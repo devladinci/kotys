@@ -309,7 +309,15 @@ function ChatScreen() {
     requestAnimationFrame(() =>
       listRef.current?.scrollToEnd({ animated: true }),
     );
-  }, [draft, pendingImages, visionCapable, send, clearDraft, pinBottom, setSlashDismissed]);
+  }, [
+    draft,
+    pendingImages,
+    visionCapable,
+    send,
+    clearDraft,
+    pinBottom,
+    setSlashDismissed,
+  ]);
 
   const handlePick = useCallback(
     (skill: SkillListing) => {

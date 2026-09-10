@@ -55,7 +55,9 @@ describe("Composer slash menu", () => {
   it("opens on a bare / and lists every user-invocable skill", async () => {
     renderComposer();
     await type("/");
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     expect(screen.getAllByRole("option")).toHaveLength(1);
   });
 
@@ -63,10 +65,14 @@ describe("Composer slash menu", () => {
     const { onSend } = renderComposer();
     await type("/");
     await waitFor(() =>
-      expect(screen.getByRole("option", { selected: true })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("option", { selected: true }),
+      ).toBeInTheDocument(),
     );
     await userEvent.keyboard("{Enter}");
-    await waitFor(() => expect(composer()).toHaveTextContent("/create-kotys-pr"));
+    await waitFor(() =>
+      expect(composer()).toHaveTextContent("/create-kotys-pr"),
+    );
     await type(" check the diff");
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
@@ -77,9 +83,13 @@ describe("Composer slash menu", () => {
   it("enter never re-picks a closed menu or sends twice", async () => {
     const { onSend } = renderComposer();
     await type("/");
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     await userEvent.keyboard("{Enter}");
-    await waitFor(() => expect(composer()).toHaveTextContent("/create-kotys-pr"));
+    await waitFor(() =>
+      expect(composer()).toHaveTextContent("/create-kotys-pr"),
+    );
     await userEvent.keyboard("{Enter}");
     await userEvent.keyboard("{Enter}");
     expect(onSend).toHaveBeenCalledTimes(1);
@@ -99,12 +109,18 @@ describe("Composer slash menu", () => {
   it("a second / after a pick reopens the menu for the next skill", async () => {
     renderComposer();
     await type("/");
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     await userEvent.keyboard("{Enter}");
-    await waitFor(() => expect(composer()).toHaveTextContent("/create-kotys-pr"));
+    await waitFor(() =>
+      expect(composer()).toHaveTextContent("/create-kotys-pr"),
+    );
     await userEvent.clear(composer());
     await type("/");
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
   });
 
   it("hidden skills never appear in the menu", async () => {
@@ -114,7 +130,9 @@ describe("Composer slash menu", () => {
     ]);
     renderComposer();
     await type("/");
-    await waitFor(() => expect(screen.getByRole("listbox")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
     const names = screen
       .getAllByRole("option")
       .map((o) => o.textContent ?? "")

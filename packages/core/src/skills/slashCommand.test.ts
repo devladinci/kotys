@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseSlashCommand, parseSlashQuery, substituteSkillArgs } from "./slashCommand.js";
+import {
+  parseSlashCommand,
+  parseSlashQuery,
+  substituteSkillArgs,
+} from "./slashCommand.js";
 import { SkillMessage } from "./SkillMessage.js";
 
 describe("parseSlashCommand", () => {

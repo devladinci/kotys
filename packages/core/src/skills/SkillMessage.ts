@@ -1,4 +1,8 @@
-import { parseSlashCommand, SKILL_FENCE_PREFIX, substituteSkillArgs } from "./slashCommand.js";
+import {
+  parseSlashCommand,
+  SKILL_FENCE_PREFIX,
+  substituteSkillArgs,
+} from "./slashCommand.js";
 
 /**
  * A persisted skill invocation: the typed `/name args` header followed by the

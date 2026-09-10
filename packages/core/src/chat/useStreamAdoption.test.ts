@@ -28,9 +28,8 @@ vi.mock("../shared/clients.js", () => ({
 
 const liveOnDaemon = new Map<number, number>();
 
-const { claimLiveStream, releaseLiveStream, resetLiveStreams } = await import(
-  "./liveStreams.js"
-);
+const { claimLiveStream, releaseLiveStream, resetLiveStreams } =
+  await import("./liveStreams.js");
 const { candidateLiveStream } = await import("./liveStreams.js");
 const { useStreamAdoption } = await import("./useStreamAdoption.js");
 const { renderHook, act, waitFor } = await import("@testing-library/react");

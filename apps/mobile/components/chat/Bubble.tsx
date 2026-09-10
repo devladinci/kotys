@@ -134,7 +134,11 @@ function BubbleBase({
           splitContentByWidgets(message.content, message.toolCalls ?? []).map(
             (segment, i) =>
               segment.kind === "text" ? (
-                <Markdown key={i} style={markdownStyles(t)} rules={markdownRules(t)}>
+                <Markdown
+                  key={i}
+                  style={markdownStyles(t)}
+                  rules={markdownRules(t)}
+                >
                   {segment.text || (streaming ? "…" : "")}
                 </Markdown>
               ) : segment.widget.kind === "input" ? (

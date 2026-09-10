@@ -299,5 +299,9 @@ export default MessageBubble;
 
 /** Skill invocations render through the same markdown body, minus the header. */
 function UserMessageBody({ content }: { content: string }) {
-  return <MarkdownBody content={SkillMessage.fromContent(content)?.displayContent ?? content} />;
+  return (
+    <MarkdownBody
+      content={SkillMessage.fromContent(content)?.displayContent ?? content}
+    />
+  );
 }
