@@ -20,6 +20,7 @@ import {
   chatIdOf,
   finishStream,
   framesAfter,
+  isLive,
   record,
 } from "./streams.js";
 
@@ -261,7 +262,10 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
         return;
       }
       // Buffer gone (expired or daemon restarted): synthesize a terminal
-      // frame from the database so the client stops its spinner.
+      // frame from the database so the client stops its spinner. A still-live
+      // stream with nothing past lastSeq must stay open — a synthesized done
+      // would end it mid-generation.
+      if (isLive(requestId)) return;
       const fallback = resumeFallback(requestId);
       if (fallback) send(client, fallback);
       return;

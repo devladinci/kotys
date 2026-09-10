@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildSkillMessage,
-  extractSkillMessage,
   parseSlashCommand,
+  parseSlashQuery,
   substituteSkillArgs,
 } from "./slashCommand.js";
+import { SkillMessage } from "./SkillMessage.js";
 
 describe("parseSlashCommand", () => {
   it("parses a bare command", () => {
@@ -47,6 +47,37 @@ describe("parseSlashCommand", () => {
   });
 });
 
+describe("parseSlashQuery", () => {
+  it("matches the bare slash and partial names", () => {
+    expect(parseSlashQuery("/")).toEqual({ query: "", args: "", raw: "/" });
+    expect(parseSlashQuery("/rel")).toEqual({
+      query: "rel",
+      args: "",
+      raw: "/rel",
+    });
+    expect(parseSlashQuery("/release-")).toEqual({
+      query: "release-",
+      args: "",
+      raw: "/release-",
+    });
+  });
+
+  it("parses complete commands like parseSlashCommand", () => {
+    expect(parseSlashQuery("/notes v1")).toEqual({
+      query: "notes",
+      args: "v1",
+      raw: "/notes v1",
+    });
+  });
+
+  it("rejects the same text parseSlashCommand rejects", () => {
+    expect(parseSlashQuery("hello /notes")).toBeNull();
+    expect(parseSlashQuery("notes")).toBeNull();
+    expect(parseSlashQuery("/a/b c")).toBeNull();
+    expect(parseSlashQuery("/Has_Caps")).toBeNull();
+  });
+});
+
 describe("substituteSkillArgs", () => {
   it("substitutes $ARGUMENTS with the whole string", () => {
     expect(substituteSkillArgs("Run on $ARGUMENTS.", "a b c")).toBe(
@@ -77,30 +108,43 @@ describe("substituteSkillArgs", () => {
   });
 });
 
-describe("buildSkillMessage / extractSkillMessage", () => {
-  it("round-trips", () => {
-    const msg = buildSkillMessage(
+describe("SkillMessage", () => {
+  it("round-trips through build and fromContent", () => {
+    const msg = SkillMessage.build(
       "release-notes",
       "v0.1.0 v0.2.0",
       "Compare $ARGUMENTS; from $1.",
     );
-    const out = extractSkillMessage(msg);
-    expect(out).toEqual({
-      name: "release-notes",
-      args: "v0.1.0 v0.2.0",
-      body: "Compare v0.1.0 v0.2.0; from v0.1.0.",
-    });
+    const out = SkillMessage.fromContent(msg);
+    expect(out?.name).toBe("release-notes");
+    expect(out?.args).toBe("v0.1.0 v0.2.0");
+    expect(out?.body).toBe("Compare v0.1.0 v0.2.0; from v0.1.0.");
   });
 
   it("round-trips without args", () => {
-    const msg = buildSkillMessage("pdf", "", "Do the thing.");
-    const out = extractSkillMessage(msg);
+    const msg = SkillMessage.build("pdf", "", "Do the thing.");
+    const out = SkillMessage.fromContent(msg);
     expect(out?.name).toBe("pdf");
     expect(out?.body).toBe("Do the thing.");
   });
 
+  it("displayContent drops the raw header and keeps args plus the fence", () => {
+    const msg = SkillMessage.build("pdf", "quarterly report", "Do the thing.");
+    const display = SkillMessage.fromContent(msg)!.displayContent;
+    expect(display).not.toContain("/pdf");
+    expect(display.startsWith("quarterly report")).toBe(true);
+    expect(display).toContain("```kotys-skill:pdf");
+    expect(display).toContain("Do the thing.");
+  });
+
+  it("displayContent without args is just the fence", () => {
+    const msg = SkillMessage.build("pdf", "", "Do the thing.");
+    const display = SkillMessage.fromContent(msg)!.displayContent;
+    expect(display).toBe("```kotys-skill:pdf\nDo the thing.\n```");
+  });
+
   it("returns null for ordinary messages", () => {
-    expect(extractSkillMessage("just a normal message")).toBeNull();
-    expect(extractSkillMessage("/not-a-skill no fence")).toBeNull();
+    expect(SkillMessage.fromContent("just a normal message")).toBeNull();
+    expect(SkillMessage.fromContent("/not-a-skill no fence")).toBeNull();
   });
 });

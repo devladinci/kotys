@@ -72,6 +72,20 @@ export function chatIdOf(requestId: number): number | undefined {
   return streams.get(requestId)?.chatId;
 }
 
+/** True while the stream is still producing frames (not done, not expired). */
+export function isLive(requestId: number): boolean {
+  const live = streams.get(requestId);
+  return live !== undefined && !live.done;
+}
+
+/** A still-running stream for this chat, if any — the remount-adopt query. */
+export function liveForChat(chatId: number): number | null {
+  for (const [requestId, live] of streams) {
+    if (!live.done && live.chatId === chatId) return requestId;
+  }
+  return null;
+}
+
 /** Drop every buffered stream — for tests only. */
 export function resetStreams(): void {
   streams.clear();

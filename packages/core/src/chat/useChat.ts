@@ -2,20 +2,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatStreamResult, ModelListing } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
-import {
-  buildSkillMessage,
-  extractSkillMessage,
-  parseSlashCommand,
-} from "../skills/slashCommand.js";
+import { parseSlashCommand } from "../skills/slashCommand.js";
+import { SkillMessage } from "../skills/SkillMessage.js";
 import { useTodoStore } from "../todos/useTodoStore.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
 import type { ToolDelta } from "./streamThrottle.js";
 import { StreamCollector, mergeChunks, mergeTools } from "./streamThrottle.js";
 import { declareStreamActivity } from "./echoGuard.js";
+import {
+  candidateLiveStream,
+  claimLiveStream,
+  releaseLiveStream,
+} from "./liveStreams.js";
 import { useMessages } from "./useMessages.js";
 import { applyChunk, applyDone, applyToolActivity } from "./streamFrames.js";
 import { useChatActions } from "./useChatActions.js";
 import { useChatStream } from "./useChatStream.js";
+import { useStreamAdoption } from "./useStreamAdoption.js";
 import { useMessageQueue } from "./useMessageQueue.js";
 import type { Message } from "./types.js";
 
@@ -171,6 +174,7 @@ export function useChat(args: UseChatArgs) {
         toolCollectorRef.current.add(requestId, [[index, activity]]);
       },
       onOwnDone: (requestId, result) => {
+        releaseLiveStream(requestId);
         collectorRef.current.flushNow(); // tail deltas pending on the cadence timer
         toolCollectorRef.current.flushNow();
         finaliseStream(requestId, result);
@@ -200,6 +204,7 @@ export function useChat(args: UseChatArgs) {
         }
       },
       onOwnError: (requestId, error) => {
+        releaseLiveStream(requestId);
         collectorRef.current.flushNow();
         toolCollectorRef.current.flushNow();
         finaliseError(requestId, error);
@@ -238,6 +243,26 @@ export function useChat(args: UseChatArgs) {
       mountedRef.current = false;
     };
   }, []);
+
+  // A remounted chat view lost its component-local streaming state; the
+  // daemon may still be streaming into this chat. Re-adopt the live stream
+  // (button back to "stop"), or clear a stale registry claim.
+  useStreamAdoption(activeChatId, {
+    adopt: (requestId) => {
+      busyRef.current = true;
+      setIsLoading(true);
+      setStreamingId(requestId);
+      declareStreamActivity(activeChatId);
+    },
+    onGone: (requestId) => {
+      releaseLiveStream(requestId);
+      busyRef.current = false;
+      setIsLoading(false);
+      setStreamingId(null);
+      declareStreamActivity(null);
+      refreshMessages();
+    },
+  });
 
   // Pending cadence timer must not fire into a dead component.
   useEffect(() => {
@@ -346,7 +371,7 @@ export function useChat(args: UseChatArgs) {
         try {
           const detail = await rpc.skills.get({ name: slash.name });
           if (detail) {
-            content = buildSkillMessage(slash.name, slash.args, detail.body);
+            content = SkillMessage.build(slash.name, slash.args, detail.body);
           } else if (slash.args === "") {
             // Unknown bare /command: leave as typed; the model sees it and
             // can say the skill does not exist.
@@ -358,7 +383,14 @@ export function useChat(args: UseChatArgs) {
       }
 
       // While a stream is running, park the message; it drains FIFO on idle.
-      if (busyRef.current || isLoading || streamingId !== null) {
+      // The registry check covers a remount that landed before adoption
+      // restored the busy state — the daemon may still be streaming.
+      if (
+        busyRef.current ||
+        isLoading ||
+        streamingId !== null ||
+        (activeChatId !== null && candidateLiveStream(activeChatId) !== null)
+      ) {
         enqueue(content, images);
         return { needsSettings: false as const };
       }
@@ -436,11 +468,12 @@ export function useChat(args: UseChatArgs) {
           },
         ]);
         setStreamingId(newAssistantId);
+        claimLiveStream(newAssistantId, currentChatId);
 
         // Registered before stream() so an instant done/error finds it.
         pendingInferenceRef.current.set(newAssistantId, {
           chatId: currentChatId,
-          userText: extractSkillMessage(content)?.args || text,
+          userText: SkillMessage.fromContent(content)?.args || text,
           model: chatModel,
           needsTopics,
           isFreshChat,
@@ -535,6 +568,7 @@ export function useChat(args: UseChatArgs) {
   const abort = useCallback(() => {
     if (streamingId !== null) {
       abortStream(streamingId);
+      releaseLiveStream(streamingId);
       // If the socket died, chat:done never arrives — clear the guard here too.
       declareStreamActivity(null);
       setIsLoading(false);
@@ -583,6 +617,7 @@ export function useChat(args: UseChatArgs) {
       );
       setIsLoading(true);
       setStreamingId(assistantId);
+      claimLiveStream(assistantId, activeChatId);
       declareStreamActivity(activeChatId);
       stream(
         assistantId,
@@ -639,6 +674,7 @@ export function useChat(args: UseChatArgs) {
       ]);
       setIsLoading(true);
       setStreamingId(newAssistantId);
+      claimLiveStream(newAssistantId, activeChatId);
       declareStreamActivity(activeChatId);
       stream(
         newAssistantId,
