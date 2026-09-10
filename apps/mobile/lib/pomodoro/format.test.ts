@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtElapsed, fmtHistoryDate } from "./format.js";
+import { fmtElapsed, fmtHistoryDate } from "./format";
 
 // Regression guard for the 1970 bug: started_at is epoch SECONDS and must be
 // multiplied before any Date call. If the *1000 is dropped, every row

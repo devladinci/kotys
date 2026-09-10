@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asEpochSeconds } from "@kotys/contracts";
-import { bucketFor, relTime } from "./chatBuckets.js";
+import { bucketFor, relTime } from "./chatBuckets";
 
 const NOW = new Date("2026-09-10T12:00:00").getTime();
 const sec = (ms: number) => asEpochSeconds(Math.floor(ms / 1000));
