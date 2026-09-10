@@ -21,10 +21,6 @@ export function candidateLiveStream(chatId: number): number | null {
   return null;
 }
 
-export function isClaimedLiveStream(requestId: number): boolean {
-  return live.has(requestId);
-}
-
 /** Reset to pristine — for tests only. */
 export function resetLiveStreams(): void {
   live.clear();
