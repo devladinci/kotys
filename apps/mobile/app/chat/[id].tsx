@@ -30,7 +30,7 @@ import {
 import type { Message } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
 import { registerScrollHandler } from "../../lib/platform";
-import { useChatScreen } from "./useChatScreen";
+import { useChatScreen } from "../../lib/useChatScreen";
 import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
 import { UserInputInline } from "../../components/UserInputInline";
