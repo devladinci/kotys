@@ -53,22 +53,22 @@
      above --surface so model time reads as a continuous bar, not gaps.
      Alphas are tuned for REAL segment widths (12–16px at 50 tools): below
      ~0.4 the tint composites to within 3% of the LLM ground and vanishes. */
-  --surface-llm: #3d3d3d;
-  --tl-web: rgba(93, 138, 168, 0.42);
+  --surface-llm: #40392f;
+  --tl-web: rgba(93, 138, 168, 0.48);
   --tl-web-ink: #86abc6;
-  --tl-read: rgba(122, 150, 116, 0.44);
+  --tl-read: rgba(122, 150, 116, 0.5);
   --tl-read-ink: #96b28f;
-  --tl-write: rgba(201, 123, 74, 0.46);
+  --tl-write: rgba(201, 123, 74, 0.52);
   --tl-write-ink: #d9925f;
-  --tl-shell: rgba(155, 127, 174, 0.42);
+  --tl-shell: rgba(155, 127, 174, 0.48);
   --tl-shell-ink: #ab8fc2;
-  --tl-memory: rgba(190, 124, 152, 0.42);
+  --tl-memory: rgba(190, 124, 152, 0.47);
   --tl-memory-ink: #c98fa9;
-  --tl-task: rgba(111, 158, 154, 0.42);
+  --tl-task: rgba(111, 158, 154, 0.48);
   --tl-task-ink: #85b2ae;
-  --tl-chat: rgba(125, 139, 176, 0.4);
+  --tl-chat: rgba(125, 139, 176, 0.46);
   --tl-chat-ink: #93a1c6;
-  --tl-mcp: rgba(100, 116, 139, 0.45);
+  --tl-mcp: rgba(100, 116, 139, 0.48);
   --tl-mcp-ink: #94a3b8;
   --tl-error: rgba(239, 68, 68, 0.45);
   --tl-error-ink: #f87171;
@@ -80,22 +80,22 @@
      to solid pastels. At real chip widths (12–16px) anything under ~0.35 alpha
      disappears against the LLM ground, so these use pre-composited values with
      visible chroma; icons use the -ink ink tones. */
-  --surface-llm: #e7e3da;
-  --tl-web: rgba(93, 138, 168, 0.38);
+  --surface-llm: #ece5d8;
+  --tl-web: rgba(93, 138, 168, 0.46);
   --tl-web-ink: #41708f;
-  --tl-read: rgba(122, 150, 116, 0.4);
+  --tl-read: rgba(122, 150, 116, 0.48);
   --tl-read-ink: #5c7a55;
-  --tl-write: rgba(201, 123, 74, 0.42);
+  --tl-write: rgba(201, 123, 74, 0.5);
   --tl-write-ink: #a85c2e;
-  --tl-shell: rgba(155, 127, 174, 0.36);
+  --tl-shell: rgba(155, 127, 174, 0.44);
   --tl-shell-ink: #7a5c93;
-  --tl-memory: rgba(190, 124, 152, 0.36);
+  --tl-memory: rgba(190, 124, 152, 0.44);
   --tl-memory-ink: #9c5c7c;
-  --tl-task: rgba(111, 158, 154, 0.38);
+  --tl-task: rgba(111, 158, 154, 0.46);
   --tl-task-ink: #4e7f7b;
-  --tl-chat: rgba(125, 139, 176, 0.36);
+  --tl-chat: rgba(125, 139, 176, 0.44);
   --tl-chat-ink: #5c6c96;
-  --tl-mcp: rgba(100, 116, 139, 0.38);
+  --tl-mcp: rgba(100, 116, 139, 0.46);
   --tl-mcp-ink: #475569;
   --tl-error: rgba(239, 68, 68, 0.4);
   --tl-error-ink: #b91c1c;
@@ -194,6 +194,15 @@ body,
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: var(--border);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes todo-fade-in {
