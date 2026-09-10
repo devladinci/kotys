@@ -65,32 +65,4 @@ export function substituteSkillArgs(body: string, args: string): string {
     });
 }
 
-/**
- * The persisted user-message form: the typed command echoed, then the skill
- * body in a fenced block the renderer can collapse into a chip.
- */
-export function buildSkillMessage(
-  name: string,
-  args: string,
-  body: string,
-): string {
-  const header = `/${name}${args ? ` ${args}` : ""}`;
-  return `${header}\n\n\`\`\`${SKILL_FENCE_PREFIX}${name}\n${substituteSkillArgs(body, args).trimEnd()}\n\`\`\``;
-}
 
-/** Extract the fenced body from a persisted skill message. */
-export function extractSkillMessage(
-  content: string,
-): { name: string; args: string; body: string } | null {
-  const first = content.indexOf("\n");
-  const header = first === -1 ? content : content.slice(0, first);
-  const parsed = parseSlashCommand(header);
-  if (!parsed) return null;
-  const match = new RegExp(
-    "```" +
-      SKILL_FENCE_PREFIX.replace(":", "\\:") +
-      "([a-z0-9-]*)\\n([\\s\\S]*?)\\n?```",
-  ).exec(content);
-  if (!match) return null;
-  return { name: parsed.name, args: parsed.args, body: match[2] };
-}
