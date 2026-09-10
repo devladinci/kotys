@@ -196,6 +196,15 @@ body,
   background: var(--border);
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes todo-fade-in {
   from {
     opacity: 0;
