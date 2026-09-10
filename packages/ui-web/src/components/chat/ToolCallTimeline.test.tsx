@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ToolActivity } from "@kotys/contracts";
-import { ToolCallTimeline } from "./widgets/ToolCallTimeline/index";
+import ToolCallTimeline from "./widgets/ToolCallTimeline";
 import { formatDuration } from "./toolDisplay";
 
 const activity = (partial: Partial<ToolActivity>): ToolActivity => ({
