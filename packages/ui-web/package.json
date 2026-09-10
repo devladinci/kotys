@@ -1,0 +1,51 @@
+{
+  "name": "@kotys/ui-web",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/index.css"
+  },
+  "scripts": {
+    "gen:tokens": "node ../../scripts/gen-tokens-css.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@kotys/contracts": "workspace:*",
+    "@kotys/core": "workspace:*",
+    "dompurify": "^3.4.13",
+    "highlight.js": "^11.11.2",
+    "lucide-react": "^1.28.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.2",
+    "react-window": "^2.3.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "devDependencies": {
+    "@kotys/client": "workspace:*",
+    "@kotys/ui-tokens": "workspace:*",
+    "@tailwindcss/typography": "^0.5.20",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.5",
+    "jsdom": "^27.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vitest": "^3.2.7"
+  }
+}

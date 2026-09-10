@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Kotys",
+    "slug": "kotys",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "kotys",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.kotys.mobile",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSMicrophoneUsageDescription": "Used for voice dictation",
+        "NSPhotoLibraryUsageDescription": "Used to attach photos to chat messages",
+        "NSCameraUsageDescription": "Used to take photos to attach to chat messages"
+      }
+    },
+    "android": {
+      "package": "app.kotys.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#F5763A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-image-picker",
+      [
+        "expo-notifications",
+        {
+          "color": "#F5763A"
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Used for voice dictation"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

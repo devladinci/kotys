@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Build the macOS dmg into release/.
+#
+# Resolves the repo root so it works from any subdirectory, builds the API
+# daemon output (packaged as an extraResource) and the desktop bundle, then
+# runs electron-builder. The dmg lands in <repo>/release/.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [ ! -d node_modules ]; then
+  printf 'error: node_modules is missing — run `pnpm install` first\n' >&2
+  exit 1
+fi
+
+# The packaged daemon (resources/api/main.js) needs apps/api compiled output,
+# and the Electron window needs ui-web/core built.
+pnpm exec turbo run build --filter=@kotys/desktop --filter=@kotys/api --filter=@kotys/ui-web --filter=@kotys/core
+
+mkdir -p release
+exec pnpm --filter @kotys/desktop run dist

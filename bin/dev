@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Start the desktop app (daemon + Electron + Vite) from anywhere in the repo.
+#
+# Thin wrapper around `pnpm --filter @kotys/desktop dev`: resolves the repo root
+# first so the script works from any subdirectory, and execs so Ctrl-C reaches
+# the processes instead of being swallowed by a parent shell.
+#
+# The Electron shell spawns the API daemon itself (see apps/desktop/electron/daemon.ts),
+# so this one command is the whole dev stack: API on 3017, Vite, Electron window.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [ ! -d node_modules ]; then
+  printf 'error: node_modules is missing — run `pnpm install` first\n' >&2
+  exit 1
+fi
+
+# Pairing hint for phones: only printed when bound wider than loopback.
+LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || true)
+TS_IP=$(tailscale ip -4 2>/dev/null || true)
+if [ "${KOTYS_HOST:-}" = "0.0.0.0" ]; then
+  [ -n "$TS_IP" ] && printf 'phone pairing (tailscale):  http://%s:3017\n' "$TS_IP" >&2
+  [ -n "$LAN_IP" ] && printf 'phone pairing (lan):  http://%s:3017\n' "$LAN_IP" >&2
+  printf 'token: ~/Library/Application Support/Kotys/token\n' >&2
+else
+  printf 'note: daemon binds 127.0.0.1 (this Mac only). For phone access run: KOTYS_HOST=0.0.0.0 bin/dev\n' >&2
+fi
+
+# Anything after `bin/dev` is forwarded, e.g. `bin/dev --port 5180`.
+if [ "$#" -gt 0 ]; then
+  exec pnpm --filter @kotys/desktop run dev -- "$@"
+fi
+exec pnpm --filter @kotys/desktop run dev

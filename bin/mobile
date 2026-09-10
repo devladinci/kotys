@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Start the Expo dev server for the mobile app, from anywhere in the repo.
+#
+# The app talks to the daemon that is already running on this machine
+# (bin/dev, or a packaged Kotys.app) — pairing happens in-app via URL + token.
+# Scan the QR with Expo Go, or press i/a for a simulator.
+#
+# Anything after `bin/mobile` is forwarded to expo, e.g.:
+#   bin/mobile --clear          (clear the Metro cache)
+#   bin/mobile ios              (boot the iOS simulator)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [ ! -d node_modules ]; then
+  printf 'error: node_modules is missing — run `pnpm install` first\n' >&2
+  exit 1
+fi
+
+TS_IP=$(tailscale ip -4 2>/dev/null || true)
+
+# The daemon may bind loopback (bin/dev) or the tailnet IP (packaged Kotys.app
+# with Tailscale up) — accept either before warning.
+daemon_alive() {
+  curl -s --max-time 1 "http://$1:3017/health" > /dev/null 2>&1
+}
+
+if daemon_alive 127.0.0.1; then
+  printf 'daemon: 127.0.0.1:3017\n' >&2
+elif [ -n "$TS_IP" ] && daemon_alive "$TS_IP"; then
+  printf 'daemon: %s:3017 (tailnet — packaged app binds there when Tailscale is up)\n' "$TS_IP" >&2
+else
+  printf 'warning: no daemon on 127.0.0.1:3017%s — start the desktop app (bin/dev) first, or the phone will have nothing to pair with\n' "${TS_IP:+ or $TS_IP:3017}" >&2
+fi
+
+# Point the Expo QR at the tailnet IP so the phone loads the bundle off-LAN.
+if [ -n "$TS_IP" ] && [ "${KOTYS_NO_TAILSCALE:-}" != "1" ]; then
+  printf 'tailscale: QR will point at %s — load exp://%s:8081 if scanning fails\n' "$TS_IP" "$TS_IP" >&2
+  export REACT_NATIVE_PACKAGER_HOSTNAME="$TS_IP"
+fi
+
+if [ "$#" -gt 0 ]; then
+  exec pnpm --filter @kotys/mobile run dev -- "$@"
+fi
+exec pnpm --filter @kotys/mobile run dev

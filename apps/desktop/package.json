@@ -1,0 +1,70 @@
+{
+  "name": "@kotys/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "dist": "vite build && node -e \"require('fs').copyFileSync('../api/dist/main.bundle.cjs','dist-electron/api-daemon.cjs')\" && node electron/copy-sqlite.mjs && electron-builder",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "lint": "eslint src electron",
+    "test": "vitest run"
+  },
+  "build": {
+    "appId": "app.kotys.desktop",
+    "productName": "Kotys",
+    "directories": {
+      "output": "../../release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "build/**"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "dist-electron/node_modules/**"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Kotys uses the microphone for hold-to-talk voice dictation."
+      },
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist"
+    },
+    "win": {
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
+  },
+  "dependencies": {
+    "@kotys/api": "workspace:*",
+    "@kotys/core": "workspace:*",
+    "@kotys/db": "workspace:*",
+    "@kotys/ui-web": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.18.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-electron": "^1.1.1",
+    "vitest": "^3.2.7"
+  }
+}

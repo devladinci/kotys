@@ -1,0 +1,183 @@
+import { getDb } from "./client.js";
+import { chatExists, escapeLike, makeSnippet } from "./internal.js";
+
+// Secondary sort on id keeps user+assistant rows inserted in the same second
+// (created_at has unixepoch granularity) in insertion order after a refetch.
+export function getMessages(chatId: number) {
+  return getDb()
+    .prepare(
+      `SELECT m.*, mo.name AS model_name
+       FROM messages m LEFT JOIN models mo ON mo.id = m.model_id
+       WHERE m.chat_id = ? ORDER BY m.created_at ASC, m.id ASC`,
+    )
+    .all(chatId);
+}
+
+export function getMessage(id: number) {
+  return getDb()
+    .prepare(
+      `SELECT m.*, mo.name AS model_name
+       FROM messages m LEFT JOIN models mo ON mo.id = m.model_id
+       WHERE m.id = ?`,
+    )
+    .get(id) as MessageRow | undefined;
+}
+
+export type MessageRow = {
+  id: number;
+  chat_id: number;
+  role: string;
+  content: string;
+  thinking: string | null;
+  images: string | null;
+  model_id: number | null;
+  model_name: string | null;
+  prompt_tokens: number | null;
+  eval_tokens: number | null;
+  tool_calls: string | null;
+  created_at: number;
+};
+
+// Null means the chat is gone, so the message was dropped rather than written.
+// Callers stop the send instead of streaming into a chat that no longer exists.
+// An assistant row with no modelId inherits the chat's model: the reply was
+// produced by whatever the chat is pointed at.
+export function insertMessage(
+  chatId: number,
+  role: string,
+  content: string,
+  images?: string[],
+  modelId?: number,
+): number | null {
+  if (!chatExists(chatId)) return null;
+  const db = getDb();
+  const resolved =
+    modelId ??
+    (role === "assistant"
+      ? ((
+          db.prepare("SELECT model_id FROM chats WHERE id = ?").get(chatId) as
+            { model_id: number | null } | undefined
+        )?.model_id ?? null)
+      : null);
+  const result = db
+    .prepare(
+      "INSERT INTO messages (chat_id, role, content, images, model_id) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(
+      chatId,
+      role,
+      content,
+      images ? JSON.stringify(images) : null,
+      resolved,
+    );
+  db.prepare("UPDATE chats SET updated_at = unixepoch() WHERE id = ?").run(
+    chatId,
+  );
+  return Number(result.lastInsertRowid);
+}
+
+/**
+ * Partial write for streaming progress: callers pass only what changed and
+ * untouched columns keep their value — an undefined must never become SQL
+ * NULL (that would erase streamed text mid-turn).
+ */
+export function updateMessage(
+  id: number,
+  fields: {
+    content?: string;
+    thinking?: string;
+    promptTokens?: number;
+    evalTokens?: number;
+    toolCalls?: string;
+  },
+) {
+  const sets: string[] = [];
+  const values: (string | number)[] = [];
+  if (fields.content !== undefined) {
+    sets.push("content = ?");
+    values.push(fields.content);
+  }
+  if (fields.thinking !== undefined) {
+    sets.push("thinking = ?");
+    values.push(fields.thinking);
+  }
+  if (fields.promptTokens !== undefined) {
+    sets.push("prompt_tokens = ?");
+    values.push(fields.promptTokens);
+  }
+  if (fields.evalTokens !== undefined) {
+    sets.push("eval_tokens = ?");
+    values.push(fields.evalTokens);
+  }
+  if (fields.toolCalls !== undefined) {
+    sets.push("tool_calls = ?");
+    values.push(fields.toolCalls);
+  }
+  if (sets.length === 0) return;
+  getDb()
+    .prepare(`UPDATE messages SET ${sets.join(", ")} WHERE id = ?`)
+    .run(...values, id);
+}
+export function searchMessages(query: string) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const tokens = q.split(/\s+/).filter(Boolean).slice(0, 5);
+  const where = tokens
+    .map(() => `lower_uni(m.content) LIKE '%' || ? || '%' ESCAPE '\\'`)
+    .join(" AND ");
+  const rows = getDb()
+    .prepare(
+      `SELECT m.id, m.chat_id, m.role, m.content, c.title, m.created_at
+       FROM messages m
+       JOIN chats c ON c.id = m.chat_id
+       WHERE ${where}
+       ORDER BY m.created_at DESC
+       LIMIT 30`,
+    )
+    .all(...tokens.map(escapeLike)) as {
+    id: number;
+    chat_id: number;
+    role: string;
+    content: string;
+    title: string;
+    created_at: number;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    chat_id: r.chat_id,
+    role: r.role,
+    title: r.title,
+    snippet: makeSnippet(r.content, tokens[0]),
+    created_at: r.created_at,
+  }));
+}
+export function getMessageRowsForChat(
+  chatId: number,
+  limit: number,
+  offset = 0,
+) {
+  return getDb()
+    .prepare(
+      `SELECT id, role, content, created_at FROM messages
+       WHERE chat_id = ? AND role IN ('user', 'assistant')
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(chatId, limit, offset) as {
+    id: number;
+    role: string;
+    content: string;
+    created_at: number;
+  }[];
+}
+export function getChatIdForMessage(messageId: number): number | null {
+  const row = getDb()
+    .prepare("SELECT chat_id FROM messages WHERE id = ?")
+    .get(messageId) as { chat_id: number } | undefined;
+  return row?.chat_id ?? null;
+}
+export function deleteTurnsAfter(chatId: number, afterId: number) {
+  getDb()
+    .prepare("DELETE FROM messages WHERE chat_id = ? AND id > ?")
+    .run(chatId, afterId);
+}

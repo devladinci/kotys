@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+#
+# Bump the version, run the checks, build the dmg, commit the bump.
+#
+# Strictly local: never pushes, never creates a remote, never publishes a
+# GitHub release. The dmg stays in release/.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
+else
+  BOLD=''; RED=''; GREEN=''; YELLOW=''; DIM=''; OFF=''
+fi
+
+step() { printf '%s==>%s %s%s%s\n' "$GREEN" "$OFF" "$BOLD" "$1" "$OFF"; }
+info() { printf '    %s%s%s\n' "$DIM" "$1" "$OFF"; }
+warn() { printf '%swarning:%s %s\n' "$YELLOW" "$1" >&2; }
+die()  { printf '%serror:%s %s\n' "$RED" "$OFF" "$1" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+Usage: bin/bump-and-release [major|minor|patch|X.Y.Z] [options]
+
+Bumps the version in the root package.json, runs the full check suite, builds
+the dmg into release/, then commits the bump. Never pushes and never tags.
+
+Arguments:
+  major | minor | patch     Which part to bump. Default: patch.
+  X.Y.Z                     Set this exact version instead.
+
+Options:
+  -m, --message <subject>   Commit subject. Default: "chore(release): vX.Y.Z"
+      --allow-dirty         Proceed with uncommitted changes. Only package.json
+                            and pnpm-lock.yaml are staged either way.
+      --skip-checks         Skip lint, typecheck, and tests. Not recommended.
+  -h, --help                Show this help.
+EOF
+}
+
+VERSION_PART="patch"
+MESSAGE=""
+ALLOW_DIRTY=0
+SKIP_CHECKS=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    major|minor|patch)
+      VERSION_PART="$1"; shift ;;
+    -m|--message)
+      [ $# -ge 2 ] || die "--message needs a value"
+      MESSAGE="$2"; shift 2 ;;
+    --allow-dirty)
+      ALLOW_DIRTY=1; shift ;;
+    --skip-checks)
+      SKIP_CHECKS=1; shift ;;
+    -h|--help)
+      usage; exit 0 ;;
+    *)
+      die "unknown argument: $1 (see --help)" ;;
+  esac
+done
+
+git diff --quiet || {
+  if [ "$ALLOW_DIRTY" -eq 1 ]; then
+    warn "working tree is dirty; continuing (--allow-dirty)"
+  else
+    die "working tree is dirty — commit or stash first, or pass --allow-dirty"
+  fi
+}
+
+step "Bumping version ($VERSION_PART)"
+# pnpm 11 dropped --workspaces-update and `pnpm version` refuses dirty trees
+# mid-workspace, so bump the version field in every package.json directly.
+NEW_VERSION="$(node -e '
+  const fs = require("node:fs");
+  const part = process.argv[1];
+  const current = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+  const [x, y, z] = current.split(".").map(Number);
+  const next = /^\d+\.\d+\.\d+$/.test(part)
+    ? part
+    : part === "major"
+      ? `${x + 1}.0.0`
+      : part === "minor"
+        ? `${x}.${y + 1}.0`
+        : `${x}.${y}.${z + 1}`;
+  const files = ["package.json"];
+  for (const dir of ["apps", "packages"]) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) files.push(`${dir}/${entry.name}/package.json`);
+    }
+  }
+  for (const file of files) {
+    const src = fs.readFileSync(file, "utf8");
+    fs.writeFileSync(file, src.replace(/"version":\s*"[^"]*"/, `"version": "${next}"`));
+  }
+  process.stdout.write(next);
+' "$VERSION_PART")"
+[ -n "$NEW_VERSION" ] || die "version bump failed"
+info "version: v$NEW_VERSION"
+
+if [ -z "$MESSAGE" ]; then
+  MESSAGE="chore(release): v$NEW_VERSION"
+fi
+
+if [ "$SKIP_CHECKS" -ne 1 ]; then
+  step "Lint"
+  pnpm lint
+  step "Typecheck"
+  pnpm typecheck
+  step "Tests"
+  pnpm test
+else
+  warn "skipping checks (--skip-checks)"
+fi
+
+step "Building dmg"
+bin/dist
+
+step "Committing bump"
+git add package.json pnpm-lock.yaml '**/package.json'
+git commit -m "$MESSAGE"
+info "committed: $MESSAGE"
+
+printf '\n%sDone:%s v%s — dmg in release/\n' "$BOLD" "$OFF" "$NEW_VERSION"
