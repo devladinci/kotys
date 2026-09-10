@@ -2,11 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatStreamResult, ModelListing } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
-import {
-  buildSkillMessage,
-  extractSkillMessage,
-  parseSlashCommand,
-} from "../skills/slashCommand.js";
+import { parseSlashCommand } from "../skills/slashCommand.js";
+import { SkillMessage } from "../skills/SkillMessage.js";
 import { useTodoStore } from "../todos/useTodoStore.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
 import type { ToolDelta } from "./streamThrottle.js";
@@ -346,7 +343,7 @@ export function useChat(args: UseChatArgs) {
         try {
           const detail = await rpc.skills.get({ name: slash.name });
           if (detail) {
-            content = buildSkillMessage(slash.name, slash.args, detail.body);
+            content = SkillMessage.build(slash.name, slash.args, detail.body);
           } else if (slash.args === "") {
             // Unknown bare /command: leave as typed; the model sees it and
             // can say the skill does not exist.
@@ -440,7 +437,7 @@ export function useChat(args: UseChatArgs) {
         // Registered before stream() so an instant done/error finds it.
         pendingInferenceRef.current.set(newAssistantId, {
           chatId: currentChatId,
-          userText: extractSkillMessage(content)?.args || text,
+          userText: SkillMessage.fromContent(content)?.args || text,
           model: chatModel,
           needsTopics,
           isFreshChat,

@@ -10,7 +10,11 @@ import {
 import { setStringAsync } from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
-import { splitContentByWidgets } from "@kotys/core";
+import {
+  SKILL_FENCE_PREFIX,
+  SkillMessage,
+  splitContentByWidgets,
+} from "@kotys/core";
 import type { Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import { InputCard, ToolTimeline } from "../kit";
@@ -120,22 +124,17 @@ function BubbleBase({
               </View>
             ) : null}
             {message.content ? (
-              <Text
-                style={{
-                  color: mode === "dark" ? "#fff" : t.text,
-                  fontSize: 15,
-                  lineHeight: 20,
-                }}
-              >
-                {message.content}
-              </Text>
+              <Markdown style={markdownStyles(t)} rules={markdownRules(t)}>
+                {SkillMessage.fromContent(message.content)?.displayContent ??
+                  message.content}
+              </Markdown>
             ) : null}
           </>
         ) : (
           splitContentByWidgets(message.content, message.toolCalls ?? []).map(
             (segment, i) =>
               segment.kind === "text" ? (
-                <Markdown key={i} style={markdownStyles(t)}>
+                <Markdown key={i} style={markdownStyles(t)} rules={markdownRules(t)}>
                   {segment.text || (streaming ? "…" : "")}
                 </Markdown>
               ) : segment.widget.kind === "input" ? (
@@ -153,6 +152,28 @@ function BubbleBase({
 const Bubble = memo(BubbleBase);
 
 const keyExtractor = (m: Message) => String(m.id);
+
+const skillPillStyles = (t: ReturnType<typeof theme>) => ({
+  row: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    alignSelf: "flex-start" as const,
+    gap: 6,
+    backgroundColor: `${t.accent}1f`,
+    borderColor: `${t.accent}66`,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginVertical: 2,
+  },
+  name: {
+    color: t.text,
+    fontSize: 12,
+    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontWeight: "600" as const,
+  },
+});
 
 const markdownStyles = (t: ReturnType<typeof theme>) => ({
   body: { color: t.text, fontSize: 15 },
@@ -173,6 +194,27 @@ const markdownStyles = (t: ReturnType<typeof theme>) => ({
   heading3: { color: t.text, fontWeight: "600" as const },
   link: { color: t.accent },
   bullet_list_icon: { color: t.textMuted },
+});
+
+const markdownRules = (t: ReturnType<typeof theme>) => ({
+  fence: (node: { key?: string; sourceInfo?: string; content?: string }) => {
+    const language = node.sourceInfo ?? "";
+    if (language.startsWith(SKILL_FENCE_PREFIX)) {
+      return (
+        <View key={node.key} style={skillPillStyles(t).row}>
+          <Ionicons name="flash" size={12} color={t.accent} />
+          <Text style={skillPillStyles(t).name}>
+            {language.slice(SKILL_FENCE_PREFIX.length)}
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <Text key={node.key} style={markdownStyles(t).fence}>
+        {(node.content ?? "").replace(/\n$/, "")}
+      </Text>
+    );
+  },
 });
 
 export { Bubble, keyExtractor };
