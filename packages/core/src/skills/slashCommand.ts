@@ -28,6 +28,28 @@ export function parseSlashCommand(text: string): ParsedSlashCommand | null {
   return { name: m[1], args: (m[2] ?? "").trim(), raw: text };
 }
 
+/** Composer slash-menu state: the bare `/` and partial names match too. */
+export type SlashQuery = {
+  /** Name typed so far, possibly "" for a bare `/`. */
+  query: string;
+  args: string;
+  raw: string;
+};
+
+/**
+ * Autocomplete counterpart of parseSlashCommand: it must match while the name
+ * is still being typed (`/`, `/rel`, `/release-`), so unlike parseSlashCommand
+ * it accepts an empty or hyphen-terminated name. Sending still goes through
+ * parseSlashCommand, which requires a complete name.
+ */
+export function parseSlashQuery(text: string): SlashQuery | null {
+  const trimmedStart = text.replace(/^\s+/, "");
+  if (!trimmedStart.startsWith("/")) return null;
+  const m = /^\/([a-z0-9-]*)(?:\s+([\s\S]*))?$/.exec(trimmedStart);
+  if (!m) return null;
+  return { query: m[1], args: (m[2] ?? "").trim(), raw: text };
+}
+
 /**
  * Substitute `$ARGUMENTS` (the whole string) and `$0`–`$9` (positional, split
  * on whitespace) into a skill body. Unknown positions become "".

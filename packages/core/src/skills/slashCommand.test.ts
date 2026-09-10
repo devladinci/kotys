@@ -3,6 +3,7 @@ import {
   buildSkillMessage,
   extractSkillMessage,
   parseSlashCommand,
+  parseSlashQuery,
   substituteSkillArgs,
 } from "./slashCommand.js";
 
@@ -44,6 +45,37 @@ describe("parseSlashCommand", () => {
     const parsed = parseSlashCommand("/notes\nline one\nline two");
     expect(parsed?.name).toBe("notes");
     expect(parsed?.args).toBe("line one\nline two");
+  });
+});
+
+describe("parseSlashQuery", () => {
+  it("matches the bare slash and partial names", () => {
+    expect(parseSlashQuery("/")).toEqual({ query: "", args: "", raw: "/" });
+    expect(parseSlashQuery("/rel")).toEqual({
+      query: "rel",
+      args: "",
+      raw: "/rel",
+    });
+    expect(parseSlashQuery("/release-")).toEqual({
+      query: "release-",
+      args: "",
+      raw: "/release-",
+    });
+  });
+
+  it("parses complete commands like parseSlashCommand", () => {
+    expect(parseSlashQuery("/notes v1")).toEqual({
+      query: "notes",
+      args: "v1",
+      raw: "/notes v1",
+    });
+  });
+
+  it("rejects the same text parseSlashCommand rejects", () => {
+    expect(parseSlashQuery("hello /notes")).toBeNull();
+    expect(parseSlashQuery("notes")).toBeNull();
+    expect(parseSlashQuery("/a/b c")).toBeNull();
+    expect(parseSlashQuery("/Has_Caps")).toBeNull();
   });
 });
 

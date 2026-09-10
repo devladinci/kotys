@@ -17,20 +17,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DEFAULT_MODEL,
+  parseSlashQuery,
   useAppStore,
   useChat,
   useChatList,
   usePlatform,
+  useSkills,
   useTokenEstimator,
   useUserInputStore,
   useVoiceInput,
 } from "@kotys/core";
 import type { Message } from "@kotys/core";
+import type { SkillListing } from "@kotys/contracts";
 import { registerScrollHandler } from "../../lib/platform";
 import { useChatScreen } from "./useChatScreen";
 import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
 import { UserInputInline } from "../../components/UserInputInline";
+import SlashMenu from "../../components/chat/SlashMenu";
 import {
   ModelPickers,
   ModePicker,
@@ -106,6 +110,9 @@ function ChatScreen() {
   const supportsThinking = chatModel.capabilities.includes("thinking");
   const visionCapable = chatModel.capabilities.includes("vision");
   const platform = usePlatform();
+  const { skills } = useSkills();
+  const slashQuery = useMemo(() => parseSlashQuery(draft), [draft]);
+  const [slashDismissed, setSlashDismissed] = useState(false);
 
   const {
     messages,
@@ -277,6 +284,7 @@ function ChatScreen() {
     // Same guard as the web Composer: a non-vision model silently ignores
     // attachments instead of erroring at the daemon.
     const images = visionCapable ? pendingImages : [];
+    setSlashDismissed(false);
     clearDraft();
     // A send is an explicit "show me the latest" signal — re-pin even if the
     // user had scrolled up (ChatGPT/iMessage behavior).
@@ -301,7 +309,22 @@ function ChatScreen() {
     requestAnimationFrame(() =>
       listRef.current?.scrollToEnd({ animated: true }),
     );
-  }, [draft, pendingImages, visionCapable, send, clearDraft, pinBottom]);
+  }, [draft, pendingImages, visionCapable, send, clearDraft, pinBottom, setSlashDismissed]);
+
+  const handlePick = useCallback(
+    (skill: SkillListing) => {
+      const parsed = parseSlashQuery(draft);
+      const tail = parsed && parsed.args ? ` ${parsed.args}` : "";
+      setDraft(`/${skill.name}${tail} `);
+      setSlashDismissed(true);
+    },
+    [draft, setDraft],
+  );
+
+  const handleDismiss = useCallback(() => {
+    setSlashDismissed(true);
+    setDraft("");
+  }, [setDraft]);
 
   const sendVoiceTranscript = useCallback(
     (text: string) => {
@@ -601,6 +624,14 @@ function ChatScreen() {
                 </View>
               ))}
             </View>
+          ) : null}
+          {slashQuery && !slashDismissed && !inputPending ? (
+            <SlashMenu
+              skills={skills}
+              query={slashQuery.query}
+              onPick={handlePick}
+              onDismiss={handleDismiss}
+            />
           ) : null}
           <View
             style={[
