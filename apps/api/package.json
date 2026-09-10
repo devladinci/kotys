@@ -1,0 +1,45 @@
+{
+  "name": "@kotys/api",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && esbuild dist/main.js --bundle --platform=node --format=cjs --outfile=dist/main.bundle.cjs --external:better-sqlite3 --log-level=warning",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@kotys/contracts": "workspace:*",
+    "@kotys/db": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@orpc/server": "^1.15.0",
+    "hono": "^4.13.5",
+    "ollama": "^0.6.3",
+    "ws": "^8.21.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "~6.0.2",
+    "vitest": "^3.2.7"
+  }
+}

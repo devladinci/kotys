@@ -1,0 +1,25 @@
+node_modules
+dist
+!bin/dist
+dist-electron
+release
+.turbo
+*.tsbuildinfo
+
+# local env / runtime state
+.env
+.env.local
+*.db
+*.db-wal
+*.db-shm
+
+# editors / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- CSP is injected as a response header by Electron main — it needs the
+         actual daemon origin in connect-src, which a static meta tag can't
+         express (Tailscale IPs aren't enumerable at build time). -->
+    <title>Kotys</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

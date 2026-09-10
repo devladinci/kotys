@@ -1,0 +1,275 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/*
+ * Explicit sources: when this file is consumed through the workspace symlink
+ * (apps import "@kotys/ui-web/styles.css"), Tailwind auto-detection runs from
+ * the importing app and misses every class used in this package.
+ */
+@source "./**/*.{ts,tsx}";
+@source "../../../apps/web/src/**/*.{ts,tsx}";
+@source "../../../apps/desktop/src/**/*.{ts,tsx}";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-user: var(--surface-user);
+  --color-surface-2: var(--surface-2);
+  --color-surface-llm: var(--surface-llm);
+  --color-tl-web: var(--tl-web);
+  --color-tl-web-ink: var(--tl-web-ink);
+  --color-tl-read: var(--tl-read);
+  --color-tl-read-ink: var(--tl-read-ink);
+  --color-tl-write: var(--tl-write);
+  --color-tl-write-ink: var(--tl-write-ink);
+  --color-tl-shell: var(--tl-shell);
+  --color-tl-shell-ink: var(--tl-shell-ink);
+  --color-tl-memory: var(--tl-memory);
+  --color-tl-memory-ink: var(--tl-memory-ink);
+  --color-tl-task: var(--tl-task);
+  --color-tl-task-ink: var(--tl-task-ink);
+  --color-tl-chat: var(--tl-chat);
+  --color-tl-chat-ink: var(--tl-chat-ink);
+  --color-tl-mcp: var(--tl-mcp);
+  --color-tl-mcp-ink: var(--tl-mcp-ink);
+  --color-tl-error: var(--tl-error);
+  --color-tl-error-ink: var(--tl-error-ink);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+}
+
+@import "./tokens.generated.css";
+
+:root,
+:root[data-theme="dark"] {
+  /* Timeline palette (Warm editorial): chips are low-chroma tint fills, the
+     matching -ink var is the icon color on top. The LLM ground sits clearly
+     above --surface so model time reads as a continuous bar, not gaps.
+     Alphas are tuned for REAL segment widths (12–16px at 50 tools): below
+     ~0.4 the tint composites to within 3% of the LLM ground and vanishes. */
+  --surface-llm: #3d3d3d;
+  --tl-web: rgba(93, 138, 168, 0.42);
+  --tl-web-ink: #86abc6;
+  --tl-read: rgba(122, 150, 116, 0.44);
+  --tl-read-ink: #96b28f;
+  --tl-write: rgba(201, 123, 74, 0.46);
+  --tl-write-ink: #d9925f;
+  --tl-shell: rgba(155, 127, 174, 0.42);
+  --tl-shell-ink: #ab8fc2;
+  --tl-memory: rgba(190, 124, 152, 0.42);
+  --tl-memory-ink: #c98fa9;
+  --tl-task: rgba(111, 158, 154, 0.42);
+  --tl-task-ink: #85b2ae;
+  --tl-chat: rgba(125, 139, 176, 0.4);
+  --tl-chat-ink: #93a1c6;
+  --tl-mcp: rgba(100, 116, 139, 0.45);
+  --tl-mcp-ink: #94a3b8;
+  --tl-error: rgba(239, 68, 68, 0.45);
+  --tl-error-ink: #f87171;
+  --accent-soft: #2e2e2e;
+}
+
+:root[data-theme="light"] {
+  /* Light-theme timeline palette — same warm-editorial hues as dark, composited
+     to solid pastels. At real chip widths (12–16px) anything under ~0.35 alpha
+     disappears against the LLM ground, so these use pre-composited values with
+     visible chroma; icons use the -ink ink tones. */
+  --surface-llm: #e7e3da;
+  --tl-web: rgba(93, 138, 168, 0.38);
+  --tl-web-ink: #41708f;
+  --tl-read: rgba(122, 150, 116, 0.4);
+  --tl-read-ink: #5c7a55;
+  --tl-write: rgba(201, 123, 74, 0.42);
+  --tl-write-ink: #a85c2e;
+  --tl-shell: rgba(155, 127, 174, 0.36);
+  --tl-shell-ink: #7a5c93;
+  --tl-memory: rgba(190, 124, 152, 0.36);
+  --tl-memory-ink: #9c5c7c;
+  --tl-task: rgba(111, 158, 154, 0.38);
+  --tl-task-ink: #4e7f7b;
+  --tl-chat: rgba(125, 139, 176, 0.36);
+  --tl-chat-ink: #5c6c96;
+  --tl-mcp: rgba(100, 116, 139, 0.38);
+  --tl-mcp-ink: #475569;
+  --tl-error: rgba(239, 68, 68, 0.4);
+  --tl-error-ink: #b91c1c;
+  --accent-soft: #ecebe6;
+}
+
+:root[data-theme="light"] pre code.hljs,
+:root[data-theme="light"] code.hljs {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+:root[data-theme="light"] .hljs-comment,
+:root[data-theme="light"] .hljs-quote {
+  color: #6a737d;
+}
+:root[data-theme="light"] .hljs-keyword,
+:root[data-theme="light"] .hljs-selector-tag,
+:root[data-theme="light"] .hljs-literal,
+:root[data-theme="light"] .hljs-section,
+:root[data-theme="light"] .hljs-doctag,
+:root[data-theme="light"] .hljs-title,
+:root[data-theme="light"] .hljs-name,
+:root[data-theme="light"] .hljs-selector-id,
+:root[data-theme="light"] .hljs-selector-class {
+  color: #d73a49;
+}
+:root[data-theme="light"] .hljs-string,
+:root[data-theme="light"] .hljs-meta,
+:root[data-theme="light"] .hljs-meta-string,
+:root[data-theme="light"] .hljs-regexp,
+:root[data-theme="light"] .hljs-attr,
+:root[data-theme="light"] .hljs-variable,
+:root[data-theme="light"] .hljs-template-variable,
+:root[data-theme="light"] .hljs-template-tag {
+  color: #032f62;
+}
+:root[data-theme="light"] .hljs-type,
+:root[data-theme="light"] .hljs-number,
+:root[data-theme="light"] .hljs-built_in,
+:root[data-theme="light"] .hljs-class .hljs-title,
+:root[data-theme="light"] .hljs-symbol,
+:root[data-theme="light"] .hljs-bullet,
+:root[data-theme="light"] .hljs-link {
+  color: #005cc5;
+}
+:root[data-theme="light"] .hljs-function .hljs-title,
+:root[data-theme="light"] .hljs-title.function_,
+:root[data-theme="light"] .hljs-params {
+  color: #6f42c1;
+}
+:root[data-theme="light"] .hljs-attribute {
+  color: #005cc5;
+}
+:root[data-theme="light"] .hljs-tag {
+  color: #22863a;
+}
+:root[data-theme="light"] .hljs-deletion {
+  color: #b31d28;
+  background: #ffebe9;
+}
+:root[data-theme="light"] .hljs-addition {
+  color: #22863a;
+  background: #f0fff4;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--border);
+}
+
+@keyframes todo-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes todo-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.todo-modal-enter {
+  animation: todo-fade-in 150ms ease-out;
+}
+
+.todo-panel-enter {
+  animation: todo-panel-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sidebar-slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.sidebar-enter {
+  animation: sidebar-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sidebar-topic-expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+.topic-expand-enter {
+  animation: sidebar-topic-expand 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+/* Brain effort gauge: SVG rect fill transitions when switching levels */
+.brain-gauge-rect {
+  transition:
+    y 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-modal-enter,
+  .todo-panel-enter,
+  .sidebar-enter,
+  .topic-expand-enter {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

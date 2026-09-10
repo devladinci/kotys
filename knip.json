@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "workspaces": {
+    ".": {},
+    "apps/api": {
+      "entry": ["scripts/e2e-computer-observe.mts"]
+    },
+    "apps/desktop": {
+      "entry": ["electron/main.ts", "electron/preload.ts"],
+      // The daemon is spawned at runtime from @kotys/api's bundled dist
+      // (see the `dist` script: it copies main.bundle.cjs into the package).
+      "ignoreDependencies": ["@kotys/api"],
+      // Deliberately resolved through @kotys/db's context (native binding).
+      "ignoreIssues": {
+        "electron/copy-sqlite.mjs": ["unlisted"]
+      }
+    },
+    "apps/mobile": {
+      // Invented by knip's Expo plugin from default app.json fields
+      // (userInterfaceStyle/updates); neither package is actually used.
+      "ignoreIssues": {
+        "app.json": ["unlisted"]
+      }
+    },
+    "packages/db": {
+      "entry": ["migrate-test.mjs"]
+    },
+    "packages/ui-web": {
+      // Test-only: vi.mock("@kotys/client") in six test files; runtime usage
+      // lives inside @kotys/core's own dependency.
+      "ignoreDependencies": ["@kotys/client", "@kotys/ui-tokens"],
+      // vite/client types come from the consuming app's vite install.
+      "ignoreIssues": {
+        "src/vite-env.d.ts": ["unlisted"]
+      }
+    }
+  }
+}

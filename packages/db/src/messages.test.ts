@@ -1,0 +1,84 @@
+import { describe, expect, it, beforeAll } from "vitest";
+import * as db from "./index.js";
+
+beforeAll(() => {
+  db.initDatabase(":memory:");
+});
+
+describe("messages", () => {
+  it("orders same-second inserts by id, not arbitrarily", () => {
+    const chatId = Number(
+      db.createChat("Order test", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    const user = db.insertMessage(chatId, "user", "hi");
+    const assistant = db.insertMessage(chatId, "assistant", "hello");
+    // created_at is unixepoch (second granularity): both rows share it. The
+    // id tiebreak must keep insertion order, or a refetch can swap the reply
+    // above the question.
+    const rows = db.getMessages(chatId) as { id: number }[];
+    expect(rows.map((r) => r.id)).toEqual([user, assistant]);
+  });
+
+  it("getMessage returns the full row", () => {
+    const chatId = Number(
+      db.createChat("Get test", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    const modelId = db.upsertModel({
+      name: "kimi",
+      contextLength: 8192,
+      capabilities: [],
+      source: "cloud",
+    });
+    const id = db.insertMessage(chatId, "assistant", "kept", ["img"], modelId)!;
+    db.updateMessage(id, {
+      content: "updated",
+      thinking: "thoughts",
+      promptTokens: 10,
+      evalTokens: 20,
+      toolCalls: "[]",
+    });
+    const row = db.getMessage(id);
+    expect(row).toMatchObject({
+      id,
+      chat_id: chatId,
+      role: "assistant",
+      content: "updated",
+      thinking: "thoughts",
+      prompt_tokens: 10,
+      eval_tokens: 20,
+      model_id: modelId,
+    });
+  });
+
+  it("getMessage returns undefined for unknown ids", () => {
+    expect(db.getMessage(999_999)).toBeUndefined();
+  });
+
+  it("partial update leaves untouched columns alone", () => {
+    const chatId = Number(
+      db.createChat("Partial test", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    const id = db.insertMessage(chatId, "assistant", "")!;
+    db.updateMessage(id, { content: "draft", thinking: "early" });
+    db.updateMessage(id, { content: "final" });
+    const row = db.getMessage(id);
+    expect(row?.content).toBe("final");
+    expect(row?.thinking).toBe("early");
+    expect(row?.prompt_tokens).toBeNull();
+  });
+});
