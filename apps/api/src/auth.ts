@@ -3,7 +3,7 @@ import { chmodSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Context, Next } from "hono";
 import { DB_PATH, getSetting, setSetting } from "@kotys/db";
-import { ALLOWED_ORIGINS } from "./config.js";
+import { ALLOWED_ORIGINS, HOST } from "./config.js";
 
 const TOKEN_KEY = "api_token";
 
@@ -35,15 +35,26 @@ export function isValidToken(candidate: string | undefined | null): boolean {
   return diff === 0;
 }
 
-/** Origin decision shared by CORS and originGuard: allowlist, or localhost on
- * any port. LAN/Tailscale browser access adds its origin to
- * KOTYS_ALLOWED_ORIGINS. */
+/** Origin decision shared by CORS and originGuard. Non-HTTP(S) schemes
+ * (exp://, app://) and the literal "null" can't come from a web page, so they
+ * imply a native client the bearer token protects anyway. Same-host http(s)
+ * covers the Expo dev server sharing the daemon's address. */
 export function isOriginAllowed(
   origin: string,
   allowlist: readonly string[] = ALLOWED_ORIGINS,
+  bindHost: string = HOST,
 ): boolean {
-  if (allowlist.includes(origin)) return true;
-  return /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+  if (allowlist.includes(origin) || origin === "null") return true;
+  if (/^(exp|app|file|capacitor):\/\//.test(origin)) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return true;
+  if (/^https?:\/\//.test(origin)) {
+    try {
+      return new URL(origin).hostname === bindHost;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /**

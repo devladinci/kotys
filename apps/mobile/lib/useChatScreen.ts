@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
-import { MAX_IMAGES } from "../../lib/images";
+import { MAX_IMAGES } from "./images";
 
 export function useChatScreen() {
   const [draft, setDraft] = useState("");
