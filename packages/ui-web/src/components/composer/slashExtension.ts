@@ -1,7 +1,11 @@
 import { useSyncExternalStore } from "react";
 import { Extension, type Editor } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
-import { exitSuggestion, Suggestion, type SuggestionKeyDownProps } from "@tiptap/suggestion";
+import {
+  exitSuggestion,
+  Suggestion,
+  type SuggestionKeyDownProps,
+} from "@tiptap/suggestion";
 import type { SkillListing } from "@kotys/contracts";
 
 export interface ISlashExtensionProps {
@@ -23,7 +27,12 @@ interface ISuggestionState {
   query: string | null;
 }
 
-const closedMenu: ISlashMenuState = { isOpen: false, query: "", items: [], index: 0 };
+const closedMenu: ISlashMenuState = {
+  isOpen: false,
+  query: "",
+  items: [],
+  index: 0,
+};
 
 let menuState = closedMenu;
 const listeners = new Set<() => void>();
@@ -63,7 +72,11 @@ export const applySlashPick = (
   editor
     .chain()
     .focus()
-    .insertContentAt(state.range, { type: "text", text }, { updateSelection: true })
+    .insertContentAt(
+      state.range,
+      { type: "text", text },
+      { updateSelection: true },
+    )
     .run();
   return true;
 };
@@ -89,7 +102,8 @@ export const SlashExtension = Extension.create<ISlashExtensionProps>({
           const all = getItems();
           if (!q) return all;
           return all.filter(
-            (s) => s.name.includes(q) || s.description.toLowerCase().includes(q),
+            (s) =>
+              s.name.includes(q) || s.description.toLowerCase().includes(q),
           );
         },
         command: ({ editor: pickEditor, props: skill }) => {
@@ -104,7 +118,9 @@ export const SlashExtension = Extension.create<ISlashExtensionProps>({
           onKeyDown: ({ event }: SuggestionKeyDownProps) => {
             if (menuState.items.length === 0) return false;
             if (event.key === "ArrowDown") {
-              setSlashIndex(Math.min(menuState.index + 1, menuState.items.length - 1));
+              setSlashIndex(
+                Math.min(menuState.index + 1, menuState.items.length - 1),
+              );
               return true;
             }
             if (event.key === "ArrowUp") {

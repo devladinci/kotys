@@ -26,13 +26,19 @@ if (!Element.prototype.getClientRects) {
 if (!Element.prototype.getBoundingClientRect) {
   Element.prototype.getBoundingClientRect = () => zeroRect;
 }
-if (!(Text.prototype as { getClientRects?: () => DOMRectList }).getClientRects) {
+if (
+  !(Text.prototype as { getClientRects?: () => DOMRectList }).getClientRects
+) {
   (Text.prototype as { getClientRects?: () => DOMRectList }).getClientRects =
     () => emptyRectList;
 }
-if (!(Text.prototype as { getBoundingClientRect?: () => DOMRect }).getBoundingClientRect) {
-  (Text.prototype as { getBoundingClientRect?: () => DOMRect }).getBoundingClientRect =
-    () => zeroRect;
+if (
+  !(Text.prototype as { getBoundingClientRect?: () => DOMRect })
+    .getBoundingClientRect
+) {
+  (
+    Text.prototype as { getBoundingClientRect?: () => DOMRect }
+  ).getBoundingClientRect = () => zeroRect;
 }
 if (!Range.prototype.getClientRects) {
   Range.prototype.getClientRects = () => emptyRectList;

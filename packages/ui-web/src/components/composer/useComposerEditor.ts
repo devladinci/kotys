@@ -60,21 +60,18 @@ export function useComposerEditor({
     setComposerConfig({ onSend, getImages, skills, placeholder });
   });
 
-  const submit = useCallback(
-    (activeEditor: Editor): boolean => {
-      const menu = getSlashMenuState();
-      if (menu.isOpen && menu.items.length > 0) {
-        return applySlashPick(activeEditor, menu.items[menu.index]);
-      }
-      const text = markdownOf(activeEditor);
-      const images = composerConfig.getImages();
-      if (!text.trim() && images.length === 0) return true;
-      composerConfig.onSend(text, images);
-      activeEditor.commands.clearContent(true);
-      return true;
-    },
-    [],
-  );
+  const submit = useCallback((activeEditor: Editor): boolean => {
+    const menu = getSlashMenuState();
+    if (menu.isOpen && menu.items.length > 0) {
+      return applySlashPick(activeEditor, menu.items[menu.index]);
+    }
+    const text = markdownOf(activeEditor);
+    const images = composerConfig.getImages();
+    if (!text.trim() && images.length === 0) return true;
+    composerConfig.onSend(text, images);
+    activeEditor.commands.clearContent(true);
+    return true;
+  }, []);
 
   const editor = useEditor({
     extensions: [

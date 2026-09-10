@@ -64,5 +64,3 @@ export function substituteSkillArgs(body: string, args: string): string {
       return positional[index - 1] ?? "";
     });
 }
-
-

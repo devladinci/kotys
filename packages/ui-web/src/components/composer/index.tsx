@@ -184,11 +184,7 @@ function ComposerBase({
   return (
     <div className="komposer relative">
       {menu.isOpen && (
-        <SlashMenu
-          items={menu.items}
-          index={menu.index}
-          onPick={pickSkill}
-        />
+        <SlashMenu items={menu.items} index={menu.index} onPick={pickSkill} />
       )}
       <div
         className={`bg-surface rounded-xl border p-1.5 transition ${

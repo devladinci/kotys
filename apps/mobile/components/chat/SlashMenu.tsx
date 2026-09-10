@@ -16,7 +16,8 @@ const filterSkills = (skills: SkillListing[], query: string) => {
   const q = query.toLowerCase();
   return skills.filter(
     (s) =>
-      s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
+      s.name.toLowerCase().includes(q) ||
+      s.description.toLowerCase().includes(q),
   );
 };
 
@@ -28,7 +29,9 @@ function SlashMenuBase({ skills, query, onPick, onDismiss }: IProps) {
   if (rows.length === 0) return null;
 
   return (
-    <View style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}>
+    <View
+      style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}
+    >
       <ScrollView keyboardShouldPersistTaps="handled" style={s.list}>
         {rows.map((skill) => (
           <Pressable
