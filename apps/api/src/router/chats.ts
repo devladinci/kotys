@@ -14,6 +14,7 @@ import { MODEL_LISTING_SCHEMA } from "@kotys/contracts";
 import { pub } from "./base.js";
 import { events } from "../services/events.js";
 import { compactChat } from "../services/chat/compact.js";
+import { liveForChat } from "../ws/streams.js";
 
 export const chatsRouter = {
   list: pub.handler(async () => listChatsWithTopics()),
@@ -86,4 +87,9 @@ export const chatsRouter = {
       }
       return result ?? { compacted: false as const };
     }),
+
+  /** The requestId still streaming into this chat, if any (remount adopt). */
+  liveStream: pub
+    .input(z.object({ chatId: z.number() }))
+    .handler(async ({ input }) => liveForChat(input.chatId)),
 };
