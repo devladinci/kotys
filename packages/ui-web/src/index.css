@@ -178,6 +178,50 @@ body,
   box-sizing: border-box;
 }
 
+.komposer .ProseMirror {
+  min-height: 32px;
+  max-height: 140px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.komposer .ProseMirror p {
+  margin: 0;
+  padding: 6px 2px;
+}
+
+.komposer .ProseMirror ul,
+.komposer .ProseMirror ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.komposer .ProseMirror li p {
+  padding: 2px;
+}
+
+.komposer .ProseMirror pre,
+.komposer .ProseMirror blockquote {
+  margin: 4px 2px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  border-left: 3px solid var(--border);
+  white-space: pre-wrap;
+}
+
+.komposer .ProseMirror blockquote {
+  white-space: normal;
+}
+
+.komposer .ProseMirror code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;

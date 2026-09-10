@@ -244,4 +244,26 @@ describe("ws manager: chat:resume", () => {
     expect(err).toBeDefined();
     expect(err?.payload.error).toBe("stream expired");
   });
+
+  it("does not end a still-live stream with a synthesized done", async () => {
+    const a = connect();
+    // A stream that is still running: no frames past what the client has
+    // already seen, but the request is alive and must stay open.
+    let settle: (r: ChatStreamResult) => void = () => {};
+    h.streamChat.mockReturnValue(
+      new Promise<ChatStreamResult>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const pending = send(a, streamReq(9, 5));
+    const b = connect();
+    await send(b, {
+      type: "chat:resume",
+      payload: { requestId: 9, lastSeq: 0 },
+    });
+    expect(b.sent.some((m) => m.type === "chat:done")).toBe(false);
+    expect(b.sent.some((m) => m.type === "chat:error")).toBe(false);
+    settle(result("done now"));
+    await pending;
+  });
 });

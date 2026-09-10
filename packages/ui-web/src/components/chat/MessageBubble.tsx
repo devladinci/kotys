@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
-import { splitContentByWidgets } from "@kotys/core";
+import { SkillMessage, splitContentByWidgets } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
 import {
   MarkdownBody,
@@ -154,7 +154,7 @@ function MessageBubbleBase({
                     })}
                   </div>
                 )}
-                <MarkdownBody content={message.content} />
+                <UserMessageBody content={message.content} />
               </div>
             </div>
           ) : (
@@ -271,7 +271,7 @@ function MessageBubbleBase({
                   <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.4s]" />
                 </div>
               ) : editing ? null : isUser ? (
-                <MarkdownBody content={message.content} />
+                <UserMessageBody content={message.content} />
               ) : (
                 <StreamingProvider value={isStreamingThis}>
                   {splitContentByWidgets(
@@ -296,3 +296,12 @@ function MessageBubbleBase({
 
 const MessageBubble = memo(MessageBubbleBase);
 export default MessageBubble;
+
+/** Skill invocations render through the same markdown body, minus the header. */
+function UserMessageBody({ content }: { content: string }) {
+  return (
+    <MarkdownBody
+      content={SkillMessage.fromContent(content)?.displayContent ?? content}
+    />
+  );
+}
