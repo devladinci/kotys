@@ -58,15 +58,23 @@ describe("isOriginAllowed", () => {
   });
 
   it("accepts the dev-server origin sharing the bind host (Expo Go on device)", () => {
-    expect(isOriginAllowed("http://100.77.236.93:8081", [], "100.77.236.93")).toBe(true);
-    expect(isOriginAllowed("https://100.77.236.93:8082", [], "100.77.236.93")).toBe(true);
+    expect(
+      isOriginAllowed("http://100.77.236.93:8081", [], "100.77.236.93"),
+    ).toBe(true);
+    expect(
+      isOriginAllowed("https://100.77.236.93:8082", [], "100.77.236.93"),
+    ).toBe(true);
   });
 
   it("rejects attacker origins", () => {
     expect(isOriginAllowed("http://evil.example")).toBe(false);
     expect(isOriginAllowed("https://evil.example:443")).toBe(false);
-    expect(isOriginAllowed("http://100.113.140.36:8081", [], "100.77.236.93")).toBe(false);
-    expect(isOriginAllowed("http://100.77.236.93:8081", [], "127.0.0.1")).toBe(false);
+    expect(
+      isOriginAllowed("http://100.113.140.36:8081", [], "100.77.236.93"),
+    ).toBe(false);
+    expect(isOriginAllowed("http://100.77.236.93:8081", [], "127.0.0.1")).toBe(
+      false,
+    );
     expect(isOriginAllowed("")).toBe(false);
   });
 
