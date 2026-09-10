@@ -574,8 +574,8 @@ function useBottomSpace(): number {
   }
 }
 
-export { bucketFor, relTime, CHAT_BUCKET_LABELS } from "./chatBuckets.js";
-export type { ChatBucket } from "./chatBuckets.js";
+export { bucketFor, relTime, CHAT_BUCKET_LABELS } from "./chatBuckets";
+export type { ChatBucket } from "./chatBuckets";
 const sh = StyleSheet.create({
   container: { flex: 1, justifyContent: "flex-end" },
   backdrop: {
