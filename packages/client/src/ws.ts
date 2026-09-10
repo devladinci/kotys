@@ -110,7 +110,8 @@ export class KotysSocket {
       for (const listener of this.listeners) listener(msg);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (ev: CloseEvent) => {
+      if (ev.code !== 1000) console.warn(`[ws] closed code=${ev.code} reason=${ev.reason}`);
       if (this.connectTimer) {
         clearTimeout(this.connectTimer);
         this.connectTimer = null;
