@@ -62,6 +62,9 @@ export const rpcMock = {
   tools: {
     list: fn([]),
   },
+  skills: {
+    list: fn([]),
+  },
   mcp: {
     servers: fn([]),
     reconnect: fn([]),

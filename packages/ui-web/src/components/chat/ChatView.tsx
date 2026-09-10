@@ -27,7 +27,7 @@ import { useUserInputStore } from "@kotys/core";
 import { DEFAULT_CONTEXT } from "@kotys/contracts";
 import PomodoroChip from "../pomodoro/PomodoroChip";
 import MessageList from "./MessageList";
-import Composer from "./Composer";
+import Composer from "../composer";
 import UserInputComposer from "../user-input/UserInputComposer";
 import ModelSelector from "./ModelSelector";
 import ThinkingSelector from "./ThinkingSelector";

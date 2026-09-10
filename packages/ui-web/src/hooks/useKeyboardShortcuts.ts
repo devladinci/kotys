@@ -6,9 +6,7 @@ import { usePomodoroStore } from "@kotys/core";
 export function focusComposer() {
   requestAnimationFrame(() => {
     document
-      .querySelector<HTMLTextAreaElement>(
-        'textarea[aria-label="Message composer"]',
-      )
+      .querySelector<HTMLElement>('.komposer [contenteditable="true"]')
       ?.focus();
   });
 }

@@ -1,4 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import type {
+  DragEvent as ReactDragEvent,
+  ChangeEvent as ReactChangeEvent,
+} from "react";
+import { EditorContent } from "@tiptap/react";
 import { ImagePlus, ListPlus, Send, Square, X } from "lucide-react";
 import {
   usePlatform,
@@ -6,14 +11,14 @@ import {
   useVoiceInput,
   type QueuedMessage,
 } from "@kotys/core";
-import { parseSlashCommand } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
-import MicButton from "./MicButton";
+import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
+import { useComposerEditor } from "./useComposerEditor";
+import { useSlashMenu, applySlashPick } from "./slashExtension";
 
 const MAX_IMAGES = 4;
 const IMAGE_MAX_DIM = 1536;
-const MAX_TEXTAREA_HEIGHT = 140;
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -68,40 +73,13 @@ function ComposerBase({
   onAbort,
   onDequeue,
 }: IProps) {
-  const [input, setInput] = useState("");
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [rejectedCount, setRejectedCount] = useState(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [slashDismissedFor, setSlashDismissedFor] = useState<string | null>(
-    null,
-  );
   const { skills } = useSkills();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout>>(null);
-
-  const slashCommand = parseSlashCommand(input);
-  const slashOpen =
-    slashCommand !== null &&
-    rejectedCount === 0 &&
-    slashDismissedFor !== slashCommand.name;
-  const slashQuery = slashCommand?.name ?? "";
-
-  const pickSkill = useCallback(
-    (skill: SkillListing) => {
-      const args = slashCommand?.args ?? "";
-      const next = `/${skill.name}${args ? ` ${args}` : ""}`;
-      setInput(next);
-      setSlashDismissedFor(skill.name);
-      textareaRef.current?.focus();
-      requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (el) el.selectionStart = el.selectionEnd = next.length;
-      });
-    },
-    [slashCommand],
-  );
 
   const addImages = useCallback(async (files: Iterable<File>) => {
     const all = [...files];
@@ -127,12 +105,61 @@ function ComposerBase({
     }
   }, []);
 
+  const clearPending = useCallback(() => {
+    setPendingImages([]);
+    setRejectedCount(0);
+    setVoiceError(null);
+  }, []);
+
+  const sendWithImages = useCallback(
+    (text: string, images: string[]) => {
+      onSend(text, images);
+      clearPending();
+    },
+    [onSend, clearPending],
+  );
+
   const effectiveImages = visionCapable ? pendingImages : [];
 
+  const handleDragOver = (e: ReactDragEvent) => {
+    e.preventDefault();
+    if (visionCapable && !dragOver) setDragOver(true);
+  };
+
+  const handleDragLeave = (e: ReactDragEvent) => {
+    if (e.currentTarget === e.target) setDragOver(false);
+  };
+
+  const handleDrop = (e: ReactDragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (visionCapable && e.dataTransfer.files.length > 0)
+      void addImages(e.dataTransfer.files);
+  };
+
+  const handleFileInput = (e: ReactChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) void addImages(e.target.files);
+    e.target.value = "";
+  };
+
+  const handleRemoveImage = (removeIndex: number) => {
+    setPendingImages((prev) => prev.filter((_, j) => j !== removeIndex));
+  };
+
+  const { editor, send, isEmpty } = useComposerEditor({
+    skills,
+    placeholder: needsApiKey
+      ? "Set API key in settings..."
+      : hasMessages
+        ? "Reply to continue the conversation..."
+        : "Ask anything to start a new conversation...",
+    onSend: sendWithImages,
+    getImages: () => effectiveImages,
+  });
+
   const voice = useVoiceInput(usePlatform(), (text) => {
-    onSend(text, effectiveImages);
-    setInput("");
-    setPendingImages([]);
+    sendWithImages(text, effectiveImages);
+    editor?.commands.clearContent(true);
   });
 
   useEffect(() => {
@@ -143,31 +170,24 @@ function ComposerBase({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [voice.status, voice.error]);
 
-  const send = () => {
-    const text = input;
-    const images = effectiveImages;
-    if (!text.trim() && images.length === 0) return;
-    onSend(text, images);
-    setInput("");
-    setPendingImages([]);
-    setSlashDismissedFor(null);
-  };
+  const menu = useSlashMenu();
 
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-  }, [input]);
+  const pickSkill = useCallback(
+    (skill: SkillListing) => {
+      if (editor) applySlashPick(editor, skill);
+    },
+    [editor],
+  );
+
+  const canSend = !isEmpty || effectiveImages.length > 0;
 
   return (
-    <div className="relative">
-      {slashOpen && (
+    <div className="komposer relative">
+      {menu.isOpen && (
         <SlashMenu
-          query={slashQuery}
-          skills={skills}
+          items={menu.items}
+          index={menu.index}
           onPick={pickSkill}
-          onClose={() => setSlashDismissedFor(slashCommand?.name ?? "")}
         />
       )}
       <div
@@ -176,19 +196,9 @@ function ComposerBase({
             ? "border-accent ring-2 ring-accent/30 bg-accent/5"
             : "border-border focus-within:border-accent"
         }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (visionCapable && !dragOver) setDragOver(true);
-        }}
-        onDragLeave={(e) => {
-          if (e.currentTarget === e.target) setDragOver(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          if (visionCapable && e.dataTransfer.files.length > 0)
-            void addImages(e.dataTransfer.files);
-        }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {dragOver && visionCapable && (
           <div className="mb-2 text-xs text-accent font-medium text-center py-1">
@@ -228,16 +238,14 @@ function ComposerBase({
             className={`flex flex-wrap gap-2 mb-2 ${visionCapable ? "" : "opacity-40"}`}
           >
             {pendingImages.map((src, i) => (
-              <div key={i} className="relative">
+              <div key={src.slice(-24) + i} className="relative">
                 <img
                   src={src}
                   alt="Pending attachment"
                   className="h-14 w-14 object-cover rounded-lg border border-border"
                 />
                 <button
-                  onClick={() =>
-                    setPendingImages((prev) => prev.filter((_, j) => j !== i))
-                  }
+                  onClick={() => handleRemoveImage(i)}
                   aria-label="Remove attachment"
                   className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-surface-2 border border-border flex items-center justify-center hover:bg-red-500 hover:text-white transition"
                 >
@@ -281,16 +289,13 @@ function ComposerBase({
             accept="image/*"
             multiple
             className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.length) void addImages(e.target.files);
-              e.target.value = "";
-            }}
+            onChange={handleFileInput}
           />
           <MicButton
             status={voice.status}
             onStart={() => void voice.start()}
-            onStop={() => voice.stop()}
-            onCancel={() => voice.cancel()}
+            onStop={voice.stop}
+            onCancel={voice.cancel}
           />
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -305,50 +310,12 @@ function ComposerBase({
           >
             <ImagePlus size={16} />
           </button>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              const next = parseSlashCommand(e.target.value);
-              if (next === null || next.name !== slashDismissedFor)
-                setSlashDismissedFor(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            onPaste={(e) => {
-              if (!visionCapable) return;
-              const files = [...e.clipboardData.items]
-                .filter((item) => item.kind === "file")
-                .map((item) => item.getAsFile())
-                .filter((f): f is File => f !== null);
-              if (files.length > 0) {
-                e.preventDefault();
-                void addImages(files);
-              }
-            }}
-            placeholder={
-              needsApiKey
-                ? "Set API key in settings..."
-                : hasMessages
-                  ? "Reply to continue the conversation..."
-                  : "Ask anything to start a new conversation..."
-            }
-            rows={1}
-            aria-label="Message composer"
-            className="flex-1 bg-transparent text-sm text-text placeholder-text-muted outline-none resize-none overflow-y-auto scrollbar-thin py-1.5 px-0.5"
-            style={{ height: "32px", maxHeight: MAX_TEXTAREA_HEIGHT }}
-          />
+          <EditorContent editor={editor} className="flex-1 min-w-0" />
           {streamingId !== null ? (
             <>
               <button
                 onClick={send}
-                disabled={!input.trim() && effectiveImages.length === 0}
+                disabled={!canSend}
                 title="Queue message"
                 aria-label="Queue message"
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 hover:bg-surface-2/70 text-text-muted hover:text-text transition disabled:opacity-40"
@@ -367,9 +334,7 @@ function ComposerBase({
           ) : (
             <button
               onClick={send}
-              disabled={
-                isLoading || (!input.trim() && effectiveImages.length === 0)
-              }
+              disabled={isLoading || !canSend}
               aria-label="Send message"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent text-white transition"
             >
