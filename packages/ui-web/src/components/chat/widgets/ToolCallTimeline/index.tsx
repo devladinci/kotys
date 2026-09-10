@@ -2,17 +2,25 @@ import { useState } from "react";
 import type { ToolActivity } from "@kotys/contracts";
 import { WidgetFor } from "../registry";
 import { buildPages, VISIBLE_TOOL_CALLS, type Segment } from "./model";
-import { useRunningTicker, useScrollFollow, useTrackWidth } from "./hooks";
+import { useRunningTicker } from "./useRunningTicker";
+import { useScrollFollow } from "./useScrollFollow";
+import { useTrackWidth } from "./useTrackWidth";
 import { TimelineSegment } from "./TimelineSegment";
-import { HoverCard, SegmentDetailBody } from "./HoverCard";
-import { CollapsedSummary, CollapseToggle, CountsLine } from "./Summary";
+import { HoverCard } from "./HoverCard";
+import { SegmentDetailBody } from "./SegmentDetailBody";
+import { CollapsedSummary } from "./CollapsedSummary";
+import { CollapseToggle } from "./CollapseToggle";
+import { CountsLine } from "./CountsLine";
 
 interface IProps {
   calls: ToolActivity[];
   isStreaming?: boolean;
 }
 
-export function ToolCallTimeline({ calls: raw, isStreaming = false }: IProps) {
+export default function ToolCallTimeline({
+  calls: raw,
+  isStreaming = false,
+}: IProps) {
   const calls = raw.filter(Boolean);
   const [expanded, setExpanded] = useState(true);
   const [preview, setPreview] = useState<{

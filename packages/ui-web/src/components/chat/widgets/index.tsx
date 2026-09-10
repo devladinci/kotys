@@ -2,6 +2,6 @@
 export { default as MarkdownBody } from "./MarkdownBody";
 export { StreamingProvider } from "./StreamingContext";
 export { default as ToolCallItem } from "./ToolCallItem";
-export { ToolCallTimeline } from "./ToolCallTimeline/index";
+export { default as ToolCallTimeline } from "./ToolCallTimeline";
 export { WidgetFor } from "./registry";
 export { renderSnippet } from "./renderSnippet";

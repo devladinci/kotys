@@ -48,6 +48,7 @@ export function TimelineSegment({
     const raf = requestAnimationFrame(() => setGrown(true));
     return () => cancelAnimationFrame(raf);
   }, []);
+
   useEffect(() => {
     if (!grown) return;
     const t = window.setTimeout(() => setSettled(true), GROW_IN_MS + 100);
