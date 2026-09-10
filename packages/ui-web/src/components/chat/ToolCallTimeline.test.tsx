@@ -105,10 +105,9 @@ describe("ToolCallTimeline", () => {
     expect(lead.querySelector("svg")).not.toBeNull();
     expect(gen.querySelector("svg")).not.toBeNull();
 
-    const track = search.parentElement as HTMLElement;
-    expect(track.className).toContain("w-full");
+    const track = search.closest(".w-full.shrink-0") as HTMLElement;
     expect(track.className).not.toMatch(/gap-/);
-    expect(track.className).toContain("rounded");
+    expect(track.className).toContain("shrink-0");
   });
 
   it("shows tool params and results in the hover modal, then hides it", async () => {
@@ -206,6 +205,36 @@ describe("ToolCallTimeline", () => {
     expect(
       screen.getByText("2 tools · 7.0s total · 3.5s in tools"),
     ).toBeInTheDocument();
+  });
+
+  it("rolls older calls off-view beyond 15, keeping the turn total intact", async () => {
+    const calls = Array.from({ length: 40 }, (_, i) =>
+      timed(1000 + i * 1000, 400, {
+        tool: "grep",
+        query: `q${i}`,
+        ...(i === 39 ? { turnEndedAt: T0 + 40400 } : {}),
+      }),
+    );
+
+    render(<ToolCallTimeline isStreaming={false} calls={calls} />);
+
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(r));
+    });
+
+    // Only the newest 15 calls sit in the newest page; older calls stay in the
+    // DOM on earlier tape pages, reachable by scrolling left.
+    const q39 = screen.getByRole("button", { name: /q39/ });
+    const strip = q39.parentElement as HTMLElement;
+    const q0 = screen.getByRole("button", { name: /q0/ });
+    expect(q0.parentElement).not.toBe(strip);
+    // 3 scrollable pages: 15 + 15 + 10 calls.
+    expect(strip.parentElement?.children.length).toBe(3);
+
+    // The full turn span is preserved: 1s lead + 40×400ms tools + 39×600ms
+    // gaps = 40.4s, independent of how the tape pages the calls.
+    expect(screen.getAllByText(/40 tools/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/40s total/).length).toBeGreaterThan(0);
   });
 
   it("renders widget calls and their cards", () => {
