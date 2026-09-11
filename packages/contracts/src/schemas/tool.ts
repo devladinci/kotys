@@ -23,7 +23,16 @@ const INPUT_WIDGET_SCHEMA = z.object({
   answers: z.record(z.string(), z.string()).nullable(),
 });
 
-const WIDGET_SCHEMA = z.union([TODO_WIDGET_SCHEMA, INPUT_WIDGET_SCHEMA]);
+const IMAGE_WIDGET_SCHEMA = z.object({
+  kind: z.literal("image"),
+  images: z.array(z.string()),
+});
+
+const WIDGET_SCHEMA = z.union([
+  TODO_WIDGET_SCHEMA,
+  INPUT_WIDGET_SCHEMA,
+  IMAGE_WIDGET_SCHEMA,
+]);
 
 export const TOOL_ACTIVITY_SCHEMA = z.object({
   tool: z.string(),

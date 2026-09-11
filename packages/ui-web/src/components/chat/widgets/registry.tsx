@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { ToolActivity } from "@kotys/contracts";
 import InputCard from "./InputCard";
 import TodoCard from "./TodoCard";
+import ImageCard from "./ImageCard";
 
 export type ChatWidget = NonNullable<ToolActivity["widget"]>;
 
@@ -9,6 +10,7 @@ export type ChatWidget = NonNullable<ToolActivity["widget"]>;
 const REGISTRY = {
   todo: TodoCard,
   input: InputCard,
+  image: ImageCard,
 } satisfies {
   [K in ChatWidget["kind"]]: ComponentType<{
     widget: Extract<ChatWidget, { kind: K }>;

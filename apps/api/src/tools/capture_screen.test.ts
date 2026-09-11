@@ -175,6 +175,10 @@ describe("execute", () => {
         // sips re-encodes as JPEG — "/9j/" is the base64 SOI marker.
         expect(thumb!.startsWith("/9j/")).toBe(true);
         expect(thumb!.length).toBeLessThan(200_000);
+        expect(res.activity.widget).toEqual({
+          kind: "image",
+          images: [thumb],
+        });
       }
     },
   );

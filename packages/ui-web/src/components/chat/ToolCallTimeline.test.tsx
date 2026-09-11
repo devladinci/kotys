@@ -12,6 +12,10 @@ const activity = (partial: Partial<ToolActivity>): ToolActivity => ({
 
 const T0 = 1_000_000;
 
+// 1×1 JPEG (SOI + minimal frame) so <img> src assertions stay cheap.
+const TINY_JPEG =
+  "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPDUzNDP/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==";
+
 const timed = (
   startedAt: number,
   durationMs: number,
@@ -255,6 +259,22 @@ describe("ToolCallTimeline", () => {
       />,
     );
     expect(screen.getByText("Review the PR")).toBeInTheDocument();
+  });
+
+  it("renders an image widget inline", () => {
+    render(
+      <ToolCallTimeline
+        isStreaming={false}
+        calls={[
+          activity({
+            tool: "capture_screen",
+            widget: { kind: "image", images: [TINY_JPEG] },
+          }),
+        ]}
+      />,
+    );
+    const img = screen.getByAltText("Screenshot 1");
+    expect(img).toHaveAttribute("src", `data:image/jpeg;base64,${TINY_JPEG}`);
   });
 
   it("formats durations compactly", () => {

@@ -45,7 +45,9 @@ export default function ToolCallTimeline({
     const widgetKey =
       tc.widget.kind === "todo"
         ? `todo-${tc.widget.id}`
-        : `input-${tc.widget.title}`;
+        : tc.widget.kind === "image"
+          ? `image-${tc.tool}-${tc.startedAt ?? ""}`
+          : `input-${tc.widget.title}`;
     return <WidgetFor key={widgetKey} widget={tc.widget} />;
   });
 

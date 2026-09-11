@@ -18,6 +18,11 @@ export type InputWidget = {
   answers: Record<string, string> | null;
 };
 
+export type ImageWidget = {
+  kind: "image";
+  images: string[];
+};
+
 export type ToolActivity = {
   tool: string;
   server?: string;
@@ -37,7 +42,7 @@ export type ToolActivity = {
   results?: { title: string; url: string }[];
   /** Base64 preview images (e.g. screenshot thumbnails) shown in the timeline. */
   images?: string[];
-  widget?: TodoWidget | InputWidget;
+  widget?: TodoWidget | InputWidget | ImageWidget;
   error?: string;
 };
 
