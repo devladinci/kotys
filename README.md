@@ -114,6 +114,7 @@ that goes away does not end the turn.
 | Tasks  | `create_todo`, `update_todo`, `complete_todo`, `list_todos`, `delete_todo`, `start_pomodoro` |
 | Chats  | `list_chats`, `search_chats`, `get_chat`                                                     |
 | Input  | `request_user_input` — asks you a question with a real form                                  |
+| Screen | `capture_screen`, `control_screen` — macOS screenshots and mouse/keyboard control            |
 | System | `current_datetime`                                                                           |
 
 Every tool can be switched off in **Settings → Tooling**. MCP tool toggles

@@ -3,7 +3,10 @@
   "workspaces": {
     ".": {},
     "apps/api": {
-      "entry": ["scripts/e2e-computer-observe.mts"]
+      "entry": ["scripts/e2e-computer-observe.mts"],
+      // pbcopy/osascript are macOS system binaries (clipboard type and the
+      // Chromium-safe paste path), not package dependencies.
+      "ignoreBinaries": ["pbcopy", "osascript"]
     },
     "apps/desktop": {
       "entry": ["electron/main.ts", "electron/preload.ts"],

@@ -22,6 +22,7 @@ import {
   MessageSquareText,
   MessagesSquare,
   Monitor,
+  MousePointerClick,
   NotebookText,
   Plus,
   Search,
@@ -51,7 +52,7 @@ const TONES: Record<ToolTone, string[]> = {
   web: ["web_search", "web_fetch", "mcp_load_tools"],
   read: ["read_file", "list", "grep"],
   write: ["write_file", "apply_patch"],
-  shell: ["bash", "capture_screen"],
+  shell: ["bash", "capture_screen", "control_screen"],
   memory: [
     "search_memories",
     "create_memory",
@@ -130,6 +131,7 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   apply_patch: FilePen,
   bash: Terminal,
   capture_screen: Camera,
+  control_screen: MousePointerClick,
   list_chats: MessagesSquare,
   search_chats: History,
   get_chat: MessageSquareText,
@@ -190,6 +192,13 @@ const BUILTIN: Record<string, Formatter> = {
     return {
       Icon: unchanged ? Monitor : TOOL_ICONS.capture_screen,
       label: `${running ? "Capturing" : "Captured"} ${target}${unchanged ? " (unchanged)" : ""}`,
+    };
+  },
+  control_screen: (tc, running) => {
+    const target = tc.query || "the screen";
+    return {
+      Icon: TOOL_ICONS.control_screen,
+      label: `${running ? "Controlling" : "Controlled"} ${target}`,
     };
   },
   list_chats: (tc, running) => ({
