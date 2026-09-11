@@ -35,6 +35,8 @@ export type ToolActivity = {
   textOffset?: number;
   roundAnchor?: number;
   results?: { title: string; url: string }[];
+  /** Base64 preview images (e.g. screenshot thumbnails) shown in the timeline. */
+  images?: string[];
   widget?: TodoWidget | InputWidget;
   error?: string;
 };

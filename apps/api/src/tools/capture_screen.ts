@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
@@ -22,6 +22,7 @@ import type { ToolContext } from "./types.js";
 
 const DEFAULT_MAX_DIM = 1280;
 const MIN_WINDOW_DIM = 60;
+const THUMB_MAX_DIM = 384;
 
 export type WindowInfo = {
   id: number;
@@ -65,6 +66,37 @@ function exec(
 
 function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function makeThumbnail(png: Buffer): Promise<string | null> {
+  const src = join(tmpdir(), `kotys-thumb-src-${Date.now()}.png`);
+  const dst = join(tmpdir(), `kotys-thumb-${Date.now()}.jpg`);
+  try {
+    await writeFile(src, png);
+    await exec(
+      "sips",
+      [
+        "-Z",
+        String(THUMB_MAX_DIM),
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        "70",
+        src,
+        "--out",
+        dst,
+      ],
+      AbortSignal.timeout(10_000),
+    );
+    return (await readFile(dst)).toString("base64");
+  } catch {
+    return null;
+  } finally {
+    await rm(src, { force: true });
+    await rm(dst, { force: true });
+  }
 }
 
 export function pngSize(png: Buffer): { width: number; height: number } {
@@ -291,6 +323,8 @@ export async function execute(
     };
   }
 
+  const thumb = await makeThumbnail(png);
+
   return {
     content: JSON.stringify({
       observed: label,
@@ -300,6 +334,10 @@ export async function execute(
       note: "PNG attached to this tool message as an image.",
     }),
     resultImages: [png.toString("base64")],
-    activity: { status: "done", query: label },
+    activity: {
+      status: "done",
+      query: label,
+      images: thumb ? [thumb] : undefined,
+    },
   };
 }
