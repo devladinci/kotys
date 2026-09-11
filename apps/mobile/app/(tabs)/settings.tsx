@@ -413,7 +413,7 @@ const TOOL_ICONS: Record<string, IoniconName> = {
   write_file: "document-text-outline",
   apply_patch: "create-outline",
   bash: "terminal-outline",
-  computer_observe: "camera-outline",
+  capture_screen: "camera-outline",
   list_chats: "chatbox-ellipses-outline",
   search_chats: "time-outline",
   get_chat: "chatbubble-ellipses-outline",

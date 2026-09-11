@@ -120,6 +120,7 @@ export async function streamChat(
   const preloadedMcp = getMcpToolDefinitionsByName(
     getLoadedMcpToolNames(streamChatId),
     toolEnabled,
+    TOOL_DEFINITIONS.map((d) => d.function.name),
   );
   const tier = mcpIndexTier(contextLength);
   const loadedNames = getLoadedMcpToolNames(streamChatId);

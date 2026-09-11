@@ -51,7 +51,7 @@ const TONES: Record<ToolTone, string[]> = {
   web: ["web_search", "web_fetch", "mcp_load_tools"],
   read: ["read_file", "list", "grep"],
   write: ["write_file", "apply_patch"],
-  shell: ["bash", "computer_observe"],
+  shell: ["bash", "capture_screen"],
   memory: [
     "search_memories",
     "create_memory",
@@ -116,7 +116,7 @@ type Formatter = (tc: ToolActivity, running: boolean) => ToolPresentation;
 /**
  * Tool name → icon, the single source of truth for every place a tool is
  * shown: the timeline, tool rows, and the settings list. Formatters may
- * override at render time (computer_observe swaps to Monitor when the frame
+ * override at render time (capture_screen swaps to Monitor when the frame
  * is unchanged) but must start from here so new surfaces stay in sync.
  */
 export const TOOL_ICONS: Record<string, LucideIcon> = {
@@ -129,7 +129,7 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   write_file: FilePlus2,
   apply_patch: FilePen,
   bash: Terminal,
-  computer_observe: Camera,
+  capture_screen: Camera,
   list_chats: MessagesSquare,
   search_chats: History,
   get_chat: MessageSquareText,
@@ -184,18 +184,12 @@ const BUILTIN: Record<string, Formatter> = {
     Icon: TOOL_ICONS.bash,
     label: `${running ? "Running" : "Ran"} ${clamp(tc.query ?? "", 70)}`,
   }),
-  // query is what was observed — "the screen" or an app name — with a
-  // trailing "(unchanged)" when the frame repeated. A running call has no
-  // query yet: the tool resolves the window only once it starts.
-  computer_observe: (tc, running) => {
-    const unchanged =
-      !running &&
-      tc.status === "done" &&
-      (tc.query?.endsWith("(unchanged)") ?? false);
-    const target = tc.query?.replace(/ \(unchanged\)$/, "") || "the screen";
+  capture_screen: (tc, running) => {
+    const unchanged = !running && tc.status === "done" && !!tc.unchanged;
+    const target = tc.query || "the screen";
     return {
-      Icon: unchanged ? Monitor : TOOL_ICONS.computer_observe,
-      label: `${running ? "Observing" : "Observed"} ${target}${unchanged ? " (unchanged)" : ""}`,
+      Icon: unchanged ? Monitor : TOOL_ICONS.capture_screen,
+      label: `${running ? "Capturing" : "Captured"} ${target}${unchanged ? " (unchanged)" : ""}`,
     };
   },
   list_chats: (tc, running) => ({

@@ -1,9 +1,9 @@
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
 import type { ToolContext, ToolModule } from "./types.js";
 import {
-  definition as computerObserveDef,
-  execute as computerObserveExec,
-} from "./computer_observe.js";
+  definition as captureScreenDef,
+  execute as captureScreenExec,
+} from "./capture_screen.js";
 import {
   definition as currentDateTimeDef,
   execute as currentDateTimeExec,
@@ -93,7 +93,7 @@ import {
 // (not namespace) imports collected into plain object literals so both knip and
 // the bundler can trace the definition/execute usages.
 const TOOLS: ToolModule[] = [
-  { definition: computerObserveDef, execute: computerObserveExec },
+  { definition: captureScreenDef, execute: captureScreenExec },
   { definition: currentDateTimeDef, execute: currentDateTimeExec },
   { definition: webSearchDef, execute: webSearchExec },
   { definition: webFetchDef, execute: webFetchExec },
