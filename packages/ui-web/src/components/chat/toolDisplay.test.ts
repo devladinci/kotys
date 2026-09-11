@@ -85,6 +85,7 @@ describe("TOOL_ICONS", () => {
     "create_memory",
     "create_todo",
     "current_datetime",
+    "control_screen",
     "delete_memory",
     "delete_todo",
     "get_chat",

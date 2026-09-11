@@ -3,7 +3,10 @@
   "workspaces": {
     ".": {},
     "apps/api": {
-      "entry": ["scripts/e2e-computer-observe.mts"]
+      "entry": ["scripts/e2e-computer-observe.mts"],
+      // pbcopy is a macOS system binary (clipboard for the type action),
+      // not a package dependency.
+      "ignoreBinaries": ["pbcopy"]
     },
     "apps/desktop": {
       "entry": ["electron/main.ts", "electron/preload.ts"],
