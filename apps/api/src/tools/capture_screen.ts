@@ -338,6 +338,7 @@ export async function execute(
       status: "done",
       query: label,
       images: thumb ? [thumb] : undefined,
+      widget: thumb ? { kind: "image", images: [thumb] } : undefined,
     },
   };
 }

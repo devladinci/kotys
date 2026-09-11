@@ -145,6 +145,20 @@ function BubbleBase({
                 <View key={i} style={{ marginTop: 4, marginBottom: 4 }}>
                   <InputCard widget={segment.widget} />
                 </View>
+              ) : segment.widget.kind === "image" ? (
+                <View
+                  key={i}
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                >
+                  {segment.widget.images.map((img, j) => (
+                    <Image
+                      key={j}
+                      source={{ uri: `data:image/jpeg;base64,${img}` }}
+                      style={s.bubbleImage}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
               ) : null,
           )
         )}
