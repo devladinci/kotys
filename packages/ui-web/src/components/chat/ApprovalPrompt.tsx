@@ -9,6 +9,7 @@ const TOOL_LABELS: Record<string, string> = {
   write_file: "create or overwrite a file",
   apply_patch: "patch a file",
   capture_screen: "take a screenshot",
+  control_screen: "click or type on the screen",
 };
 
 function ApprovalPromptComponent() {

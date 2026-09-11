@@ -20,6 +20,7 @@ treat every prompt you paste into the chat with the same care.
 - Read and write files (`read_file`, `write_file`, `apply_patch`).
 - Fetch web pages and search the web (`web_fetch`, `web_search`).
 - Capture the screen (`capture_screen`) if granted macOS permissions.
+- Click or type on screen apps (`control_screen`) if granted Accessibility permissions. Window-scoped only, unless approved.
 
 ## Guardrails
 

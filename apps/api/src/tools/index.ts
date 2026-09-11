@@ -5,6 +5,10 @@ import {
   execute as captureScreenExec,
 } from "./capture_screen.js";
 import {
+  definition as controlScreenDef,
+  execute as controlScreenExec,
+} from "./control_screen.js";
+import {
   definition as currentDateTimeDef,
   execute as currentDateTimeExec,
 } from "./current_datetime.js";
@@ -94,6 +98,7 @@ import {
 // the bundler can trace the definition/execute usages.
 const TOOLS: ToolModule[] = [
   { definition: captureScreenDef, execute: captureScreenExec },
+  { definition: controlScreenDef, execute: controlScreenExec },
   { definition: currentDateTimeDef, execute: currentDateTimeExec },
   { definition: webSearchDef, execute: webSearchExec },
   { definition: webFetchDef, execute: webFetchExec },

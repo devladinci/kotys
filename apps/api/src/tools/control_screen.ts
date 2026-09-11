@@ -1,0 +1,424 @@
+import { execFile, spawn } from "node:child_process";
+import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
+import type { ToolContext } from "./types.js";
+import { listWindows, pickWindow, type WindowInfo } from "./capture_screen.js";
+
+/**
+ * control_screen — mouse and keyboard actions on macOS via cliclick.
+ *
+ * Typing lands through the clipboard (pbcopy + Cmd+V): instant and immune to
+ * keyboard layouts, unlike emulated keystrokes.
+ *
+ * With `app`, coordinates are relative to that app's frontmost window and the
+ * call runs through the tool's own consent channel (auto-approved in
+ * autopilot, asked for in copilot). Without `app`, coordinates are absolute
+ * screen coordinates and the call goes through the approval round-trip
+ * directly, so even autopilot asks.
+ */
+
+const MAX_ACTIONS = 12;
+const DEFAULT_SETTLE_MS = 350;
+const MIN_SETTLE_MS = 50;
+const MAX_SETTLE_MS = 2000;
+
+const MODIFIERS = ["cmd", "alt", "ctrl", "shift", "fn"] as const;
+type Modifier = (typeof MODIFIERS)[number];
+
+export type ControlAction =
+  | { op: "click"; x: number; y: number }
+  | { op: "type"; text: string }
+  | { op: "key"; key: string; modifiers?: Modifier[] }
+  | { op: "wait"; ms: number };
+
+const KNOWN_KEYS = new Set([
+  "return",
+  "esc",
+  "space",
+  "tab",
+  "delete",
+  "fwd-delete",
+  "home",
+  "end",
+  "page-up",
+  "page-down",
+  "arrow-up",
+  "arrow-down",
+  "arrow-left",
+  "arrow-right",
+  "enter",
+  "fn",
+]);
+
+function isModifier(value: unknown): value is Modifier {
+  return (
+    typeof value === "string" &&
+    (MODIFIERS as readonly string[]).includes(value)
+  );
+}
+
+function isNonNegativeInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+export function validateActions(raw: unknown): {
+  actions?: ControlAction[];
+  error?: string;
+} {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return { error: "`actions` must be a non-empty array." };
+  }
+  if (raw.length > MAX_ACTIONS) {
+    return { error: `At most ${MAX_ACTIONS} actions per call.` };
+  }
+  const actions: ControlAction[] = [];
+  for (const item of raw) {
+    const a = (item ?? {}) as Record<string, unknown>;
+    if (a.op === "click") {
+      if (!isNonNegativeInt(a.x) || !isNonNegativeInt(a.y)) {
+        return {
+          error:
+            "click needs integer `x` and `y` (pixels in the target window).",
+        };
+      }
+      actions.push({ op: "click", x: a.x, y: a.y });
+    } else if (a.op === "type") {
+      if (
+        typeof a.text !== "string" ||
+        a.text.length === 0 ||
+        a.text.length > 2000
+      ) {
+        return { error: "type needs non-empty `text` (up to 2000 chars)." };
+      }
+      actions.push({ op: "type", text: a.text });
+    } else if (a.op === "key") {
+      if (
+        typeof a.key !== "string" ||
+        a.key.length > 20 ||
+        !/^[a-z0-9-]$|^[a-z0-9][a-z0-9-]{0,19}$/.test(a.key)
+      ) {
+        return {
+          error:
+            "key needs a cliclick key name like `return`, `esc`, `space`, `arrow-down`, `f5`, or a single character.",
+        };
+      }
+      const modifiers = a.modifiers ?? [];
+      if (!Array.isArray(modifiers) || !modifiers.every(isModifier)) {
+        return {
+          error: `modifiers must be a subset of: ${MODIFIERS.join(", ")}.`,
+        };
+      }
+      const key = a.key.toLowerCase();
+      actions.push(
+        modifiers.length > 0
+          ? { op: "key", key, modifiers: modifiers as Modifier[] }
+          : { op: "key", key },
+      );
+    } else if (a.op === "wait") {
+      if (!isNonNegativeInt(a.ms) || a.ms < MIN_SETTLE_MS || a.ms > 5000) {
+        return {
+          error: `wait needs \`ms\` between ${MIN_SETTLE_MS} and 5000.`,
+        };
+      }
+      actions.push({ op: "wait", ms: a.ms });
+    } else {
+      return { error: `Unknown action op: ${JSON.stringify(a.op)}.` };
+    }
+  }
+  return { actions };
+}
+
+export function describeActions(actions: ControlAction[]): string {
+  return actions
+    .map((a) => {
+      if (a.op === "click") return `click(${a.x},${a.y})`;
+      if (a.op === "type")
+        return `type(${JSON.stringify(a.text.slice(0, 24))})`;
+      if (a.op === "key") {
+        return `key(${[...(a.modifiers ?? []), a.key].join("+")})`;
+      }
+      return `wait(${a.ms}ms)`;
+    })
+    .join(" → ");
+}
+
+function exec(cmd: string, args: string[], signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 15_000, signal }, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+function copyToClipboard(text: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("pbcopy");
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`pbcopy exited with ${code}`));
+    });
+    child.stdin.end(text);
+  });
+}
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new Error("aborted"));
+      },
+      { once: true },
+    );
+  });
+}
+
+async function runCliclick(
+  commands: string[],
+  signal: AbortSignal,
+): Promise<void> {
+  try {
+    await exec("cliclick", ["-w", "20", ...commands], signal);
+  } catch (err) {
+    if (
+      (err as NodeJS.ErrnoException).code === "ENOENT" ||
+      (err instanceof Error && err.message.includes("ENOENT"))
+    ) {
+      throw new Error(
+        "cliclick is not installed. Install it with `brew install cliclick`.",
+      );
+    }
+    throw new Error(
+      `cliclick failed (${err instanceof Error ? err.message : String(err)}). ` +
+        "If nothing happened, grant Accessibility permission to the app running Kotys " +
+        "(System Settings → Privacy & Security → Accessibility).",
+    );
+  }
+}
+
+export function keyCommands(action: ControlAction & { op: "key" }): string[] {
+  const isSpecial =
+    KNOWN_KEYS.has(action.key) ||
+    /^f\d{1,2}$/.test(action.key) ||
+    /^num-/.test(action.key) ||
+    /^arrow-/.test(action.key);
+  const press = isSpecial ? `kp:${action.key}` : `t:${action.key}`;
+  if (!action.modifiers) return [press];
+  const mods = action.modifiers.join(",");
+  return [`kd:${mods}`, press, `ku:${mods}`];
+}
+
+export const definition: ToolDefinition = {
+  type: "function",
+  category: "write",
+  function: {
+    name: "control_screen",
+    description:
+      "Perform mouse and keyboard actions on macOS: click, type, key, wait — several in one call. " +
+      "Pair with capture_screen: capture first, act on coordinates read from that capture, then re-capture to verify. " +
+      "With `app`, coordinates are relative to that app's frontmost window (recommended — safer, and can auto-run in autopilot). " +
+      "Without `app`, coordinates are absolute screen coordinates and the user is always asked. " +
+      "For web pages prefer the browser tools; use this for native apps such as Simulator, Finder or Xcode.",
+    parameters: {
+      type: "object",
+      properties: {
+        actions: {
+          type: "array",
+          maxItems: MAX_ACTIONS,
+          description:
+            'Ordered actions, e.g. [{"op":"click","x":120,"y":80},{"op":"type","text":"hello"},{"op":"key","key":"return"}.',
+          items: {
+            type: "object",
+            properties: {
+              op: {
+                type: "string",
+                enum: ["click", "type", "key", "wait"],
+                description:
+                  "click = left click at x/y; type = paste text via clipboard; key = press a key or chord; wait = pause.",
+              },
+              x: {
+                type: "integer",
+                description:
+                  "Pixel x, relative to the target window (or the screen).",
+              },
+              y: {
+                type: "integer",
+                description:
+                  "Pixel y, relative to the target window (or the screen).",
+              },
+              text: { type: "string", description: "Text to paste (op=type)." },
+              key: {
+                type: "string",
+                description:
+                  "Key name for op=key: return, esc, space, tab, delete, fwd-delete, arrow-up/down/left/right, f1…f16, or a single character.",
+              },
+              modifiers: {
+                type: "array",
+                items: { type: "string", enum: [...MODIFIERS] },
+                description:
+                  "Modifier keys held while pressing `key` (op=key): cmd, alt, ctrl, shift, fn.",
+              },
+              ms: {
+                type: "integer",
+                description: "Milliseconds to wait, 50–5000 (op=wait).",
+              },
+            },
+            required: ["op"],
+          },
+        },
+        app: {
+          type: "string",
+          description:
+            "App whose frontmost window the coordinates are relative to (e.g. 'Simulator'). Window-scoped control can auto-run in autopilot. Omit for absolute screen coordinates — that always asks.",
+        },
+        settle_ms: {
+          type: "integer",
+          description: `Milliseconds to wait after each action, ${MIN_SETTLE_MS}–${MAX_SETTLE_MS} (default ${DEFAULT_SETTLE_MS}). Raise for slow apps.`,
+        },
+      },
+      required: ["actions"],
+    },
+  },
+};
+
+async function resolveTarget(
+  appQuery: string,
+  ctx: ToolContext,
+): Promise<
+  { target: WindowInfo | null; error?: ToolResult } & { needsApproval: boolean }
+> {
+  if (!appQuery) {
+    return { target: null, needsApproval: true };
+  }
+  let windows: WindowInfo[];
+  try {
+    windows = await listWindows(ctx.signal);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      target: null,
+      needsApproval: false,
+      error: {
+        content: `Error: could not list windows (${msg}).`,
+        activity: { status: "error", error: msg },
+      },
+    };
+  }
+  const target = pickWindow(windows, appQuery);
+  if (!target) {
+    return {
+      target: null,
+      needsApproval: false,
+      error: {
+        content: JSON.stringify({
+          error: `No open window found for app ${JSON.stringify(appQuery)}.`,
+          open_apps: [...new Set(windows.map((w) => w.app))].slice(0, 20),
+          note: "Retry with one of open_apps, or run capture_screen with app=list.",
+        }),
+        activity: { status: "error", error: "no matching window" },
+      },
+    };
+  }
+  return { target, needsApproval: false };
+}
+
+export async function execute(
+  args: ToolArgs,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  if (process.platform !== "darwin") {
+    return {
+      content: "control_screen works on macOS only.",
+      activity: { status: "error", error: "unsupported platform" },
+    };
+  }
+
+  const validated = validateActions(args.actions);
+  if (validated.error || !validated.actions) {
+    return {
+      content: `Error: ${validated.error ?? "invalid actions"}`,
+      activity: {
+        status: "error",
+        error: validated.error ?? "invalid actions",
+      },
+    };
+  }
+  const actions = validated.actions;
+
+  const appQuery = typeof args.app === "string" ? args.app.trim() : "";
+  const resolved = await resolveTarget(appQuery, ctx);
+  if (resolved.error) return resolved.error;
+
+  const target = resolved.target;
+  if (!target && !resolved.needsApproval) {
+    return {
+      content: "Error: target resolution failed.",
+      activity: { status: "error", error: "target resolution failed" },
+    };
+  }
+
+  if (!target) {
+    const approved = ctx.requestApproval
+      ? await ctx.requestApproval({
+          tool: "control_screen",
+          preview:
+            `Actions on the whole screen: ${describeActions(actions)}.\n` +
+            "No window scope — actions can land anywhere.",
+        })
+      : false;
+    if (!approved) {
+      return {
+        content:
+          "User declined the screen-control request. Continue without it.",
+        activity: { status: "error", error: "declined" },
+      };
+    }
+  }
+
+  const label = target ? target.app : "the screen";
+  const settleMs =
+    isNonNegativeInt(args.settle_ms) && args.settle_ms >= MIN_SETTLE_MS
+      ? Math.min(args.settle_ms, MAX_SETTLE_MS)
+      : DEFAULT_SETTLE_MS;
+
+  try {
+    for (const action of actions) {
+      if (action.op === "wait") {
+        await delay(action.ms, ctx.signal);
+      } else if (action.op === "type") {
+        await copyToClipboard(action.text);
+        await runCliclick(["kd:cmd", "t:v", "ku:cmd"], ctx.signal);
+      } else if (action.op === "click") {
+        const x = target ? target.x + action.x : action.x;
+        const y = target ? target.y + action.y : action.y;
+        await runCliclick([`c:${x},${y}`], ctx.signal);
+      } else {
+        await runCliclick(keyCommands(action), ctx.signal);
+      }
+      if (action.op !== "wait") await delay(settleMs, ctx.signal);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message === "aborted") throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: `Error: ${msg}`,
+      activity: { status: "error", error: msg },
+    };
+  }
+
+  return {
+    content: JSON.stringify({
+      acted_on: label,
+      done: actions.length,
+      actions: describeActions(actions),
+      note: "Verify the result with capture_screen before acting further.",
+    }),
+    activity: {
+      status: "done",
+      query: `${describeActions(actions)} in ${label}`,
+    },
+  };
+}

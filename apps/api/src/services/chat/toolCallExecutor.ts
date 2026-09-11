@@ -20,6 +20,7 @@ const SELF_APPROVING_TOOLS = new Set([
   "write_file",
   "apply_patch",
   "capture_screen",
+  "control_screen",
   "create_memory",
   "update_memory",
   "delete_memory",

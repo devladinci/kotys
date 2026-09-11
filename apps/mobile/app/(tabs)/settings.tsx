@@ -414,6 +414,7 @@ const TOOL_ICONS: Record<string, IoniconName> = {
   apply_patch: "create-outline",
   bash: "terminal-outline",
   capture_screen: "camera-outline",
+  control_screen: "hardware-chip-outline",
   list_chats: "chatbox-ellipses-outline",
   search_chats: "time-outline",
   get_chat: "chatbubble-ellipses-outline",

@@ -29,6 +29,8 @@ export type WindowInfo = {
   title: string;
   width: number;
   height: number;
+  x: number;
+  y: number;
 };
 
 const WINDOW_LIST_JXA = `
@@ -41,6 +43,8 @@ JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject(raw))
     id: w.kCGWindowNumber,
     app: w.kCGWindowOwnerName || '',
     title: w.kCGWindowName || '',
+    x: Math.round(w.kCGWindowBounds.X),
+    y: Math.round(w.kCGWindowBounds.Y),
     width: Math.round(w.kCGWindowBounds.Width),
     height: Math.round(w.kCGWindowBounds.Height),
   })));
@@ -74,7 +78,7 @@ export function pngSize(png: Buffer): { width: number; height: number } {
   return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
 }
 
-async function listWindows(signal: AbortSignal): Promise<WindowInfo[]> {
+export async function listWindows(signal: AbortSignal): Promise<WindowInfo[]> {
   const { stdout } = await exec(
     "osascript",
     ["-l", "JavaScript", "-e", WINDOW_LIST_JXA],
