@@ -18,8 +18,13 @@
 
 ## What is Kotys?
 
-Kotys is a chat app for [Ollama](https://ollama.com) models. But it is more
-than chat: the model can use **tools**. It can read and write files, run shell
+> 🚧 **Kotys is in ALPHA — super early.** Expect breaking changes, rough
+> edges, and missing docs. Everything can change without notice. Not yet
+> recommended for anything you care about.
+
+Kotys works with [Ollama](https://ollama.com) models — run them locally, or
+connect to [Ollama Cloud](https://ollama.com/cloud). But it is more than chat:
+the model can use **tools**. It can read and write files, run shell
 commands, search the web, remember things, and manage your tasks — with your
 permission.
 
@@ -176,10 +181,9 @@ The layering is enforced by ESLint rules, not just by convention. See
 
 ## Status
 
-Early, but used daily. The desktop app is the primary target; web and mobile
-follow. Expect rough edges and breaking changes. Kotys is in feature freeze
-while it is prepared for an open-source release: fixes and documentation for
-now, no new features.
+**ALPHA — super early.** Used daily by the author, but expect breaking
+changes at any time. The desktop app is the primary target; web and mobile
+follow. Nothing here is stable yet.
 
 ## License
 
