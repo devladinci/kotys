@@ -45,6 +45,12 @@ LAN or Tailscale. No cloud in the middle.
 > [SECURITY.md](SECURITY.md)), but it is not sandboxed. Read the threat model
 > before running it outside your own machine.
 
+
+
+https://github.com/user-attachments/assets/aec0508f-aae0-4a31-b3e6-8a9d89ead042
+
+
+
 ## Why Kotys?
 
 - **Local-first.** The model, the database, and the API all run on your
