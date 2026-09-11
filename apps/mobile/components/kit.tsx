@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -434,6 +435,18 @@ function ToolCallRow({
           <Text numberOfLines={2} style={{ color: t.danger, fontSize: 11 }}>
             {tc.error}
           </Text>
+        ) : null}
+        {tc.images && tc.images.length > 0 ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {tc.images.map((img, i) => (
+              <Image
+                key={i}
+                source={{ uri: `data:image/png;base64,${img}` }}
+                style={{ width: 132, height: 88, borderRadius: 8, borderWidth: 1, borderColor: t.border }}
+                resizeMode="cover"
+              />
+            ))}
+          </View>
         ) : null}
       </View>
     </View>

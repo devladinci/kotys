@@ -47,6 +47,18 @@ export function ToolDetailBody({ tc, durationMs }: IToolDetailBodyProps) {
           ))}
         </dl>
       )}
+      {tc.images && tc.images.length > 0 && (
+        <div className="mt-2 flex flex-col gap-2">
+          {tc.images.map((src, j) => (
+            <img
+              key={j}
+              src={`data:image/png;base64,${src}`}
+              alt={`${label} preview ${j + 1}`}
+              className="rounded-md border border-border max-h-48 w-auto self-start"
+            />
+          ))}
+        </div>
+      )}
       {tc.results && tc.results.length > 0 && (
         <ul className="mt-1.5 space-y-0.5 border-l-2 border-border pl-2">
           {tc.results.map((r, j) => (

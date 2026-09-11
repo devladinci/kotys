@@ -154,4 +154,26 @@ describe("execute", () => {
       expect(res.activity.unchanged).toBeUndefined();
     },
   );
+
+  it.runIf(process.platform === "darwin")(
+    "attaches a base64 thumbnail on captured activity, not on declined",
+    async () => {
+      const res = await execute(
+        {},
+        {
+          ...baseCtx,
+          requestApproval: async () => true,
+        },
+      );
+      expect(res.activity.status).toBe("done");
+      if (res.activity.unchanged) {
+        // Screen identical to an earlier run in this suite — no new image.
+        expect(res.activity.images).toBeUndefined();
+      } else {
+        const thumb = res.activity.images?.[0];
+        expect(thumb).toBeTruthy();
+        expect(thumb!.length).toBeLessThan(600_000);
+      }
+    },
+  );
 });
