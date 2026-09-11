@@ -133,7 +133,7 @@ export const definition: ToolDefinition = {
     description:
       "Take a screenshot on macOS and see it as an image. " +
       "Without arguments it captures the whole screen; pass `app` to capture only that app's frontmost window, which is sharper and cheaper when the question is about one app. " +
-      "Pass `app: \"list\"` first when you don't know which apps are running. " +
+      'Pass `app: "list"` first when you don\'t know which apps are running. ' +
       "Repeat calls on the same target may return unchanged without a new image.",
     parameters: {
       type: "object",
@@ -154,9 +154,7 @@ export const definition: ToolDefinition = {
   },
 };
 
-async function listOpenApps(
-  signal: AbortSignal,
-): Promise<ToolResult | null> {
+async function listOpenApps(signal: AbortSignal): Promise<ToolResult | null> {
   let windows: WindowInfo[];
   try {
     windows = await listWindows(signal);

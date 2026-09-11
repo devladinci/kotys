@@ -193,7 +193,11 @@ describe("describeTool", () => {
     expect(window.Icon).toBe(Camera);
 
     const unchanged = describeTool(
-      activity({ tool: "capture_screen", query: "the screen", unchanged: true }),
+      activity({
+        tool: "capture_screen",
+        query: "the screen",
+        unchanged: true,
+      }),
     );
     expect(unchanged.label).toBe("Captured the screen (unchanged)");
     expect(unchanged.Icon).toBe(Monitor);

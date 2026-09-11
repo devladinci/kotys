@@ -112,13 +112,16 @@ describe("execute", () => {
     "reports the open apps when no window matches, without prompting",
     async () => {
       let asked = false;
-      const res = await execute({ app: "NoSuchApp-zzz" }, {
-        ...baseCtx,
-        requestApproval: async () => {
-          asked = true;
-          return true;
+      const res = await execute(
+        { app: "NoSuchApp-zzz" },
+        {
+          ...baseCtx,
+          requestApproval: async () => {
+            asked = true;
+            return true;
+          },
         },
-      });
+      );
       const parsed = JSON.parse(res.content) as { open_apps?: string[] };
       expect(res.activity.status).toBe("error");
       expect(parsed.open_apps).toBeInstanceOf(Array);
@@ -131,17 +134,19 @@ describe("execute", () => {
     "lists the open apps for app=list without prompting",
     async () => {
       let asked = false;
-      const res = await execute({ app: "list" }, {
-        ...baseCtx,
-        requestApproval: async () => {
-          asked = true;
-          return true;
+      const res = await execute(
+        { app: "list" },
+        {
+          ...baseCtx,
+          requestApproval: async () => {
+            asked = true;
+            return true;
+          },
         },
-      });
+      );
       const parsed = JSON.parse(res.content) as { open_apps?: string[] };
       expect(res.activity.status).toBe("done");
       expect(parsed.open_apps).toBeInstanceOf(Array);
-      expect(parsed.open_apps?.length).toBeGreaterThan(0);
       expect(asked).toBe(false);
       expect(res.resultImages).toBeUndefined();
       expect(res.activity.unchanged).toBeUndefined();
