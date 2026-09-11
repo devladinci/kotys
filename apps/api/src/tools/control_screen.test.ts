@@ -68,11 +68,15 @@ describe("keyCommands", () => {
     expect(keyCommands({ op: "key", key: "return" })).toEqual(["kp:return"]);
     expect(keyCommands({ op: "key", key: "f5" })).toEqual(["kp:f5"]);
     expect(keyCommands({ op: "key", key: "a" })).toEqual(["t:a"]);
+  });
+
+  it("routes modifier combos through keycodes, not cliclick", () => {
     expect(keyCommands({ op: "key", key: "v", modifiers: ["cmd"] })).toEqual([
-      "kd:cmd",
       "t:v",
-      "ku:cmd",
     ]);
+    expect(
+      keyCommands({ op: "key", key: "return", modifiers: ["cmd", "shift"] }),
+    ).toEqual(["kp:return"]);
   });
 });
 

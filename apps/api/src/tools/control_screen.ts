@@ -4,10 +4,12 @@ import type { ToolContext } from "./types.js";
 import { listWindows, pickWindow, type WindowInfo } from "./capture_screen.js";
 
 /**
- * control_screen — mouse and keyboard actions on macOS via cliclick.
+ * control_screen — mouse and keyboard actions on macOS.
  *
- * Typing lands through the clipboard (pbcopy + Cmd+V): instant and immune to
- * keyboard layouts, unlike emulated keystrokes.
+ * Plain keys go through cliclick. Typing lands through the clipboard
+ * (pbcopy + paste via hardware keycode): instant, layout-immune, and the only
+ * path Chromium respects — Electron apps ignore synthetic unicode events that
+ * carry modifiers, but honor `key code N using command down`.
  *
  * With `app`, coordinates are relative to that app's frontmost window and the
  * call runs through the tool's own consent channel (auto-approved in
@@ -205,10 +207,71 @@ export function keyCommands(action: ControlAction & { op: "key" }): string[] {
     /^f\d{1,2}$/.test(action.key) ||
     /^num-/.test(action.key) ||
     /^arrow-/.test(action.key);
-  const press = isSpecial ? `kp:${action.key}` : `t:${action.key}`;
-  if (!action.modifiers) return [press];
-  const mods = action.modifiers.join(",");
-  return [`kd:${mods}`, press, `ku:${mods}`];
+  return isSpecial ? [`kp:${action.key}`] : [`t:${action.key}`];
+}
+
+// Hardware keycodes (kVK_*): Chromium ignores synthetic unicode events that
+// carry modifiers, but honors keydown on the physical key.
+const KEYCODES: Record<string, number> = {
+  a: 0,
+  s: 1,
+  d: 2,
+  f: 3,
+  h: 4,
+  g: 5,
+  z: 6,
+  x: 7,
+  c: 8,
+  v: 9,
+  b: 11,
+  q: 12,
+  w: 13,
+  e: 14,
+  r: 15,
+  y: 16,
+  t: 17,
+  o: 31,
+  u: 32,
+  p: 35,
+  i: 34,
+  n: 45,
+  m: 46,
+  j: 38,
+  k: 40,
+  l: 37,
+  "0": 29,
+  "1": 18,
+  "2": 19,
+  "3": 20,
+  "4": 21,
+  "5": 23,
+  "6": 22,
+  "7": 26,
+  "8": 28,
+  "9": 25,
+};
+
+const MODIFIER_FLAGS: Record<Modifier, string> = {
+  cmd: "command down",
+  alt: "option down",
+  ctrl: "control down",
+  shift: "shift down",
+  fn: "fn down",
+};
+
+async function runOsa(script: string, signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = execFile(
+      "osascript",
+      ["-e", script],
+      { timeout: 10_000 },
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      },
+    );
+    signal.addEventListener("abort", () => child.kill(), { once: true });
+  });
 }
 
 export const definition: ToolDefinition = {
@@ -380,11 +443,24 @@ export async function execute(
         await delay(action.ms, ctx.signal);
       } else if (action.op === "type") {
         await copyToClipboard(action.text);
-        await runCliclick(["kd:cmd", "t:v", "ku:cmd"], ctx.signal);
+        await runOsa(
+          'tell application "System Events" to key code 9 using command down',
+          ctx.signal,
+        );
       } else if (action.op === "click") {
         const x = target ? target.x + action.x : action.x;
         const y = target ? target.y + action.y : action.y;
         await runCliclick([`c:${x},${y}`], ctx.signal);
+      } else if (action.op === "key" && action.modifiers?.length) {
+        const mods = action.modifiers
+          .map((m) => MODIFIER_FLAGS[m])
+          .join(" using ");
+        const key = KEYCODES[action.key];
+        const script =
+          key === undefined
+            ? `tell application "System Events" to keystroke "${action.key}" using {${mods}}`
+            : `tell application "System Events" to key code ${key} using {${mods}}`;
+        await runOsa(script, ctx.signal);
       } else {
         await runCliclick(keyCommands(action), ctx.signal);
       }
