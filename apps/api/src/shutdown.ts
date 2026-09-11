@@ -99,7 +99,7 @@ export function installShutdownHandlers(): () => void {
 /**
  * Test hook: clear the one-shot guard so a mocked process.exit (tests can't
  * really exit) doesn't leave the module wedged in "already shutting down".
- * Mirrors resetFramesForTests in computer_observe.ts.
+ * Mirrors resetFramesForTests in capture_screen.ts.
  */
 export function resetShutdownStateForTests(): void {
   shuttingDown = false;

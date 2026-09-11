@@ -36,6 +36,7 @@ import {
   type ConnectorChatMessage,
 } from "../llm/registry.js";
 import {
+  budgetLoadedMcpDefs,
   getLoadedMcpToolNames,
   mcpIndexTier,
   withSystemBlocks,
@@ -117,9 +118,15 @@ export async function streamChat(
       : undefined) ??
     model.contextLength ??
     DEFAULT_CONTEXT;
-  const preloadedMcp = getMcpToolDefinitionsByName(
-    getLoadedMcpToolNames(streamChatId),
-    toolEnabled,
+  const mcpLoader = (names: string[]) =>
+    getMcpToolDefinitionsByName(
+      names,
+      toolEnabled,
+      TOOL_DEFINITIONS.map((d) => d.function.name),
+    );
+  const { defs: preloadedMcp, dropped } = budgetLoadedMcpDefs(
+    streamChatId,
+    mcpLoader,
   );
   const tier = mcpIndexTier(contextLength);
   const loadedNames = getLoadedMcpToolNames(streamChatId);
@@ -143,6 +150,10 @@ export async function streamChat(
 
   const trace: ToolActivity[] = [];
   const persist: { callIndex: number; content: string }[] = [];
+  const evictionNotice =
+    dropped.length > 0
+      ? `These MCP tools were unloaded this turn to keep the prompt small: ${dropped.join(", ")}. They remain listed in the tool signatures index — call mcp_load_tools with their names to load them again.`
+      : "";
   const daemonMessages = await buildDaemonMessages(
     req,
     toolRoster.index,
@@ -151,7 +162,7 @@ export async function streamChat(
   );
   const chatMessages: ConnectorChatMessage[] =
     daemonMessages ??
-    withSystemBlocks(messages, toolRoster.index, skills.index);
+    withSystemBlocks(messages, toolRoster.index, skills.index, evictionNotice);
 
   const emitChunk = (thinkingDelta: string, contentDelta: string) => {
     callbacks.onChunk({ thinkingDelta, contentDelta });

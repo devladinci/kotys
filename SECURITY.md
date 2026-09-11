@@ -19,7 +19,7 @@ treat every prompt you paste into the chat with the same care.
 - Execute shell commands (`bash`), including anything your user can do.
 - Read and write files (`read_file`, `write_file`, `apply_patch`).
 - Fetch web pages and search the web (`web_fetch`, `web_search`).
-- Capture the screen (`computer_observe`) if granted macOS permissions.
+- Capture the screen (`capture_screen`) if granted macOS permissions.
 
 ## Guardrails
 

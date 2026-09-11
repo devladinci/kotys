@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { ToolDefinition } from "@kotys/contracts";
 import { getDb, initDatabase } from "@kotys/db";
 import {
+  LOADED_MCP_TOKEN_BUDGET,
+  budgetLoadedMcpDefs,
   getLoadedMcpToolNames,
   mcpIndexTier,
   rememberLoadedMcpTools,
@@ -75,5 +78,65 @@ describe("loaded tool memory", () => {
     rememberLoadedMcpTools(8, ["doomed"]);
     getDb().prepare("DELETE FROM chats WHERE id = 8").run();
     expect(getLoadedMcpToolNames(8)).toEqual([]);
+  });
+});
+
+describe("budgetLoadedMcpDefs", () => {
+  beforeAll(() => {
+    const insert = getDb().prepare(
+      "INSERT INTO chats (id, title) VALUES (?, 'budget probe')",
+    );
+    const run = getDb().transaction((ids: number[]) => {
+      for (const id of ids) insert.run(id);
+    });
+    run([10, 11, 12, 13]);
+  });
+
+  const def = (name: string, size: number): ToolDefinition => ({
+    type: "function",
+    function: {
+      name,
+      description: "d".repeat(size),
+      parameters: { type: "object", properties: {} },
+    },
+  });
+  const resolve = (names: string[]) => names.map((n) => def(n, 100));
+
+  it("passes everything through under budget", () => {
+    rememberLoadedMcpTools(10, ["a", "b", "c"]);
+    const { defs, dropped } = budgetLoadedMcpDefs(10, resolve);
+    expect(defs.map((d) => d.function.name)).toEqual(["a", "b", "c"]);
+    expect(dropped).toEqual([]);
+  });
+
+  it("keeps newest, drops coldest over budget, and forgets them", () => {
+    const big = LOADED_MCP_TOKEN_BUDGET * 4;
+    rememberLoadedMcpTools(11, ["old", "fresh"]);
+    const { defs, dropped } = budgetLoadedMcpDefs(11, (names) =>
+      names.map((n) => def(n, n === "fresh" ? big - 1 : big)),
+    );
+    expect(defs.map((d) => d.function.name)).toEqual(["fresh"]);
+    expect(dropped).toEqual(["old"]);
+    expect(getLoadedMcpToolNames(11)).toEqual(["fresh"]);
+  });
+
+  it("always keeps the first tool even when it alone exceeds budget", () => {
+    rememberLoadedMcpTools(12, ["huge"]);
+    const { defs, dropped } = budgetLoadedMcpDefs(12, (names) =>
+      names.map((n) => def(n, LOADED_MCP_TOKEN_BUDGET * 8)),
+    );
+    expect(defs.map((d) => d.function.name)).toEqual(["huge"]);
+    expect(dropped).toEqual([]);
+  });
+
+  it("returns empty for an unkeyed chat or unknown names", () => {
+    expect(budgetLoadedMcpDefs(null, resolve)).toEqual({
+      defs: [],
+      dropped: [],
+    });
+    expect(budgetLoadedMcpDefs(13, () => [])).toEqual({
+      defs: [],
+      dropped: [],
+    });
   });
 });

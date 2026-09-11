@@ -24,6 +24,8 @@ export type ToolActivity = {
   query?: string;
   url?: string;
   filePath?: string;
+  /** True when the tool verified its target and produced nothing new. */
+  unchanged?: boolean;
   status: "running" | "done" | "error";
   durationMs?: number;
   startedAt?: number;

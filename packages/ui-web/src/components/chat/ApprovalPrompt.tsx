@@ -8,7 +8,7 @@ const TOOL_LABELS: Record<string, string> = {
   bash: "run a shell command",
   write_file: "create or overwrite a file",
   apply_patch: "patch a file",
-  computer_observe: "take a screenshot",
+  capture_screen: "take a screenshot",
 };
 
 function ApprovalPromptComponent() {

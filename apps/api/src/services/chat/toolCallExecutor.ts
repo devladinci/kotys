@@ -19,7 +19,7 @@ const SELF_APPROVING_TOOLS = new Set([
   "bash",
   "write_file",
   "apply_patch",
-  "computer_observe",
+  "capture_screen",
   "create_memory",
   "update_memory",
   "delete_memory",

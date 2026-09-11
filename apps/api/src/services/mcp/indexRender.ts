@@ -175,6 +175,7 @@ export function renderMcpToolIndex(
 export function getMcpToolDefinitionsByName(
   names: string[],
   isEnabled: (name: string) => boolean,
+  builtinNames: string[] = [],
 ): ToolDefinition[] {
   const wanted = new Set(names);
   const defs = new Map<string, ToolDefinition>();
@@ -183,6 +184,13 @@ export function getMcpToolDefinitionsByName(
     for (const tool of s.tools) {
       if (!wanted.has(tool.name) || !isEnabled(tool.name)) continue;
       if (!defs.has(tool.name)) defs.set(tool.name, toDefinition(s.name, tool));
+    }
+  }
+  for (const name of wanted) {
+    if (defs.has(name) && builtinNames.includes(name)) {
+      console.warn(
+        `[mcp] tool "${name}" shadows a built-in tool of the same name — the built-in wins and the MCP version is unreachable`,
+      );
     }
   }
   return [...defs.values()];
@@ -261,7 +269,11 @@ export function loadMcpTools(
     };
   }
 
-  const defs = getMcpToolDefinitionsByName(names, isEnabled);
+  const defs = getMcpToolDefinitionsByName(
+    names,
+    isEnabled,
+    builtinDefs.map((d) => d.function.name),
+  );
   const builtin = new Map(
     builtinDefs
       .filter((d) => isEnabled(d.function.name))

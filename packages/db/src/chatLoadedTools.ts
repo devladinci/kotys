@@ -24,3 +24,16 @@ export const getChatLoadedTools = (chatId: number): string[] =>
       )
       .all(chatId) as { tool_name: string }[]
   ).map((r) => r.tool_name);
+
+export const forgetChatLoadedTools = (
+  chatId: number,
+  names: string[],
+): void => {
+  if (names.length === 0) return;
+  const placeholders = names.map(() => "?").join(", ");
+  getDb()
+    .prepare(
+      `DELETE FROM chat_loaded_tools WHERE chat_id = ? AND tool_name IN (${placeholders})`,
+    )
+    .run(chatId, ...names);
+};

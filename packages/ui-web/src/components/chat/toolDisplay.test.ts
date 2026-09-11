@@ -80,8 +80,8 @@ describe("TOOL_ICONS", () => {
   const BUILTIN_TOOL_NAMES = [
     "apply_patch",
     "bash",
+    "capture_screen",
     "complete_todo",
-    "computer_observe",
     "create_memory",
     "create_todo",
     "current_datetime",
@@ -173,39 +173,43 @@ describe("describeTool", () => {
     ).toBe("Loading tool schemas");
   });
 
-  it("labels computer_observe by target and state", () => {
+  it("labels capture_screen by target and state", () => {
     const running = describeTool(
-      activity({ tool: "computer_observe", status: "running" }),
+      activity({ tool: "capture_screen", status: "running" }),
     );
-    expect(running.label).toBe("Observing the screen");
+    expect(running.label).toBe("Capturing the screen");
     expect(running.Icon).toBe(Camera);
 
     const captured = describeTool(
-      activity({ tool: "computer_observe", query: "the screen" }),
+      activity({ tool: "capture_screen", query: "the screen" }),
     );
-    expect(captured.label).toBe("Observed the screen");
+    expect(captured.label).toBe("Captured the screen");
     expect(captured.Icon).toBe(Camera);
 
     const window = describeTool(
-      activity({ tool: "computer_observe", query: "Safari" }),
+      activity({ tool: "capture_screen", query: "Safari" }),
     );
-    expect(window.label).toBe("Observed Safari");
+    expect(window.label).toBe("Captured Safari");
     expect(window.Icon).toBe(Camera);
 
     const unchanged = describeTool(
-      activity({ tool: "computer_observe", query: "the screen (unchanged)" }),
+      activity({
+        tool: "capture_screen",
+        query: "the screen",
+        unchanged: true,
+      }),
     );
-    expect(unchanged.label).toBe("Observed the screen (unchanged)");
+    expect(unchanged.label).toBe("Captured the screen (unchanged)");
     expect(unchanged.Icon).toBe(Monitor);
 
     const windowUnchanged = describeTool(
-      activity({ tool: "computer_observe", query: "Safari (unchanged)" }),
+      activity({ tool: "capture_screen", query: "Safari", unchanged: true }),
     );
-    expect(windowUnchanged.label).toBe("Observed Safari (unchanged)");
+    expect(windowUnchanged.label).toBe("Captured Safari (unchanged)");
     expect(windowUnchanged.Icon).toBe(Monitor);
   });
 
-  it("puts computer_observe in the shell tone", () => {
-    expect(toolTone(activity({ tool: "computer_observe" }))).toBe("shell");
+  it("puts capture_screen in the shell tone", () => {
+    expect(toolTone(activity({ tool: "capture_screen" }))).toBe("shell");
   });
 });
