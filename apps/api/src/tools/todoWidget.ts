@@ -1,4 +1,5 @@
 import type { TodoWidget } from "@kotys/contracts";
+import { secondsToDate } from "@kotys/contracts";
 
 type TodoLike = {
   id: number;
@@ -9,6 +10,9 @@ type TodoLike = {
   due_at: number | null;
   notify_at: number | null;
 };
+
+const toIso = (ts: number | null): string | null =>
+  secondsToDate(ts)?.toISOString() ?? null;
 
 /** The inline card the user sees in chat after a task tool ran. */
 export function buildTodoWidget(
@@ -25,7 +29,7 @@ export function buildTodoWidget(
     ...(todo.priority
       ? { priority: todo.priority as TodoWidget["priority"] }
       : {}),
-    due_at: todo.due_at,
-    notify_at: todo.notify_at,
+    due_at: toIso(todo.due_at),
+    notify_at: toIso(todo.notify_at),
   };
 }

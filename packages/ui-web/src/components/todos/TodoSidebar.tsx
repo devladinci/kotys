@@ -16,7 +16,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import type { TodoRecord } from "@kotys/contracts";
+import { toMillis, type TodoRecord } from "@kotys/contracts";
 import { useTodoStore, DEFAULT_SIDEBAR_WIDTH } from "@kotys/core";
 import PomodoroPanel from "../pomodoro/PomodoroPanel";
 import {
@@ -82,15 +82,16 @@ function TodoSidebarBase() {
       const row: Row = {
         todo,
         dueLabel: dueLabelFor(todo, now),
-        dueTitle: todo.due_at === null ? null : exactLabelFor(todo.due_at),
+        dueTitle:
+          todo.due_at === null ? null : exactLabelFor(toMillis(todo.due_at)),
         remindLabel:
           todo.notify_at === null
             ? null
-            : reminderLabelFor(todo.notify_at, now, todo.due_at),
+            : reminderLabelFor(toMillis(todo.notify_at), now, todo.due_at),
         remindTitle:
           todo.notify_at === null
             ? null
-            : `Reminder · ${exactLabelFor(todo.notify_at)}`,
+            : `Reminder · ${exactLabelFor(toMillis(todo.notify_at))}`,
         overdue: isOverdue(todo, now),
       };
       const bucket = buckets.get(key);

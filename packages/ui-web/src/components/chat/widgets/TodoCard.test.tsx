@@ -44,6 +44,13 @@ describe("TodoCard", () => {
     expect(screen.getByText(/Today|Tomorrow/)).toBeInTheDocument();
   });
 
+  it("normalises legacy epoch-seconds widgets so they do not read as 1970", () => {
+    const tomorrowS = Math.floor(Date.now() / 1000) + 86_400;
+    render(<TodoCard widget={widget({ due_at: tomorrowS })} />);
+    expect(screen.getByText(/Today|Tomorrow/)).toBeInTheDocument();
+    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+  });
+
   it("fades a deleted task and hides its checkbox and chips", () => {
     render(
       <TodoCard

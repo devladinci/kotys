@@ -18,7 +18,8 @@ const ACTION_PAST: Record<TodoWidget["action"], string> = {
 
 const toDate = (value: NonNullable<TodoWidget["due_at"]>): number | null => {
   const ms = typeof value === "number" ? value : Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
+  if (!Number.isFinite(ms)) return null;
+  return ms < 1e11 ? ms * 1000 : ms;
 };
 
 function TodoCardBase({ widget }: { widget: TodoWidget }) {
