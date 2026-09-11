@@ -11,9 +11,7 @@ describe("buildTodoWidget", () => {
       notify_at: null,
     });
 
-    expect(widget.due_at).toBe(
-      new Date(1_789_196_400 * 1000).toISOString(),
-    );
+    expect(widget.due_at).toBe(new Date(1_789_196_400 * 1000).toISOString());
     expect(widget.notify_at).toBeNull();
   });
 
