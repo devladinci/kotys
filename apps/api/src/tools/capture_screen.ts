@@ -73,7 +73,11 @@ async function makeThumbnail(png: Buffer): Promise<string | null> {
   const dst = join(tmpdir(), `kotys-thumb-${Date.now()}.png`);
   try {
     await writeFile(src, png);
-    await exec("sips", ["-Z", String(THUMB_MAX_DIM), src, "--out", dst], AbortSignal.timeout(10_000));
+    await exec(
+      "sips",
+      ["-Z", String(THUMB_MAX_DIM), src, "--out", dst],
+      AbortSignal.timeout(10_000),
+    );
     return (await readFile(dst)).toString("base64");
   } catch {
     return null;
