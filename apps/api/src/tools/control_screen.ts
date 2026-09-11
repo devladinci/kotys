@@ -94,7 +94,7 @@ export function validateActions(raw: unknown): {
       if (
         typeof a.key !== "string" ||
         a.key.length > 20 ||
-        !/^[a-z0-9-]$|^[a-z0-9][a-z0-9-]{0,19}$/.test(a.key)
+        !/^[a-z0-9][a-z0-9-]{0,19}$/.test(a.key)
       ) {
         return {
           error:
@@ -287,11 +287,9 @@ export const definition: ToolDefinition = {
 async function resolveTarget(
   appQuery: string,
   ctx: ToolContext,
-): Promise<
-  { target: WindowInfo | null; error?: ToolResult } & { needsApproval: boolean }
-> {
+): Promise<{ target: WindowInfo | null; error?: ToolResult }> {
   if (!appQuery) {
-    return { target: null, needsApproval: true };
+    return { target: null };
   }
   let windows: WindowInfo[];
   try {
@@ -300,7 +298,6 @@ async function resolveTarget(
     const msg = err instanceof Error ? err.message : String(err);
     return {
       target: null,
-      needsApproval: false,
       error: {
         content: `Error: could not list windows (${msg}).`,
         activity: { status: "error", error: msg },
@@ -311,7 +308,6 @@ async function resolveTarget(
   if (!target) {
     return {
       target: null,
-      needsApproval: false,
       error: {
         content: JSON.stringify({
           error: `No open window found for app ${JSON.stringify(appQuery)}.`,
@@ -322,7 +318,7 @@ async function resolveTarget(
       },
     };
   }
-  return { target, needsApproval: false };
+  return { target };
 }
 
 export async function execute(
@@ -353,12 +349,6 @@ export async function execute(
   if (resolved.error) return resolved.error;
 
   const target = resolved.target;
-  if (!target && !resolved.needsApproval) {
-    return {
-      content: "Error: target resolution failed.",
-      activity: { status: "error", error: "target resolution failed" },
-    };
-  }
 
   if (!target) {
     const approved = ctx.requestApproval

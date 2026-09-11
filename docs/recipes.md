@@ -516,7 +516,7 @@ levels:
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **ask**       | Asks before every tool call, reads included, except for the cases below.                                                                             |
 | **copilot**   | The default. Asks before `write_file`, `apply_patch`, `capture_screen`, `control_screen` (macOS only), and any `bash` command that is not read-only. |
-| **autopilot** | Never asks, for any tool. Only for fully trusted, repetitive tasks.                                                                                  |
+| **autopilot** | Never asks, for any tool. Only for fully trusted, repetitive tasks. One exception: `control_screen` without `app` still asks.                        |
 
 Two things run without asking, whatever the mode:
 
