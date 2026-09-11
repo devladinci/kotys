@@ -23,7 +23,9 @@
 > recommended for anything you care about.
 
 Kotys works with [Ollama](https://ollama.com) models — run them locally, or
-connect to [Ollama Cloud](https://ollama.com/cloud). But it is more than chat:
+connect to [Ollama Cloud](https://ollama.com/cloud). It also talks to any
+OpenAI-compatible server: [oMLX](https://omlx.ai) works out of the box, for
+MLX models and speech-to-text. But it is more than chat:
 the model can use **tools**. It can read and write files, run shell
 commands, search the web, remember things, and manage your tasks — with your
 permission.
@@ -132,6 +134,7 @@ You need:
 - Node.js 22+
 - pnpm 10+
 - [Ollama](https://ollama.com) running locally, or an Ollama Cloud API key
+- Optional: an [oMLX](https://omlx.ai) server, for MLX models and dictation
 
 ```bash
 pnpm install
