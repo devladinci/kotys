@@ -107,7 +107,7 @@ that goes away does not end the turn.
 
 | Group  | Tools                                                                                        |
 | ------ | -------------------------------------------------------------------------------------------- |
-| Read   | `computer_observe`, `read_file`, `list`, `grep`                                              |
+| Read   | `capture_screen`, `read_file`, `list`, `grep`                                                |
 | Write  | `write_file`, `apply_patch`, `bash`                                                          |
 | Web    | `web_search`, `web_fetch`                                                                    |
 | Memory | `search_memories`, `create_memory`, `update_memory`, `delete_memory`                         |
