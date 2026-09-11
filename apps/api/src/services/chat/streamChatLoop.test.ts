@@ -89,6 +89,7 @@ vi.mock("../../tools/index.js", async (importOriginal) => {
     ...real,
     runTool: async (_name: string, args: Record<string, unknown>) => ({
       content: typeof args.bytes === "number" ? "x".repeat(args.bytes) : "ok",
+      ...(args.withImage ? { resultImages: ["c2NyZWVu"] } : {}),
     }),
   };
 });
@@ -248,6 +249,23 @@ describe("streamChat loop persistence", () => {
     expect(result.content).toContain("remain");
     const finalRound = state.roundBodies.at(-1) as { tools?: unknown[] };
     expect(finalRound.tools).toBeUndefined();
+  });
+
+  it("drops tool images from the wire once seen — later rounds re-send only the text result", async () => {
+    // Request 2 carries the capture (the round where the model reacts to it);
+    // request 3 must not.
+    state.scripts.push([toolCallPart("list", { withImage: true })]);
+    state.scripts.push([toolCallPart("list", { withImage: false })]);
+    state.scripts.push([doneText("done")]);
+
+    await streamChat(baseReq(), cbs(), new AbortController().signal);
+
+    const toolMsg = (body: { messages: unknown[] }) =>
+      body.messages.filter((m) => (m as { role: string }).role === "tool");
+    expect(toolMsg(state.roundBodies[1])[0]).toMatchObject({
+      images: ["c2NyZWVu"],
+    });
+    expect(toolMsg(state.roundBodies[2])[0]).not.toHaveProperty("images");
   });
 
   it("stops on the token observer before the server's context window rejects the round", async () => {

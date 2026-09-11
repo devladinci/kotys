@@ -22,7 +22,7 @@ import type { ToolContext } from "./types.js";
 
 const DEFAULT_MAX_DIM = 1280;
 const MIN_WINDOW_DIM = 60;
-const THUMB_MAX_DIM = 640;
+const THUMB_MAX_DIM = 384;
 
 export type WindowInfo = {
   id: number;
@@ -70,12 +70,24 @@ function sha256(bytes: Buffer): string {
 
 async function makeThumbnail(png: Buffer): Promise<string | null> {
   const src = join(tmpdir(), `kotys-thumb-src-${Date.now()}.png`);
-  const dst = join(tmpdir(), `kotys-thumb-${Date.now()}.png`);
+  const dst = join(tmpdir(), `kotys-thumb-${Date.now()}.jpg`);
   try {
     await writeFile(src, png);
     await exec(
       "sips",
-      ["-Z", String(THUMB_MAX_DIM), src, "--out", dst],
+      [
+        "-Z",
+        String(THUMB_MAX_DIM),
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        "70",
+        src,
+        "--out",
+        dst,
+      ],
       AbortSignal.timeout(10_000),
     );
     return (await readFile(dst)).toString("base64");

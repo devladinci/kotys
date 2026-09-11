@@ -261,6 +261,11 @@ export async function streamChat(
       }
 
       const toolCalls = await streamer.round();
+      // The capture was in the request that just went out; later rounds only
+      // need the text result.
+      for (const m of chatMessages) {
+        if (m.role === "tool" && m.images?.length) delete m.images;
+      }
       if (aborted || toolCalls.length === 0) break;
       chatMessages.push({
         role: "assistant",

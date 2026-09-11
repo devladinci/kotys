@@ -52,7 +52,7 @@ export function ToolDetailBody({ tc, durationMs }: IToolDetailBodyProps) {
           {tc.images.map((src, j) => (
             <img
               key={j}
-              src={`data:image/png;base64,${src}`}
+              src={`data:image/jpeg;base64,${src}`}
               alt={`${label} preview ${j + 1}`}
               className="rounded-md border border-border max-h-48 w-auto self-start"
             />

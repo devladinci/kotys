@@ -448,7 +448,7 @@ function ToolCallRow({
             {tc.images.map((img, i) => (
               <Image
                 key={i}
-                source={{ uri: `data:image/png;base64,${img}` }}
+                source={{ uri: `data:image/jpeg;base64,${img}` }}
                 style={{
                   width: 132,
                   height: 88,

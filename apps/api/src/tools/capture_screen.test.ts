@@ -172,7 +172,9 @@ describe("execute", () => {
       } else {
         const thumb = res.activity.images?.[0];
         expect(thumb).toBeTruthy();
-        expect(thumb!.length).toBeLessThan(600_000);
+        // sips re-encodes as JPEG — "/9j/" is the base64 SOI marker.
+        expect(thumb!.startsWith("/9j/")).toBe(true);
+        expect(thumb!.length).toBeLessThan(200_000);
       }
     },
   );
