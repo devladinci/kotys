@@ -140,6 +140,9 @@ function persistResult(
       ...(thinking !== undefined ? { thinking } : {}),
       ...(result?.promptTokens ? { promptTokens: result.promptTokens } : {}),
       ...(result?.evalTokens ? { evalTokens: result.evalTokens } : {}),
+      ...(result?.tokensMeasured !== undefined
+        ? { tokensMeasured: result.tokensMeasured }
+        : {}),
       ...(toolCalls !== undefined ? { toolCalls } : {}),
     });
     const chatId = getChatIdForMessage(requestId);
@@ -172,6 +175,7 @@ function resumeFallback(requestId: number): ServerMessage | null {
       thinking: row.thinking ?? "",
       promptTokens: row.prompt_tokens ?? 0,
       evalTokens: row.eval_tokens ?? 0,
+      tokensMeasured: row.tokens_measured !== 0,
       toolCalls: row.tool_calls
         ? (JSON.parse(row.tool_calls) as ChatStreamResult["toolCalls"])
         : [],

@@ -71,6 +71,7 @@ export function applyDone(
     thinking: result.thinking || m.thinking,
     promptTokens: result.promptTokens || m.promptTokens,
     evalTokens: result.evalTokens || m.evalTokens,
+    tokensMeasured: result.tokensMeasured || m.tokensMeasured,
     toolCalls: result.toolCalls.length > 0 ? result.toolCalls : m.toolCalls,
   };
   return next;

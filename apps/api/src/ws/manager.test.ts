@@ -68,6 +68,7 @@ const result = (content: string): ChatStreamResult => ({
   thinking: "",
   promptTokens: 1,
   evalTokens: 2,
+  tokensMeasured: true,
   toolCalls: [],
 });
 
@@ -141,6 +142,7 @@ describe("ws manager: fan-out", () => {
       content: "final text",
       promptTokens: 1,
       evalTokens: 2,
+      tokensMeasured: true,
     });
     expect(
       fake.sent.some((m) => m.type === "chat:done" && m.chatId === 5),

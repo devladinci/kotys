@@ -12,6 +12,8 @@ export type TokenizedMessage = {
   content: string;
   promptTokens?: number;
   evalTokens?: number;
+  /** False marks a chars/4 estimate, which must never anchor the meter. */
+  tokensMeasured?: boolean;
 };
 
 /**
@@ -29,7 +31,11 @@ export function projectedUsedTokens(
   const live = msgs.filter((m) => m.role !== "system" && m.id > upto);
   let anchor = -1;
   for (let i = live.length - 1; i >= 0; i--) {
-    if (live[i].role === "assistant" && live[i].promptTokens) {
+    if (
+      live[i].role === "assistant" &&
+      live[i].promptTokens &&
+      live[i].tokensMeasured !== false
+    ) {
       anchor = i;
       break;
     }

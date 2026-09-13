@@ -179,6 +179,39 @@ describe("projectedUsedTokens", () => {
     );
   });
 
+  it("refuses to anchor on a row flagged as a chars/4 estimate", () => {
+    const msgs: TokenizedMessage[] = [
+      {
+        id: 2,
+        role: "assistant",
+        content: "b".repeat(20),
+        promptTokens: 50_000,
+        tokensMeasured: false,
+      },
+      { id: 3, role: "user", content: "c".repeat(400) },
+    ];
+    // The fake 50k anchor is skipped: the meter falls back to estimating
+    // every live message instead of trusting a guess.
+    expect(projectedUsedTokens(msgs, { summary: null, summaryUpto: 0 })).toBe(
+      (20 + 400) / 4,
+    );
+  });
+
+  it("still anchors on a legacy row with no flag", () => {
+    const msgs: TokenizedMessage[] = [
+      {
+        id: 2,
+        role: "assistant",
+        content: "",
+        promptTokens: 4_000,
+      },
+      { id: 3, role: "user", content: "c".repeat(400) },
+    ];
+    expect(projectedUsedTokens(msgs, { summary: null, summaryUpto: 0 })).toBe(
+      4_100,
+    );
+  });
+
   it("counts only non-system messages after the boundary", () => {
     const msgs: TokenizedMessage[] = [
       { id: 0, role: "system", content: "s".repeat(10_000) },

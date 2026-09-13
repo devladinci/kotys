@@ -197,6 +197,11 @@ export function initDatabase(dbPath: string = DB_PATH): void {
     db.exec("ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER");
     db.exec("ALTER TABLE messages ADD COLUMN eval_tokens INTEGER");
   }
+  if (!messageCols.some((c) => c.name === "tokens_measured")) {
+    // NULL = legacy row (treated as measured), 1 = provider counted it,
+    // 0 = chars/4 estimate — never an anchor.
+    db.exec("ALTER TABLE messages ADD COLUMN tokens_measured INTEGER");
+  }
   if (!messageCols.some((c) => c.name === "tool_calls")) {
     db.exec("ALTER TABLE messages ADD COLUMN tool_calls TEXT");
   }

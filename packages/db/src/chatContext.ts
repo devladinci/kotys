@@ -26,7 +26,9 @@ export function getTurnRowsForChat(
 /**
  * The provider's own prompt size for the newest assistant turn after `afterId`,
  * the summary boundary — a turn measured before it was billed for messages the
- * summary has since replaced. An errored or tool-only turn still counts.
+ * summary has since replaced. An errored or tool-only turn still counts, but
+ * only when the provider actually reported the size: rows whose count is a
+ * chars/4 fallback (`tokens_measured = 0`) never anchor the trigger.
  */
 export function getMeasuredPrompt(
   chatId: number,
@@ -37,6 +39,7 @@ export function getMeasuredPrompt(
       `SELECT id, prompt_tokens FROM messages
        WHERE chat_id = ? AND role = 'assistant'
          AND id > ? AND prompt_tokens > 0
+         AND (tokens_measured IS NULL OR tokens_measured = 1)
        ORDER BY id DESC LIMIT 1`,
     )
     .get(chatId, afterId) as { id: number; prompt_tokens: number } | undefined;

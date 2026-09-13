@@ -11,6 +11,8 @@ export type Message = {
   model?: string;
   promptTokens?: number;
   evalTokens?: number;
+  /** True when the provider counted this turn; false means chars/4 estimate. */
+  tokensMeasured?: boolean;
   toolCalls?: ToolActivity[];
   /** Unixepoch seconds, straight from the row; absent on optimistic sends. */
   createdAt?: number;

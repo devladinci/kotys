@@ -57,6 +57,7 @@ export const messagesRouter = {
         thinking: z.string().optional(),
         promptTokens: z.number().optional(),
         evalTokens: z.number().optional(),
+        tokensMeasured: z.boolean().optional(),
         toolCalls: z.string().optional(),
       }),
     )

@@ -33,5 +33,7 @@ export type ChatStreamResult = {
   thinking: string;
   promptTokens: number;
   evalTokens: number;
+  /** True when the provider reported these counts; false = chars/4 estimate. */
+  tokensMeasured: boolean;
   toolCalls: ToolActivity[];
 };

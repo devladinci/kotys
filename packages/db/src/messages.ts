@@ -34,6 +34,7 @@ export type MessageRow = {
   model_name: string | null;
   prompt_tokens: number | null;
   eval_tokens: number | null;
+  tokens_measured: number | null;
   tool_calls: string | null;
   created_at: number;
 };
@@ -88,6 +89,7 @@ export function updateMessage(
     thinking?: string;
     promptTokens?: number;
     evalTokens?: number;
+    tokensMeasured?: boolean;
     toolCalls?: string;
   },
 ) {
@@ -108,6 +110,10 @@ export function updateMessage(
   if (fields.evalTokens !== undefined) {
     sets.push("eval_tokens = ?");
     values.push(fields.evalTokens);
+  }
+  if (fields.tokensMeasured !== undefined) {
+    sets.push("tokens_measured = ?");
+    values.push(fields.tokensMeasured ? 1 : 0);
   }
   if (fields.toolCalls !== undefined) {
     sets.push("tool_calls = ?");

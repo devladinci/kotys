@@ -7,6 +7,7 @@ import {
 import {
   getChatById,
   getTurnRowsForChat,
+  getToolResultsForMessages,
   imagesOf,
   setChatSummary,
 } from "@kotys/db";
@@ -46,6 +47,20 @@ const buildSummaryPrompt = (history: string, previousSummary?: string) =>
     SUMMARY_TEMPLATE,
     history,
   ].join("\n\n");
+
+/** Tool output under each assistant turn, capped so one huge result cannot eat the summary prompt. */
+const TOOL_SUMMARY_CHARS = 4_000;
+
+const summarizeToolResults = (messageId: number): string => {
+  const rows = getToolResultsForMessages([messageId]);
+  if (rows.length === 0) return "";
+  const text = rows
+    .map((r) => r.content)
+    .join("\n---\n")
+    .trim();
+  if (text.length <= TOOL_SUMMARY_CHARS) return text;
+  return `${text.slice(0, TOOL_SUMMARY_CHARS)}\n…(truncated)`;
+};
 
 type Candidate = {
   id: number;
@@ -90,12 +105,15 @@ export async function compactChat(
   if (head.length === 0) return null;
 
   let history = head
-    .map(
-      (r) =>
-        `[${r.role === "user" ? "User" : "Assistant"}]: ${
-          imagesOf(r)?.length ? "[image attached] " : ""
-        }${r.content}`,
-    )
+    .map((r) => {
+      const label = r.role === "user" ? "User" : "Assistant";
+      const imagePrefix = imagesOf(r)?.length ? "[image attached] " : "";
+      const toolText = summarizeToolResults(r.id);
+      const body = toolText
+        ? `${r.content}\n\nTool output:\n${toolText}`
+        : r.content;
+      return `[${label}]: ${imagePrefix}${body}`;
+    })
     .join("\n\n");
   const maxHistoryChars = Math.max(2000, (ctx - summaryTokens - 500) * 4);
   if (history.length > maxHistoryChars)

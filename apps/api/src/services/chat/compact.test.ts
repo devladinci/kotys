@@ -1,5 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { selectSummaryHead } from "./compact.js";
+
+const h = vi.hoisted(() => ({
+  toolResults: [] as {
+    message_id: number;
+    call_index: number;
+    content: string;
+  }[],
+}));
+
+vi.mock("@kotys/db", () => ({
+  getToolResultsForMessages: (ids: number[]) =>
+    h.toolResults.filter((r) => ids.includes(r.message_id)),
+}));
+
+beforeEach(() => {
+  h.toolResults.length = 0;
+});
 
 // estimateTokens is chars/4; "x".repeat(400) = 100 tokens.
 const msg = (id: number, chars: number) => ({
