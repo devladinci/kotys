@@ -34,8 +34,7 @@ const toOllamaMessages = (messages: ConnectorChatMessage[]): OllamaMessage[] =>
     const out: OllamaMessage = { role: m.role, content: m.content };
     // Ollama's API takes raw base64; DB rows can hold data-URIs (composer
     // uploads replayed as history) — strip the prefix or the request 400s.
-    if (m.images && m.images.length > 0)
-      out.images = asBase64Images(m.images);
+    if (m.images && m.images.length > 0) out.images = asBase64Images(m.images);
     if (m.toolCalls && m.toolCalls.length > 0)
       out.tool_calls = m.toolCalls.map((tc) => ({
         function: { name: tc.function.name, arguments: tc.function.arguments },

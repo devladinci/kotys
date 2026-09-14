@@ -20,9 +20,10 @@ describe("asBase64Image", () => {
 
 describe("asBase64Images", () => {
   it("normalizes a mixed batch", () => {
-    expect(
-      asBase64Images(["data:image/jpeg;base64,QQ==", "Qg=="]),
-    ).toEqual(["QQ==", "Qg=="]);
+    expect(asBase64Images(["data:image/jpeg;base64,QQ==", "Qg=="])).toEqual([
+      "QQ==",
+      "Qg==",
+    ]);
   });
 });
 

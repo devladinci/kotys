@@ -94,7 +94,11 @@ describe("resetAssistantMessage", () => {
       }),
     );
     db.insertMessage(chatId, "user", "hi");
-    const assistantId = db.insertMessage(chatId, "assistant", "**Error:** boom");
+    const assistantId = db.insertMessage(
+      chatId,
+      "assistant",
+      "**Error:** boom",
+    );
     if (assistantId === null) throw new Error("insert failed");
     db.updateMessage(assistantId, {
       thinking: "hmm",
@@ -128,8 +132,8 @@ describe("resetAssistantMessage", () => {
     // User rows are never touched, even by id collision attempts.
     const userId = db.insertMessage(chatId, "user", "still here");
     db.resetAssistantMessage(userId as number);
-    expect((db.getMessage(userId as number) as { content: string }).content).toBe(
-      "still here",
-    );
+    expect(
+      (db.getMessage(userId as number) as { content: string }).content,
+    ).toBe("still here");
   });
 });

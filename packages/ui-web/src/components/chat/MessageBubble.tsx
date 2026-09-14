@@ -287,10 +287,7 @@ function MessageBubbleBase({
                       message.toolCalls ?? [],
                     ).map((segment) =>
                       segment.kind === "text" ? (
-                        <MarkdownBody
-                          key={segment.id}
-                          content={segment.text}
-                        />
+                        <MarkdownBody key={segment.id} content={segment.text} />
                       ) : (
                         <WidgetFor key={segment.id} widget={segment.widget} />
                       ),

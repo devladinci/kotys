@@ -41,9 +41,11 @@ describe("ollamaConnector image normalization", () => {
         images: ["data:image/png;base64,QUJD"],
       },
     ];
-    await connector
-      .stream({ model: "m", messages }, () => {}, new AbortController().signal)
-      .done;
+    await connector.stream(
+      { model: "m", messages },
+      () => {},
+      new AbortController().signal,
+    ).done;
     const payload = chatMock.mock.calls.at(-1)![0];
     expect(payload.messages[0].images).toEqual(["QUJD"]);
   });

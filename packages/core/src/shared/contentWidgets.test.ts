@@ -20,7 +20,9 @@ describe("splitContentByWidgets", () => {
     const segments = splitContentByWidgets("hello world", [
       call({ tool: "web_search" }),
     ]);
-    expect(segments).toEqual([{ id: "all", kind: "text", text: "hello world" }]);
+    expect(segments).toEqual([
+      { id: "all", kind: "text", text: "hello world" },
+    ]);
   });
 
   it("interleaves a widget at its offset between text", () => {
@@ -49,7 +51,9 @@ describe("splitContentByWidgets", () => {
     const segments = splitContentByWidgets("plain answer", [
       call({ tool: "request_user_input", widget: inputWidget("old form") }),
     ]);
-    expect(segments).toEqual([{ id: "all", kind: "text", text: "plain answer" }]);
+    expect(segments).toEqual([
+      { id: "all", kind: "text", text: "plain answer" },
+    ]);
   });
 
   it("orders two widgets by offset and keeps same-offset calls in index order", () => {

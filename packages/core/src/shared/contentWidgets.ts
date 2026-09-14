@@ -32,8 +32,7 @@ export function splitContentByWidgets(
       (a.call.textOffset ?? 0) - (b.call.textOffset ?? 0) ||
       a.index - b.index,
   );
-  if (placed.length === 0)
-    return [{ id: "all", kind: "text", text: content }];
+  if (placed.length === 0) return [{ id: "all", kind: "text", text: content }];
 
   const segments: ContentSegment[] = [];
   let cursor = 0;
@@ -45,7 +44,6 @@ export function splitContentByWidgets(
     cursor = offset;
   }
   const rest = content.slice(cursor);
-  if (rest.trim())
-    segments.push({ id: "tail", kind: "text", text: rest });
+  if (rest.trim()) segments.push({ id: "tail", kind: "text", text: rest });
   return segments;
 }
