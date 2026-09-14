@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Check, Server, Link2 } from "lucide-react";
 import { usePlatform } from "@kotys/core";
+import { PairingPanel } from "./PairingPanel";
 
 type BackendView = { kind: "own" } | { kind: "connect"; host: string };
 
@@ -68,6 +69,18 @@ export function BackendSettings() {
     setSelected(kind);
     setError("");
   }, []);
+
+  // A successful pair persists the connect config in the main process;
+  // restarting the window against it is the only thing left to do.
+  const handlePaired = useCallback(async () => {
+    if (!backend) return;
+    setError("");
+    try {
+      await backend.restart();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [backend]);
 
   const handleCopy = useCallback(async () => {
     if (!backend) return;
@@ -169,6 +182,7 @@ export function BackendSettings() {
             aria-label="Backend connect code"
             className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-accent font-mono"
           />
+          <PairingPanel onPaired={handlePaired} />
         </div>
       )}
 

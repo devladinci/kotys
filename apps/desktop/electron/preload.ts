@@ -12,4 +12,8 @@ contextBridge.exposeInMainWorld("kotys", {
   setBackend: (raw: unknown) => ipcRenderer.invoke("backend:set", raw),
   restartWithBackend: () => ipcRenderer.invoke("backend:restart"),
   connectCode: () => ipcRenderer.invoke("backend:connectCode"),
+  // Pairing: discover Kotys daemons on the tailnet, then join one with the
+  // 4-digit code its settings panel shows.
+  discoverBackends: () => ipcRenderer.invoke("backend:discover"),
+  pairWithBackend: (req: unknown) => ipcRenderer.invoke("backend:pair", req),
 });

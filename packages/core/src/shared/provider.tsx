@@ -62,6 +62,19 @@ export type Platform = {
     restart: () => Promise<void>;
     /** `<host>|<token>` for this instance, or "" when no daemon is running. */
     connectCode: () => Promise<{ host: string; code: string }>;
+    /**
+     * Tailnet discovery + pairing. Optional: only Electron with the pairing
+     * bridge implements it; a missing method means "paste code instead".
+     */
+    discover?: () => Promise<
+      | { status: "ok"; instances: { name: string; host: string }[] }
+      | { status: "unavailable"; error: string }
+    >;
+    /** Trade the owner's 4-digit code for its token; persists on success. */
+    pair?: (req: {
+      host: string;
+      code: string;
+    }) => Promise<{ kind: "connect"; host: string }>;
   };
 };
 

@@ -9,6 +9,16 @@ interface ElectronBridge {
   setBackend?: (mode: unknown) => Promise<unknown>;
   restartWithBackend?: () => Promise<void>;
   connectCode?: () => Promise<{ host: string; code: string }>;
+  discoverBackends?: () => Promise<
+    | { status: "ok"; instances: DiscoveredInstance[] }
+    | { status: "unavailable"; error: string }
+  >;
+  pairWithBackend?: (req: { host: string; code: string }) => Promise<unknown>;
+}
+
+export interface DiscoveredInstance {
+  name: string;
+  host: string;
 }
 
 const electron = (): ElectronBridge | undefined =>
@@ -87,5 +97,30 @@ export const desktopPlatform: Platform = {
     },
     connectCode: async () =>
       (await electron()?.connectCode?.()) ?? { host: "", code: "" },
+    discover: async () => {
+      const bridge = electron();
+      if (!bridge?.discoverBackends) {
+        return {
+          status: "unavailable" as const,
+          error: "Pairing needs the desktop app.",
+        };
+      }
+      return bridge.discoverBackends();
+    },
+    pair: async (req) => {
+      const bridge = electron();
+      if (!bridge?.pairWithBackend) {
+        throw new Error("Pairing needs the desktop app.");
+      }
+      const result = await bridge.pairWithBackend(req);
+      if (
+        !result ||
+        typeof result !== "object" ||
+        (result as { kind?: unknown }).kind !== "connect"
+      ) {
+        throw new Error("Pairing failed");
+      }
+      return { kind: "connect" as const, host: req.host };
+    },
   },
 };

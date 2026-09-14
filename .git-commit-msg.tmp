@@ -1,0 +1,17 @@
+feat(pairing): Bluetooth-style pairing between instances on the tailnet
+
+Owner side (apps/api): POST /pairing/start (auth'd) mints a 4-digit code,
+single live session, 2-min TTL, 5-attempt budget; POST /pairing/claim is
+open by design (the joiner has no token yet) and trades the code for the
+API token. Stale codes from ended sessions read as no_pairing_in_progress
+and never burn the live session's budget. /health now reports an instance
+name for the discovery list.
+
+Client side (apps/desktop/electron/discovery.ts): tailscale status --json
+peers probed for a Kotys daemon; claim via /pairing/claim. New IPC
+backend:discover / backend:pair with strict request guards (dotted-quad
+host, exactly-4-digit code).
+
+UI: PairingPanel in Settings > Backend (scan, pick instance, enter the
+code its panel shows, pair and restart). Paste-code flow stays as
+fallback.

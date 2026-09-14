@@ -20,7 +20,14 @@ import {
   parseConnectCode,
   type BackendConfig,
 } from "./backendConfig";
-import { currentBindHost, ensureDaemon, stopDaemon } from "./daemon";
+import {
+  currentBindHost,
+  ensureDaemon,
+  stopDaemon,
+  claimPairing,
+  discoverInstances,
+} from "./daemon";
+import { isDottedQuad } from "./discovery";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let win: BrowserWindow | null = null;
@@ -37,6 +44,8 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
+
+const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 
 const DIST_DIR = path.join(__dirname, "../dist");
 
@@ -299,6 +308,19 @@ app.whenReady().then(() => {
     const token = readToken();
     return { host, code: token ? `${host}|${token}` : "" };
   });
+  /**
+   * Pairing instead of pasting: list tailnet peers that run a Kotys daemon,
+   * then trade the owner's 4-digit code for its token. Discovery degrades
+   * to an error string the UI shows as-is (no Tailscale, or no peers).
+   */
+  ipcMain.handle("backend:discover", async () => discoverInstances(PORT));
+  ipcMain.handle("backend:pair", async (_e, raw: unknown) => {
+    const parsed = asPairRequest(raw);
+    if (!parsed) throw new Error("Invalid pairing request");
+    const outcome = await claimPairing(parsed.host, PORT, parsed.code);
+    if (!outcome.ok) throw new Error(outcome.error);
+    return { kind: "connect", host: parsed.host, token: outcome.token };
+  });
   if (!process.env.VITE_DEV_SERVER_URL) {
     protocol.handle("app", serveRenderer);
   }
@@ -320,3 +342,13 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   if (process.env.KOTYS_KEEP_DAEMON !== "1") void stopDaemon();
 });
+
+/** Guard the cross-boundary pair request before it reaches the network. */
+function asPairRequest(raw: unknown): { host: string; code: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const host = (raw as { host?: unknown }).host;
+  const code = (raw as { code?: unknown }).code;
+  if (typeof host !== "string" || !isDottedQuad(host)) return null;
+  if (typeof code !== "string" || !/^\d{4}$/.test(code)) return null;
+  return { host, code };
+}
