@@ -1,4 +1,5 @@
 import type { ModelListing } from "@kotys/contracts";
+import { asDataUriImage } from "@kotys/contracts";
 import type {
   ConnectorChatMessage,
   ConnectorChatRequest,
@@ -117,9 +118,7 @@ const toOpenAiContent = (
     { type: "text", text: content },
     ...images.map((b64) => ({
       type: "image_url" as const,
-      image_url: {
-        url: b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`,
-      },
+      image_url: { url: asDataUriImage(b64) },
     })),
   ];
 };

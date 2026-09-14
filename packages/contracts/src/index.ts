@@ -9,6 +9,7 @@ export * from "./types/mcp.js";
 export * from "./types/stream.js";
 export * from "./types/skill.js";
 export * from "./types/analytics.js";
+export * from "./types/image.js";
 
 export * from "./schemas/mcp.js";
 export * from "./schemas/skill.js";

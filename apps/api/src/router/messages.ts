@@ -6,6 +6,7 @@ import {
   updateMessage,
   searchMessages,
   getChatIdForMessage,
+  resetAssistantMessage,
 } from "@kotys/db";
 import { pub } from "./base.js";
 import { events } from "../services/events.js";
@@ -74,4 +75,14 @@ export const messagesRouter = {
   search: pub
     .input(z.object({ query: z.string() }))
     .handler(async ({ input }) => searchMessages(input.query)),
+
+  resetForRetry: pub
+    .input(z.object({ id: z.number() }))
+    .handler(async ({ input }) => {
+      resetAssistantMessage(input.id);
+      const chatId = getChatIdForMessage(input.id);
+      if (chatId !== null) {
+        events.emitEvent("messages:changed", { chatId, messageId: input.id });
+      }
+    }),
 };

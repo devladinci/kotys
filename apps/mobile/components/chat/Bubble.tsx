@@ -10,6 +10,7 @@ import {
 import { setStringAsync } from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
+import { asDataUriImage, isErrorTurn } from "@kotys/contracts";
 import {
   SKILL_FENCE_PREFIX,
   SkillMessage,
@@ -20,6 +21,22 @@ import { theme, useThemeMode } from "../../lib/theme";
 import { InputCard, ToolTimeline } from "../kit";
 import { s } from "./styles";
 
+interface IProps {
+  message: Message;
+  streaming: boolean;
+  highlighted: boolean;
+  busy: boolean;
+  onRegenerate: (id: number) => void;
+  onEdit: (m: Message) => void;
+}
+
+const segmentGap = { marginTop: 4, marginBottom: 4 };
+const imageRow = {
+  flexDirection: "row" as const,
+  flexWrap: "wrap" as const,
+  gap: 6,
+};
+
 function BubbleBase({
   message,
   streaming,
@@ -27,18 +44,14 @@ function BubbleBase({
   busy,
   onRegenerate,
   onEdit,
-}: {
-  message: Message;
-  streaming: boolean;
-  highlighted: boolean;
-  busy: boolean;
-  onRegenerate: (id: number) => void;
-  onEdit: (m: Message) => void;
-}) {
+}: IProps) {
   const mode = useThemeMode();
   const t = theme(mode);
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
+
+  const handleEdit = () => onEdit(message);
+  const handleCopy = () => void setStringAsync(message.content);
 
   const longPress = useCallback(() => {
     if (streaming || busy) return;
@@ -46,19 +59,31 @@ function BubbleBase({
       ActionSheetIOS.showActionSheetWithOptions(
         { options: ["Edit & resend", "Copy", "Cancel"], cancelButtonIndex: 2 },
         (idx) => {
-          if (idx === 0) onEdit(message);
-          if (idx === 1) void setStringAsync(message.content);
+          if (idx === 0) handleEdit();
+          if (idx === 1) handleCopy();
         },
       );
     } else {
+      const failed = isErrorTurn(message.content);
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Regenerate", "Copy", "Cancel"], cancelButtonIndex: 2 },
+        {
+          options: failed
+            ? ["Retry", "Regenerate", "Copy", "Cancel"]
+            : ["Regenerate", "Copy", "Cancel"],
+          cancelButtonIndex: failed ? 3 : 2,
+        },
         (idx) => {
-          if (idx === 0) onRegenerate(message.id);
-          if (idx === 1) void setStringAsync(message.content);
+          if (failed) {
+            if (idx === 0 || idx === 1) onRegenerate(message.id);
+          } else if (idx === 0) {
+            onRegenerate(message.id);
+          }
+          if (idx === (failed ? 2 : 1)) handleCopy();
         },
       );
     }
+    // handleEdit/handleCopy are stable per-render closures over props below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message, isUser, streaming, busy, onEdit, onRegenerate]);
 
   return (
@@ -109,18 +134,13 @@ function BubbleBase({
           <>
             {message.images && message.images.length > 0 ? (
               <View style={s.bubbleImages}>
-                {message.images.map((src, i) => {
-                  const url = src.startsWith("data:")
-                    ? src
-                    : `data:image/png;base64,${src}`;
-                  return (
-                    <Image
-                      key={i}
-                      source={{ uri: url }}
-                      style={s.bubbleImage}
-                    />
-                  );
-                })}
+                {message.images.map((src) => (
+                  <Image
+                    key={asDataUriImage(src)}
+                    source={{ uri: asDataUriImage(src) }}
+                    style={s.bubbleImage}
+                  />
+                ))}
               </View>
             ) : null}
             {message.content ? (
@@ -132,28 +152,25 @@ function BubbleBase({
           </>
         ) : (
           splitContentByWidgets(message.content, message.toolCalls ?? []).map(
-            (segment, i) =>
+            (segment) =>
               segment.kind === "text" ? (
                 <Markdown
-                  key={i}
+                  key={segment.id}
                   style={markdownStyles(t)}
                   rules={markdownRules(t)}
                 >
                   {segment.text || (streaming ? "…" : "")}
                 </Markdown>
               ) : segment.widget.kind === "input" ? (
-                <View key={i} style={{ marginTop: 4, marginBottom: 4 }}>
+                <View key={segment.id} style={segmentGap}>
                   <InputCard widget={segment.widget} />
                 </View>
               ) : segment.widget.kind === "image" ? (
-                <View
-                  key={i}
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
-                >
-                  {segment.widget.images.map((img, j) => (
+                <View key={segment.id} style={imageRow}>
+                  {segment.widget.images.map((img) => (
                     <Image
-                      key={j}
-                      source={{ uri: `data:image/jpeg;base64,${img}` }}
+                      key={asDataUriImage(img)}
+                      source={{ uri: asDataUriImage(img) }}
                       style={s.bubbleImage}
                       resizeMode="cover"
                     />

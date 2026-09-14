@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatStreamResult, ModelListing } from "@kotys/contracts";
+import { ERROR_TURN_PREFIX } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
 import { parseSlashCommand } from "../skills/slashCommand.js";
@@ -319,7 +320,7 @@ export function useChat(args: UseChatArgs) {
     async (assistantId: number, errorMsg: string) => {
       const buf = streamBuffersRef.current.get(assistantId);
       const tools = toolBuffersRef.current.get(assistantId)?.filter(Boolean);
-      const errorContent = `${buf?.content ? buf.content + "\n\n" : ""}**Error:** ${errorMsg}`;
+      const errorContent = `${buf?.content ? buf.content + "\n\n" : ""}${ERROR_TURN_PREFIX} ${errorMsg}`;
       await updateMessage(assistantId, {
         content: errorContent,
         ...(buf?.thinking ? { thinking: buf.thinking } : {}),
@@ -503,7 +504,7 @@ export function useChat(args: UseChatArgs) {
             {
               id: Date.now(),
               role: "assistant",
-              content: `**Error:** ${errorMsg}`,
+              content: `${ERROR_TURN_PREFIX} ${errorMsg}`,
               model: chatModel.name,
             },
           ]);
@@ -602,6 +603,12 @@ export function useChat(args: UseChatArgs) {
             : m,
         ),
       );
+      // Wipe the DB row before replaying. A failed turn's persisted
+      // error-marker text would otherwise be rebuilt as history on the
+      // next request and shown to the model as its own prior reply — and a
+      // second failure would stack another error onto it. Old tool results
+      // must go too: their replay budget could crowd out the fresh turn.
+      await rpc.messages.resetForRetry({ id: assistantId });
       setIsLoading(true);
       setStreamingId(assistantId);
       claimLiveStream(assistantId, activeChatId);
@@ -623,6 +630,7 @@ export function useChat(args: UseChatArgs) {
       isLoading,
       messages,
       permissionMode,
+      rpc,
       setMessages,
       stream,
       thinkingEffort,

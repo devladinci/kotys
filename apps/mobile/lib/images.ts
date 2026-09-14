@@ -1,7 +1,8 @@
 // Image attachment pipeline for the mobile composer — mirrors the web
 // Composer's prepareImage: everything becomes a JPEG data URI, downscaled so
-// the longest edge is ≤ 1536px (same as the web IMAGE_MAX_DIM), and the
-// daemon's stripDataUrl later strips the prefix before the model sees it.
+// the longest edge is ≤ 1536px (same as the web IMAGE_MAX_DIM). Data-URIs are
+// the DB storage format; each LLM connector normalizes to its own wire format
+// (see @kotys/contracts asBase64Images / asDataUriImage) before sending.
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 

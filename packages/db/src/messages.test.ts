@@ -82,3 +82,58 @@ describe("messages", () => {
     expect(row?.prompt_tokens).toBeNull();
   });
 });
+
+describe("resetAssistantMessage", () => {
+  it("wipes content, thinking, tool trace and tool results, keeping the row", () => {
+    const chatId = Number(
+      db.createChat("Retry test", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    db.insertMessage(chatId, "user", "hi");
+    const assistantId = db.insertMessage(
+      chatId,
+      "assistant",
+      "**Error:** boom",
+    );
+    if (assistantId === null) throw new Error("insert failed");
+    db.updateMessage(assistantId, {
+      thinking: "hmm",
+      toolCalls: JSON.stringify([{ tool: "bash", status: "error" }]),
+      promptTokens: 42,
+      evalTokens: 7,
+      tokensMeasured: true,
+    });
+    db.insertToolResults(assistantId, [
+      { callIndex: 0, content: "stale output" },
+    ]);
+
+    db.resetAssistantMessage(assistantId);
+
+    const row = db.getMessage(assistantId) as {
+      content: string;
+      thinking: string | null;
+      tool_calls: string | null;
+      prompt_tokens: number | null;
+      eval_tokens: number | null;
+      tokens_measured: number | null;
+    };
+    expect(row.content).toBe("");
+    expect(row.thinking).toBeNull();
+    expect(row.tool_calls).toBeNull();
+    expect(row.prompt_tokens).toBeNull();
+    expect(row.eval_tokens).toBeNull();
+    expect(row.tokens_measured).toBeNull();
+    expect(db.getToolResultsForMessages([assistantId])).toEqual([]);
+
+    // User rows are never touched, even by id collision attempts.
+    const userId = db.insertMessage(chatId, "user", "still here");
+    db.resetAssistantMessage(userId as number);
+    expect(
+      (db.getMessage(userId as number) as { content: string }).content,
+    ).toBe("still here");
+  });
+});

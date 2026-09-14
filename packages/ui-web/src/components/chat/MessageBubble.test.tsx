@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import MessageBubble from "./MessageBubble";
+import { MessageBubble } from "./MessageBubble";
 import type { Message } from "@kotys/contracts";
 
 const userMessage = (content: string): Message => ({

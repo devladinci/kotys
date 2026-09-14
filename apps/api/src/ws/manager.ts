@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { WSContext } from "hono/ws";
 import type { ChatStreamResult } from "@kotys/contracts";
+import { ERROR_TURN_PREFIX } from "@kotys/contracts";
 import { getMessage, getChatIdForMessage, updateMessage } from "@kotys/db";
 import { events } from "../services/events.js";
 import { resolveApproval } from "../services/approval.js";
@@ -130,8 +131,8 @@ function persistResult(
     } else {
       const partial = row.content || "";
       content = partial
-        ? `${partial}\n\n**Error:** ${error ?? "stream failed"}`
-        : `**Error:** ${error ?? "stream failed"}`;
+        ? `${partial}\n\n${ERROR_TURN_PREFIX} ${error ?? "stream failed"}`
+        : `${ERROR_TURN_PREFIX} ${error ?? "stream failed"}`;
       thinking = row.thinking || undefined;
     }
     // 0 usage means "no measurement" — writing it would fake an anchor.
