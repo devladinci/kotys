@@ -139,9 +139,14 @@ You need:
 - Optional: an [oMLX](https://omlx.ai) server, for MLX models and dictation
 
 ```bash
-pnpm install
-pnpm dev
+bin/setup
+bin/dev
 ```
+
+`bin/setup` verifies Node and pnpm, checks Ollama, installs dependencies, and
+builds the workspace packages that `bin/dev` resolves at runtime — packages
+are not committed to git, so this one command comes first. It is idempotent,
+so re-running it is always safe.
 
 This starts the API daemon, the desktop app, and the web client.
 

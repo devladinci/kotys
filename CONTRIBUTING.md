@@ -3,12 +3,13 @@
 ## Setup
 
 ```bash
-pnpm install
-pnpm --filter @kotys/api dev      # terminal 1 — the backend
-pnpm --filter @kotys/desktop dev  # terminal 2 — the app
+bin/setup
+bin/dev
 ```
 
-Requires Node 22+, pnpm 10+, and Ollama running locally (or an Ollama Cloud key).
+`bin/dev` starts the whole stack — the desktop app spawns the API daemon
+itself. Requires Node 22+, pnpm 10+, and Ollama running locally (or an
+Ollama Cloud key).
 
 ## Before opening a PR
 
