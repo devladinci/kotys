@@ -9,7 +9,12 @@ import type { ToolContext } from "./types.js";
 import { buildTodoWidget } from "./todoWidget.js";
 import { TODO_PRIORITIES } from "@kotys/contracts";
 import { validateNewTodoDates } from "../validation/todoDates.js";
-import { secondsToDate, asEpochSeconds } from "@kotys/contracts";
+import { parseTodoDateArg } from "../validation/todoDateArgs.js";
+import {
+  secondsToDate,
+  asEpochSeconds,
+  type EpochSeconds,
+} from "@kotys/contracts";
 
 const PRIORITY_GUIDE =
   "low = nice to have, no urgency. " +
@@ -43,12 +48,12 @@ export const definition: ToolDefinition = {
         due_at: {
           type: "number",
           description:
-            "Optional Unix timestamp (seconds) for when the task is due. Must be in the future — call current_datetime first if you are unsure of the current time.",
+            "Optional Unix timestamp (seconds) for when the task is due. Must be in the future — call current_datetime first if you are unsure of the current time. An ISO 8601 string is also accepted.",
         },
         notify_at: {
           type: "number",
           description:
-            "Optional Unix timestamp (seconds) for when to send a native notification reminder. Must be in the future.",
+            "Optional Unix timestamp (seconds) for when to send a native notification reminder. Must be in the future. An ISO 8601 string is also accepted.",
         },
       },
     },
@@ -73,15 +78,27 @@ export async function execute(
       ? (args.priority as TodoPriority)
       : "medium";
 
-  const due_at =
-    typeof args.due_at === "number" && args.due_at > 0
-      ? asEpochSeconds(Math.round(args.due_at))
-      : null;
-
-  const notify_at =
-    typeof args.notify_at === "number" && args.notify_at > 0
-      ? asEpochSeconds(Math.round(args.notify_at))
-      : null;
+  const dates: Record<"due_at" | "notify_at", EpochSeconds | null> = {
+    due_at: null,
+    notify_at: null,
+  };
+  for (const field of ["due_at", "notify_at"] as const) {
+    const raw = args[field];
+    if (raw === undefined) continue;
+    const parsed = parseTodoDateArg(field, raw);
+    if ("error" in parsed) {
+      return {
+        content: JSON.stringify({
+          created: false,
+          reason: `${parsed.error} Call current_datetime to get the current time.`,
+        }),
+        activity: { query: title },
+      };
+    }
+    dates[field] = parsed.value === null ? null : asEpochSeconds(parsed.value);
+  }
+  const due_at: EpochSeconds | null = dates.due_at;
+  const notify_at: EpochSeconds | null = dates.notify_at;
 
   // Rejected here as well as in the main process so the model gets a message
   // it can act on rather than a bare thrown error.
