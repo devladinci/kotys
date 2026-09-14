@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { List, useDynamicRowHeight } from "react-window";
 import type { Message } from "@kotys/contracts";
-import MessageBubble from "./MessageBubble";
+import { MessageBubble } from "./MessageBubble";
 
 interface IProps {
   messages: Message[];

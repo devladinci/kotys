@@ -1,8 +1,12 @@
 import type { ToolActivity } from "@kotys/contracts";
 
 export type ContentSegment =
-  | { kind: "text"; text: string }
-  | { kind: "widget"; widget: NonNullable<ToolActivity["widget"]> };
+  | { id: string; kind: "text"; text: string }
+  | {
+      id: string;
+      kind: "widget";
+      widget: NonNullable<ToolActivity["widget"]>;
+    };
 
 /**
  * Splits a turn's text around widget-bearing tool calls so each card renders
@@ -28,18 +32,20 @@ export function splitContentByWidgets(
       (a.call.textOffset ?? 0) - (b.call.textOffset ?? 0) ||
       a.index - b.index,
   );
-  if (placed.length === 0) return [{ kind: "text", text: content }];
+  if (placed.length === 0)
+    return [{ id: "all", kind: "text", text: content }];
 
   const segments: ContentSegment[] = [];
   let cursor = 0;
-  for (const { call } of placed) {
+  for (const { call, index } of placed) {
     const offset = Math.min(call.textOffset ?? 0, content.length);
     const text = content.slice(cursor, offset);
-    if (text.trim()) segments.push({ kind: "text", text });
-    segments.push({ kind: "widget", widget: call.widget! });
+    if (text.trim()) segments.push({ id: `t${index}`, kind: "text", text });
+    segments.push({ id: `w${index}`, kind: "widget", widget: call.widget! });
     cursor = offset;
   }
   const rest = content.slice(cursor);
-  if (rest.trim()) segments.push({ kind: "text", text: rest });
+  if (rest.trim())
+    segments.push({ id: "tail", kind: "text", text: rest });
   return segments;
 }

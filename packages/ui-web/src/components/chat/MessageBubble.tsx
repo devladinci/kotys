@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
+import { isErrorTurn } from "@kotys/contracts";
 import { SkillMessage, splitContentByWidgets } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
 import {
@@ -25,6 +26,10 @@ interface IProps {
   ) => void;
   isLoading?: boolean;
 }
+
+/** B64 image payloads may arrive raw; the <img> source needs a data-URI. */
+const imageSrc = (src: string): string =>
+  src.startsWith("data:") ? src : `data:image/png;base64,${src}`;
 
 function MessageBubbleBase({
   message,
@@ -52,10 +57,9 @@ function MessageBubbleBase({
     !message.thinking &&
     !message.toolCalls?.length;
 
-  // Error turns are marked `**Error:** …` (finaliseError / server persist);
-  // retry must wipe the row, which regenerate now does.
-  const isFailed =
-    !isUser && !isStreamingThis && message.content.includes("**Error:**");
+  // Failed turns carry the shared **Error:** marker; retry wipes the row,
+  // which regenerate now does.
+  const isFailed = !isUser && !isStreamingThis && isErrorTurn(message.content);
 
   const startEdit = () => {
     setDraft(message.content);
@@ -72,6 +76,16 @@ function MessageBubbleBase({
   const cancelEdit = () => {
     setEditing(false);
     setDraft(message.content);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      commitEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
   };
 
   // createdAt is unixepoch seconds; in-flight optimistic messages lack it.
@@ -138,13 +152,11 @@ function MessageBubbleBase({
               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-surface-user px-3 py-2">
                 {message.images && message.images.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {message.images.map((src, i) => {
-                      const url = src.startsWith("data:")
-                        ? src
-                        : `data:image/png;base64,${src}`;
+                    {message.images.map((src) => {
+                      const url = imageSrc(src);
                       return (
                         <button
-                          key={i}
+                          key={url}
                           onClick={() => onImageClick(url)}
                           aria-label="Open image"
                           className="max-h-48 max-w-60 rounded-lg border border-border cursor-zoom-in object-contain p-0 bg-transparent"
@@ -174,13 +186,11 @@ function MessageBubbleBase({
                 )}
               {message.images && message.images.length > 0 && !editing && (
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {message.images.map((src, i) => {
-                    const url = src.startsWith("data:")
-                      ? src
-                      : `data:image/png;base64,${src}`;
+                  {message.images.map((src) => {
+                    const url = imageSrc(src);
                     return (
                       <button
-                        key={i}
+                        key={url}
                         onClick={() => onImageClick(url)}
                         aria-label="Open image"
                         className="max-h-48 max-w-60 rounded-lg border border-border cursor-zoom-in object-contain p-0 bg-transparent"
@@ -200,15 +210,7 @@ function MessageBubbleBase({
                   <textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        commitEdit();
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        cancelEdit();
-                      }
-                    }}
+                    onKeyDown={handleEditKeyDown}
                     ref={editRef}
                     rows={3}
                     aria-label="Edit message"
@@ -283,11 +285,14 @@ function MessageBubbleBase({
                     {splitContentByWidgets(
                       message.content,
                       message.toolCalls ?? [],
-                    ).map((segment, i) =>
+                    ).map((segment) =>
                       segment.kind === "text" ? (
-                        <MarkdownBody key={i} content={segment.text} />
+                        <MarkdownBody
+                          key={segment.id}
+                          content={segment.text}
+                        />
                       ) : (
-                        <WidgetFor key={i} widget={segment.widget} />
+                        <WidgetFor key={segment.id} widget={segment.widget} />
                       ),
                     )}
                   </StreamingProvider>
@@ -315,7 +320,6 @@ function MessageBubbleBase({
 }
 
 const MessageBubble = memo(MessageBubbleBase);
-export default MessageBubble;
 
 /** Skill invocations render through the same markdown body, minus the header. */
 function UserMessageBody({ content }: { content: string }) {
@@ -325,3 +329,5 @@ function UserMessageBody({ content }: { content: string }) {
     />
   );
 }
+
+export { MessageBubble };
