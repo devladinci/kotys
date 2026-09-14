@@ -167,7 +167,7 @@ function BubbleBase({
                 </View>
               ) : segment.widget.kind === "image" ? (
                 <View key={segment.id} style={imageRow}>
-                  {segment.widget.images.map((img, j) => (
+                  {segment.widget.images.map((img) => (
                     <Image
                       key={asDataUriImage(img)}
                       source={{ uri: asDataUriImage(img) }}
