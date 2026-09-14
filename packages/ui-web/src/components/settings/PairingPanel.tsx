@@ -156,7 +156,6 @@ export function PairingPanel({ onPaired }: IProps) {
             <span className="font-medium">{pairing.instance.name}</span>:
           </span>
           <input
-            autoFocus
             type="text"
             inputMode="numeric"
             maxLength={4}
