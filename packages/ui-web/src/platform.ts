@@ -3,6 +3,12 @@ import { createVoiceRecorder } from "./voiceRecorder.js";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
+  // Optional in practice on older builds; the desktop preload always
+  // provides them, web/mobile never see this bridge at all.
+  getBackend?: () => Promise<unknown>;
+  setBackend?: (mode: unknown) => Promise<unknown>;
+  restartWithBackend?: () => Promise<void>;
+  connectCode?: () => Promise<{ host: string; code: string }>;
 }
 
 const electron = (): ElectronBridge | undefined =>
@@ -67,4 +73,19 @@ export const desktopPlatform: Platform = {
   // Main-process notifications: renderer HTML5 notifications have no
   // permission store for the app://kotys origin.
   notify: ({ title, body }) => electron()?.notify({ title, body }),
+  // The Electron bridge can host or join a shared backend; the window
+  // reloads against the persisted choice.
+  backend: {
+    get: async () => electron()?.getBackend?.(),
+    set: (mode) => {
+      const bridge = electron();
+      if (!bridge?.setBackend) throw new Error("Backend not configurable");
+      return bridge.setBackend(mode);
+    },
+    restart: async () => {
+      await electron()?.restartWithBackend?.();
+    },
+    connectCode: async () =>
+      (await electron()?.connectCode?.()) ?? { host: "", code: "" },
+  },
 };

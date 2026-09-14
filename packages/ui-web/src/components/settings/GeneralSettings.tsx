@@ -11,6 +11,7 @@ import {
 import { useAppStore, useRpc, type ThemeMode } from "@kotys/core";
 import type { RunningModel } from "@kotys/contracts";
 import { formatBytes, formatExpires } from "./helpers";
+import { BackendSettings } from "./BackendSettings";
 
 const DEFAULT_OMLX_HOST = "http://127.0.0.1:7777/v1";
 
@@ -24,6 +25,7 @@ export default function GeneralSettings({
   return (
     <div className="space-y-4">
       <ProvidersSection />
+      <BackendSettings />
       <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
       <RunningModelsSection />
     </div>

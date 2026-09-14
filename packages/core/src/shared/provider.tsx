@@ -41,6 +41,30 @@ export type Platform = {
   /** Hold-to-talk voice input; hosts without a mic throw. */
   startVoiceRecording?: () => Promise<void>;
   stopVoiceRecording?: () => Promise<VoiceRecording>;
+  /**
+   * Desktop backend selection. Present when the host can host or join a
+   * shared backend (Electron desktop): "own" spawns this machine's daemon,
+   * "connect" attaches to another instance's daemon and shares its database.
+   * Hosts without it (web, mobile) always run against the backend they were
+   * pointed at and need no setting.
+   */
+  backend?: {
+    /** The persisted mode; "own" unless previously changed. */
+    get: () => Promise<unknown>;
+    /**
+     * Persist a new mode ("own", or a `host|token` connect code) without
+     * restarting; takes effect on the next restart or backend:restart.
+     */
+    set: (
+      mode:
+        | { kind: "own" }
+        | { kind: "connect"; connectCode: string },
+    ) => Promise<unknown>;
+    /** Reload the window against the persisted backend config. */
+    restart: () => Promise<void>;
+    /** `<host>|<token>` for this instance, or "" when no daemon is running. */
+    connectCode: () => Promise<{ host: string; code: string }>;
+  };
 };
 
 /**

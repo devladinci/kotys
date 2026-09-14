@@ -3,18 +3,12 @@ import { execFile } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import type { BackendConfig } from "./backendConfig";
+import { OWN_BACKEND } from "./backendConfig";
 import { parseTailscaleIp, plausibleHost } from "./daemonHost";
 
 const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 const BASE = `http://127.0.0.1:${PORT}`;
-/**
- * KOTYS_REMOTE_HOST points this desktop app at a daemon already running on
- * another machine (e.g. the M1 over Tailscale: KOTYS_REMOTE_HOST=100.x.y.z).
- * The app then attaches instead of spawning a local daemon, so both machines
- * share one database. Loopback is still tried first, so a co-located daemon
- * always wins and "app + its own daemon" keeps working with the variable set.
- */
-const REMOTE_HOST = process.env.KOTYS_REMOTE_HOST;
 
 /**
  * Tailscale IPv4, or null when Tailscale is absent/down. Parsing rules are
@@ -53,18 +47,28 @@ function tailscaleHost(): Promise<string | null> {
   });
 }
 
+export type RemoteProbe =
+  | { status: "ok"; base: string }
+  | { status: "unreachable"; error: string };
+
 /**
- * Health-probe a remote host once. Used by ensureDaemon when
- * KOTYS_REMOTE_HOST points at another machine's daemon.
+ * Health-probe a remote host once. Used by ensureDaemon when the backend
+ * setting points this app at another machine's daemon. /health needs no
+ * token; a wrong pairing token surfaces later as the renderer's normal 401
+ * pairing flow instead.
  */
-async function probeRemote(host: string): Promise<string | null> {
+async function probeRemote(host: string): Promise<RemoteProbe> {
   try {
     const res = await fetch(`http://${host}:${PORT}/health`, {
       signal: AbortSignal.timeout(1500),
     });
-    return res.ok ? `http://${host}:${PORT}` : null;
-  } catch {
-    return null;
+    if (res.ok) return { status: "ok", base: `http://${host}:${PORT}` };
+    return { status: "unreachable", error: `HTTP ${res.status}` };
+  } catch (err) {
+    return {
+      status: "unreachable",
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
@@ -149,40 +153,59 @@ async function findRunningDaemon(host: string): Promise<string | null> {
 }
 
 /**
+ * The host this app's daemon would bind: KOTYS_HOST wins, then Tailscale,
+ * then loopback; malformed values fall through rather than dying on a DNS
+ * lookup. Shared by ensureDaemon and the connect-code IPC so both agree on
+ * what "this instance's address" is.
+ */
+export async function currentBindHost(): Promise<string> {
+  const envHost = process.env.KOTYS_HOST;
+  return (
+    (envHost && plausibleHost(envHost) ? envHost : null) ??
+    (await tailscaleHost()) ??
+    "127.0.0.1"
+  );
+}
+
+/**
  * Attaches to an already-running daemon, or starts one.
  *
  * Attach-first matters: if you left the daemon up so your phone could reach it,
  * opening the desktop app must not start a second one fighting for the same
  * database and port.
+ *
+ * @param config Backend mode. "own" (the default) spawns/attaches locally.
+ *   "connect" points at another machine's daemon — it attaches when that
+ *   daemon is up, and otherwise THROWS rather than falling back to spawning
+ *   locally: a silent fallback would present a fresh local database and look
+ *   exactly like lost data.
  */
-export async function ensureDaemon(): Promise<string> {
-  // KOTYS_HOST wins, then Tailscale, then loopback; malformed values fall
-  // through rather than dying on a DNS lookup.
-  const envHost = process.env.KOTYS_HOST;
-  const host =
-    (envHost && plausibleHost(envHost) ? envHost : null) ??
-    (await tailscaleHost()) ??
-    "127.0.0.1";
+export async function ensureDaemon(
+  config: BackendConfig = OWN_BACKEND,
+): Promise<string> {
+  const host = await currentBindHost();
 
-  const running = await findRunningDaemon(host);
-  const remote =
-    REMOTE_HOST && plausibleHost(REMOTE_HOST) ? REMOTE_HOST : null;
-  if (remote) {
-    // Pointed at another machine: attach if its daemon is up, spawn one if
-    // not (the local daemon will still bind host from KOTYS_HOST). Loopback
-    // was probed first inside findRunningDaemon, so a co-located daemon
-    // always wins over the remote one.
-    const remoteBase = await probeRemote(remote);
-    if (remoteBase) {
+  if (config.mode.kind === "connect") {
+    const { host: remoteHost } = config.mode;
+    const probe = await probeRemote(remoteHost);
+    if (probe.status === "ok") {
       console.log(
-        `[api] attached to remote daemon at ${remoteBase} — not spawning our own`,
+        `[api] attached to remote daemon at ${probe.base} — not spawning our own`,
       );
-      return remoteBase;
+      return probe.base;
     }
-    console.log(
-      `[api] no daemon on ${remote}:${PORT} (KOTYS_REMOTE_HOST) — spawning locally`,
+    // A co-located daemon is a different instance with a different database:
+    // attaching to it would silently show the wrong machine's data. Fail
+    // loudly instead — the user decides (start the remote, or switch back).
+    throw new Error(
+      `No Kotys daemon reachable at ${remoteHost}:${PORT} (${probe.error}). ` +
+        `Backend mode is "connect", so refusing to start a local daemon that ` +
+        `would show a different (possibly empty) database. ` +
+        `Start the daemon on ${remoteHost} or switch backend to "own".`,
     );
   }
+
+  const running = await findRunningDaemon(host);
   if (running) {
     // Attach-first means this Electron process holds no daemon handle. Saying
     // so saves a future "why didn't ^C stop the API" mystery: the daemon the
