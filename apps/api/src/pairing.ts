@@ -9,23 +9,15 @@ import { randomInt } from "node:crypto";
  * that budget is comfortably out of brute-force reach.
  */
 
-export interface PairingAttempt {
-  ok: true;
-  token: string;
-}
-
-export interface PairingFailure {
-  ok: false;
-  /** 404 no live session · 403 wrong code · 429 attempt budget spent. */
-  status: 403 | 404 | 429;
-  error: string;
-}
-
 export interface PairingService {
   /** Mint a fresh code, replacing any previous session. */
   start(): { code: string; expiresInSeconds: number };
   /** Trade a candidate code for the API token. */
-  claim(candidate: string): PairingAttempt | PairingFailure;
+  claim(
+    candidate: string,
+  ):
+    | { ok: true; token: string }
+    | { ok: false; status: 403 | 404 | 429; error: string };
 }
 
 const DEFAULT_TTL_MS = 2 * 60 * 1000;

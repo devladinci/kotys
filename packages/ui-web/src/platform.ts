@@ -10,15 +10,10 @@ interface ElectronBridge {
   restartWithBackend?: () => Promise<void>;
   connectCode?: () => Promise<{ host: string; code: string }>;
   discoverBackends?: () => Promise<
-    | { status: "ok"; instances: DiscoveredInstance[] }
+    | { status: "ok"; instances: { name: string; host: string }[] }
     | { status: "unavailable"; error: string }
   >;
   pairWithBackend?: (req: { host: string; code: string }) => Promise<unknown>;
-}
-
-export interface DiscoveredInstance {
-  name: string;
-  host: string;
 }
 
 const electron = (): ElectronBridge | undefined =>

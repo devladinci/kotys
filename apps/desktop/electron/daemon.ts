@@ -6,11 +6,7 @@ import { app } from "electron";
 import type { BackendConfig } from "./backendConfig";
 import { OWN_BACKEND } from "./backendConfig";
 import { parseTailscaleIp, plausibleHost } from "./daemonHost";
-import {
-  claimPairing,
-  discoverInstances,
-  type DiscoveredInstance,
-} from "./discovery";
+import { claimPairing, discoverInstances } from "./discovery";
 
 const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -309,4 +305,3 @@ const SIGTERM_GRACE_MS = 2_000;
 
 /** See discovery.ts — thin re-exports keep IPC wiring in main.ts honest. */
 export { discoverInstances, claimPairing };
-export type { DiscoveredInstance };
