@@ -7,6 +7,14 @@ import { parseTailscaleIp, plausibleHost } from "./daemonHost";
 
 const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 const BASE = `http://127.0.0.1:${PORT}`;
+/**
+ * KOTYS_REMOTE_HOST points this desktop app at a daemon already running on
+ * another machine (e.g. the M1 over Tailscale: KOTYS_REMOTE_HOST=100.x.y.z).
+ * The app then attaches instead of spawning a local daemon, so both machines
+ * share one database. Loopback is still tried first, so a co-located daemon
+ * always wins and "app + its own daemon" keeps working with the variable set.
+ */
+const REMOTE_HOST = process.env.KOTYS_REMOTE_HOST;
 
 /**
  * Tailscale IPv4, or null when Tailscale is absent/down. Parsing rules are
@@ -43,6 +51,21 @@ function tailscaleHost(): Promise<string | null> {
     }
     setTimeout(() => finish(null), 3000);
   });
+}
+
+/**
+ * Health-probe a remote host once. Used by ensureDaemon when
+ * KOTYS_REMOTE_HOST points at another machine's daemon.
+ */
+async function probeRemote(host: string): Promise<string | null> {
+  try {
+    const res = await fetch(`http://${host}:${PORT}/health`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok ? `http://${host}:${PORT}` : null;
+  } catch {
+    return null;
+  }
 }
 
 function augmentPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -142,6 +165,24 @@ export async function ensureDaemon(): Promise<string> {
     "127.0.0.1";
 
   const running = await findRunningDaemon(host);
+  const remote =
+    REMOTE_HOST && plausibleHost(REMOTE_HOST) ? REMOTE_HOST : null;
+  if (remote) {
+    // Pointed at another machine: attach if its daemon is up, spawn one if
+    // not (the local daemon will still bind host from KOTYS_HOST). Loopback
+    // was probed first inside findRunningDaemon, so a co-located daemon
+    // always wins over the remote one.
+    const remoteBase = await probeRemote(remote);
+    if (remoteBase) {
+      console.log(
+        `[api] attached to remote daemon at ${remoteBase} — not spawning our own`,
+      );
+      return remoteBase;
+    }
+    console.log(
+      `[api] no daemon on ${remote}:${PORT} (KOTYS_REMOTE_HOST) — spawning locally`,
+    );
+  }
   if (running) {
     // Attach-first means this Electron process holds no daemon handle. Saying
     // so saves a future "why didn't ^C stop the API" mystery: the daemon the
