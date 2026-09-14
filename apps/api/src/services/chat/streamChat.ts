@@ -42,6 +42,7 @@ import {
   withSystemBlocks,
 } from "./mcpIndex.js";
 import { buildDaemonMessages } from "./context.js";
+import { logTokenAccounting, recordTurnUsage } from "./context-budget.js";
 import { getSkillAdvertisement } from "../skills/registry.js";
 import { getEnabledTools } from "./toolEnabled.js";
 import { maybeNotify } from "./notify.js";
@@ -182,6 +183,7 @@ export async function streamChat(
       // never replay. It stays in memory for the loop guard.
       promptTokens: streamer.usage.basePromptTokens || undefined,
       evalTokens: streamer.usage.evalTokens || undefined,
+      tokensMeasured: streamer.usage.basePromptTokens > 0 || undefined,
       ...(trace.length > 0 ? { toolCalls: JSON.stringify(trace) } : {}),
     });
     events.emitEvent("messages:progress", {
@@ -322,11 +324,21 @@ export async function streamChat(
     stopTick();
   }
   const usage = streamer.usage;
-  const promptTokens =
-    usage.basePromptTokens ||
-    estimateTokensFromChars(
+  // The provider's first-round count is the only trustworthy number; the
+  // chars/4 fallback is an estimate and is flagged so nothing downstream
+  // (compact trigger, client meter) ever anchors on it as a measurement.
+  const turnUsage = recordTurnUsage({
+    promptTokens: usage.basePromptTokens,
+    evalTokens: usage.evalTokens,
+    estimate: estimateTokensFromChars(
       messages.map((m) => m.content ?? "").join("").length,
-    );
+    ),
+  });
+  if (!turnUsage.tokensMeasured) {
+    logTokenAccounting("estimate-fallback", {
+      chatId: streamChatId ?? undefined,
+    });
+  }
   const turnEndedAt = Date.now();
   for (const entry of trace) entry.turnEndedAt = turnEndedAt;
   if (streamChatId !== null && persist.length > 0) {
@@ -341,8 +353,9 @@ export async function streamChat(
   return {
     content: streamer.content,
     thinking: streamer.thinking,
-    promptTokens,
-    evalTokens: usage.evalTokens,
+    promptTokens: turnUsage.promptTokens,
+    evalTokens: turnUsage.evalTokens,
+    tokensMeasured: turnUsage.tokensMeasured,
     toolCalls: trace,
   };
 }

@@ -282,6 +282,9 @@ export function useChat(args: UseChatArgs) {
         ...(result.thinking ? { thinking: result.thinking } : {}),
         ...(result.promptTokens ? { promptTokens: result.promptTokens } : {}),
         ...(result.evalTokens ? { evalTokens: result.evalTokens } : {}),
+        ...(result.tokensMeasured !== undefined
+          ? { tokensMeasured: result.tokensMeasured }
+          : {}),
         ...(result.toolCalls.length > 0
           ? { toolCalls: JSON.stringify(result.toolCalls) }
           : {}),
@@ -296,6 +299,7 @@ export function useChat(args: UseChatArgs) {
                 model: chatModel.name,
                 promptTokens: result.promptTokens || undefined,
                 evalTokens: result.evalTokens || undefined,
+                tokensMeasured: result.tokensMeasured || undefined,
                 toolCalls:
                   result.toolCalls.length > 0 ? result.toolCalls : undefined,
               }

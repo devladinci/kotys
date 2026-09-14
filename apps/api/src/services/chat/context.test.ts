@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { events } from "../events.js";
 import type { StreamRequest } from "@kotys/contracts";
 import { streamChat } from "./streamChat.js";
+import { clearTokenAccountingLog } from "./context-budget.js";
 
 const HOME = "/tmp/kotys-context-test-home";
 
@@ -132,6 +133,7 @@ const { state } = h;
 
 beforeEach(() => {
   h.reset();
+  clearTokenAccountingLog();
   events.removeAllListeners("approval:request");
   events.removeAllListeners("approval:cancel");
 });
@@ -533,6 +535,58 @@ describe("daemon context assembly", () => {
     });
     // 3,012 + 1,203 estimated clears the 3,072 mark.
     expect(state.compactCalls).toEqual([7]);
+  });
+
+  it("retries the compact on the next message after a failed one", async () => {
+    // First send: compact throws, the request proceeds un-compacted.
+    state.chat = { id: 7, summary: null, summary_upto: null };
+    state.turns = [
+      {
+        id: 11,
+        role: "user",
+        content: "x".repeat(33),
+        images: null,
+        tool_calls: null,
+      },
+      {
+        id: 12,
+        role: "assistant",
+        content: "y".repeat(4774),
+        images: null,
+        tool_calls: null,
+        prompt_tokens: 3_012,
+      },
+      {
+        id: 13,
+        role: "user",
+        content: "z".repeat(40),
+        images: null,
+        tool_calls: null,
+      },
+    ];
+    state.compactTo = null;
+    scriptReply("ok");
+    await collect({
+      requestId: 900,
+      host: "http://127.0.0.1:11434",
+      model: { ...model, contextLength: 4_096 },
+      chatId: 7,
+      messages: [{ role: "user", content: "z".repeat(40) }],
+    });
+    expect(state.compactCalls).toEqual([7]);
+
+    // Second send right after: the failure gate blocks a second attempt.
+    state.compactCalls.length = 0;
+    state.compactTo = 12;
+    scriptReply("ok");
+    await collect({
+      requestId: 901,
+      host: "http://127.0.0.1:11434",
+      model: { ...model, contextLength: 4_096 },
+      chatId: 7,
+      messages: [{ role: "user", content: "z".repeat(40) }],
+    });
+    expect(state.compactCalls).toEqual([]);
   });
 
   it("leaves a chat alone while the measured prompt fits", async () => {

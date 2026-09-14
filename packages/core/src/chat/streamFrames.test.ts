@@ -19,6 +19,7 @@ const done = (content: string): ChatStreamResult => ({
   thinking: "",
   promptTokens: 0,
   evalTokens: 0,
+  tokensMeasured: false,
   toolCalls: [],
 });
 

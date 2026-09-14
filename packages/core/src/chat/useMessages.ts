@@ -14,6 +14,7 @@ type MessageRow = {
   model_name: string | null;
   prompt_tokens: number | null;
   eval_tokens: number | null;
+  tokens_measured: number | null;
   tool_calls: string | null;
   created_at: number;
 };
@@ -27,6 +28,8 @@ const rowToMessage = (r: MessageRow): Message => ({
   model: r.model_name || undefined,
   promptTokens: r.prompt_tokens ?? undefined,
   evalTokens: r.eval_tokens ?? undefined,
+  tokensMeasured:
+    r.tokens_measured == null ? undefined : r.tokens_measured === 1,
   toolCalls: parseToolCalls(r.tool_calls),
   createdAt: r.created_at,
 });
@@ -261,6 +264,7 @@ export function useMessages(activeChatId: number | null) {
         thinking?: string;
         promptTokens?: number;
         evalTokens?: number;
+        tokensMeasured?: boolean;
         toolCalls?: string;
       },
     ): Promise<void> => {

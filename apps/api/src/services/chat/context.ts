@@ -20,6 +20,10 @@ import {
 } from "@kotys/contracts";
 import type { ToolActivity } from "@kotys/contracts";
 import { compactChat } from "./compact.js";
+import {
+  recordCompactFailure,
+  shouldAttemptCompact,
+} from "./context-budget.js";
 import type { ConnectorChatMessage } from "../llm/registry.js";
 import type { ToolResultRow, TurnRow } from "@kotys/db";
 
@@ -224,9 +228,20 @@ export async function buildDaemonMessages(
 
   let turns = collect(chat.summary_upto);
   if (
-    projectedContextTokens(chatId, chat, turns) > usableTokens(contextLength)
+    projectedContextTokens(chatId, chat, turns) > usableTokens(contextLength) &&
+    shouldAttemptCompact(chatId)
   ) {
-    await compactChat(chatId).catch(() => null);
+    try {
+      const summary = await compactChat(chatId);
+      if (summary === null) {
+        recordCompactFailure(chatId, "compact produced no summary");
+      }
+    } catch (err) {
+      recordCompactFailure(
+        chatId,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     const compacted = getChatById(chatId);
     // Re-read, or this request carries the summary *and* what it replaced.
     if (compacted) {
