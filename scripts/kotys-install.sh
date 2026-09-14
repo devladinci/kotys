@@ -30,6 +30,20 @@
 #   KOTYS_INSTALL_FORCE set to 1 to bypass the loop guard
 #   KOTYS_LAUNCH_LABEL  launchd label to boot out on exit (optional)
 #
+# Self-detach FIRST, before anything else: armed runs start as children of
+# the app's own process tree, and the quit step below would take this script
+# down with the app (observed as a silent mid-flight death that way).
+# Re-exec in a detached session so the app's death cannot kill the installer.
+# Guard/FORCE/SRC env vars are forwarded; re-exec happens at most once.
+if [ -z "${KOTYS_INSTALL_DETACHED:-}" ]; then
+  export KOTYS_INSTALL_DETACHED=1
+  if command -v setsid >/dev/null 2>&1; then
+    exec setsid "$0" "$@"
+  else
+    exec bash -c 'disown; exec "$@"' _ "$0" "$@"
+  fi
+fi
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
