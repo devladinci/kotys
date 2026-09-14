@@ -22,7 +22,7 @@ const CANDIDATE_BINS =
       ]
     : ["tailscale"];
 
-export interface DiscoveredInstance {
+interface DiscoveredInstance {
   /** Tailscale peer name or the IP when the name is unknown. */
   name: string;
   /** Tailscale IPv4 of the peer. */
@@ -44,7 +44,7 @@ export type PairClaim =
   { ok: true; token: string } | { ok: false; error: string };
 
 /** Best-effort: no Tailscale (or no peers) is a normal empty answer. */
-export function parsePeers(stdout: string): DiscoveredInstance[] {
+function parsePeers(stdout: string): DiscoveredInstance[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
