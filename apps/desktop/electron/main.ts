@@ -20,7 +20,7 @@ import {
   parseConnectCode,
   type BackendConfig,
 } from "./backendConfig";
-import { ensureDaemon, stopDaemon } from "./daemon";
+import { currentBindHost, ensureDaemon, stopDaemon } from "./daemon";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let win: BrowserWindow | null = null;
