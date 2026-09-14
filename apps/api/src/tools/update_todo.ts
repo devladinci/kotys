@@ -10,6 +10,7 @@ import type { ToolContext } from "./types.js";
 import { buildTodoWidget } from "./todoWidget.js";
 import { TODO_STATUSES, TODO_PRIORITIES } from "@kotys/contracts";
 import { validateTodoDateChanges } from "../validation/todoDates.js";
+import { parseTodoDateArg } from "../validation/todoDateArgs.js";
 import { secondsToDate, asEpochSeconds } from "@kotys/contracts";
 
 export const definition: ToolDefinition = {
@@ -49,12 +50,12 @@ export const definition: ToolDefinition = {
         due_at: {
           type: ["number", "null"],
           description:
-            "New due date as Unix timestamp (seconds), or null to clear.",
+            "New due date as Unix timestamp (seconds), or null to clear. An ISO 8601 string is also accepted.",
         },
         notify_at: {
           type: ["number", "null"],
           description:
-            "New reminder time as Unix timestamp (seconds), or null to clear. Changing this re-arms the reminder even if the old one already fired.",
+            "New reminder time as Unix timestamp (seconds), or null to clear. Changing this re-arms the reminder even if the old one already fired. An ISO 8601 string is also accepted.",
         },
       },
     },
@@ -95,19 +96,29 @@ export async function execute(
   // would type-check even if a refactor stopped putting dates in it.
   let due_at: number | null | undefined;
   let notify_at: number | null | undefined;
-  if (args.due_at !== undefined) {
-    due_at =
-      typeof args.due_at === "number" && args.due_at > 0
-        ? Math.round(args.due_at)
-        : null;
-    fields.due_at = due_at === null ? null : asEpochSeconds(due_at);
-  }
-  if (args.notify_at !== undefined) {
-    notify_at =
-      typeof args.notify_at === "number" && args.notify_at > 0
-        ? Math.round(args.notify_at)
-        : null;
-    fields.notify_at = notify_at === null ? null : asEpochSeconds(notify_at);
+  for (const [field, raw] of [
+    ["due_at", args.due_at],
+    ["notify_at", args.notify_at],
+  ] as const) {
+    if (raw === undefined) continue;
+    const parsed = parseTodoDateArg(field, raw);
+    if ("error" in parsed) {
+      return {
+        content: JSON.stringify({
+          updated: false,
+          reason: `${parsed.error} Call current_datetime to get the current time.`,
+        }),
+        activity: { query: String(id) },
+      };
+    }
+    const value = parsed.value === null ? null : Math.round(parsed.value);
+    if (field === "due_at") {
+      due_at = value;
+      fields.due_at = value === null ? null : asEpochSeconds(value);
+    } else {
+      notify_at = value;
+      fields.notify_at = value === null ? null : asEpochSeconds(value);
+    }
   }
 
   if (Object.keys(fields).length === 0) {
