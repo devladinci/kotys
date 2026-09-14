@@ -10,7 +10,11 @@ import { buildTodoWidget } from "./todoWidget.js";
 import { TODO_PRIORITIES } from "@kotys/contracts";
 import { validateNewTodoDates } from "../validation/todoDates.js";
 import { parseTodoDateArg } from "../validation/todoDateArgs.js";
-import { secondsToDate, asEpochSeconds, type EpochSeconds } from "@kotys/contracts";
+import {
+  secondsToDate,
+  asEpochSeconds,
+  type EpochSeconds,
+} from "@kotys/contracts";
 
 const PRIORITY_GUIDE =
   "low = nice to have, no urgency. " +

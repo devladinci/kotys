@@ -16,12 +16,14 @@ beforeAll(() => {
 
 let chatId: number;
 beforeEach(() => {
-  chatId = Number(createChat("todo date args test", {
-    name: "test",
-    contextLength: 8192,
-    capabilities: [],
-    source: "local",
-  }));
+  chatId = Number(
+    createChat("todo date args test", {
+      name: "test",
+      contextLength: 8192,
+      capabilities: [],
+      source: "local",
+    }),
+  );
 });
 
 afterEach(async () => {
@@ -30,9 +32,8 @@ afterEach(async () => {
 });
 
 const getTodo = (id: number) => {
-  const row = getDb()
-    .prepare("SELECT * FROM todos WHERE id = ?")
-    .get(id) as { due_at: number | null; notify_at: number | null } | undefined;
+  const row = getDb().prepare("SELECT * FROM todos WHERE id = ?").get(id) as
+    { due_at: number | null; notify_at: number | null } | undefined;
   if (!row) throw new Error(`todo ${id} missing`);
   return row;
 };
@@ -45,7 +46,10 @@ describe("todo date arguments arrive as strings", () => {
       { title: "Invoice", due_at: String(due) },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { created: boolean; todo: { id: number } };
+    const body = JSON.parse(result.content) as {
+      created: boolean;
+      todo: { id: number };
+    };
     expect(body.created).toBe(true);
     expect(getTodo(body.todo.id).due_at).toBe(due);
   });
@@ -57,9 +61,14 @@ describe("todo date arguments arrive as strings", () => {
       { title: "Invoice", notify_at: iso },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { created: boolean; todo: { id: number } };
+    const body = JSON.parse(result.content) as {
+      created: boolean;
+      todo: { id: number };
+    };
     expect(body.created).toBe(true);
-    expect(getTodo(body.todo.id).notify_at).toBe(Math.round(Date.parse(iso) / 1000));
+    expect(getTodo(body.todo.id).notify_at).toBe(
+      Math.round(Date.parse(iso) / 1000),
+    );
   });
 
   it("create_todo still accepts real numbers", async () => {
@@ -69,7 +78,10 @@ describe("todo date arguments arrive as strings", () => {
       { title: "Invoice", due_at: due },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { created: boolean; todo: { id: number } };
+    const body = JSON.parse(result.content) as {
+      created: boolean;
+      todo: { id: number };
+    };
     expect(body.created).toBe(true);
     expect(getTodo(body.todo.id).due_at).toBe(due);
   });
@@ -80,7 +92,10 @@ describe("todo date arguments arrive as strings", () => {
       { title: "Invoice", due_at: "next tuesday-ish" },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { created: boolean; reason?: string };
+    const body = JSON.parse(result.content) as {
+      created: boolean;
+      reason?: string;
+    };
     expect(body.created).toBe(false);
     expect(body.reason).toContain("due_at");
   });
@@ -101,7 +116,10 @@ describe("todo date arguments arrive as strings", () => {
       { id: String(created.todo.id), due_at: String(due) },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { updated: boolean; todo: { due_at: string | null } };
+    const body = JSON.parse(result.content) as {
+      updated: boolean;
+      todo: { due_at: string | null };
+    };
     expect(body.updated).toBe(true);
     expect(getTodo(created.todo.id).due_at).toBe(due);
     expect(body.todo.due_at).toBe(new Date(due * 1000).toISOString());
@@ -143,7 +161,10 @@ describe("todo date arguments arrive as strings", () => {
       { id: String(created.todo.id), due_at: past },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { updated: boolean; reason?: string };
+    const body = JSON.parse(result.content) as {
+      updated: boolean;
+      reason?: string;
+    };
     expect(body.updated).toBe(false);
     expect(body.reason).toContain("past");
     expect(getTodo(created.todo.id).due_at).toBeNull();
@@ -165,7 +186,10 @@ describe("todo date arguments arrive as strings", () => {
       { id: String(created.todo.id), due_at: "not a date" },
       testContext({ homedir: "/tmp", chatId }),
     );
-    const body = JSON.parse(result.content) as { updated: boolean; reason?: string };
+    const body = JSON.parse(result.content) as {
+      updated: boolean;
+      reason?: string;
+    };
     expect(body.updated).toBe(false);
     expect(body.reason).toContain("due_at");
     expect(getTodo(created.todo.id).due_at).toBe(original);
