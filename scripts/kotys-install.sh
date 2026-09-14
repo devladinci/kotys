@@ -40,7 +40,19 @@ if [ -z "${KOTYS_INSTALL_DETACHED:-}" ]; then
   if command -v setsid >/dev/null 2>&1; then
     exec setsid "$0" "$@"
   else
-    exec bash -c 'disown; exec "$@"' _ "$0" "$@"
+    # macOS ships no setsid binary. A plain `disown` keeps the SAME process
+    # group, and process-group kills (agent harness `.kill(-pid)` / Ctrl+C)
+    # would take the installer down mid-flight (observed Sep 14 20:35: died
+    # silently right after "new bundle installed"). Double-fork + setsid(3)
+    # via perl: new session AND new process group, fully detached from the
+    # caller's terminal, group and session.
+    exec perl -e '
+      use POSIX qw(setsid);
+      fork and exit 0;          # leave the caller process group
+      POSIX::setsid();          # become session+group leader
+      if (fork) { exit 0; }     # second fork: not a session leader child
+      exec $ARGV[0], @ARGV[1 .. $#ARGV];
+    ' "$0" "$@"
   fi
 fi
 
