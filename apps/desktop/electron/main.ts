@@ -319,7 +319,15 @@ app.whenReady().then(() => {
     if (!parsed) throw new Error("Invalid pairing request");
     const outcome = await claimPairing(parsed.host, PORT, parsed.code);
     if (!outcome.ok) throw new Error(outcome.error);
-    return { kind: "connect", host: parsed.host, token: outcome.token };
+    // Persist here, before the UI's restart: the settings panel follows up
+    // with backend.restart(), which re-reads this file — a pair that isn't
+    // persisted would restart against the previous mode and look like the
+    // pairing silently did nothing.
+    const config: BackendConfig = {
+      mode: { kind: "connect", host: parsed.host, token: outcome.token },
+    };
+    writeBackendConfig(config);
+    return config;
   });
   if (!process.env.VITE_DEV_SERVER_URL) {
     protocol.handle("app", serveRenderer);
