@@ -3,6 +3,17 @@ import { createVoiceRecorder } from "./voiceRecorder.js";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
+  // Optional in practice on older builds; the desktop preload always
+  // provides them, web/mobile never see this bridge at all.
+  getBackend?: () => Promise<unknown>;
+  setBackend?: (mode: unknown) => Promise<unknown>;
+  restartWithBackend?: () => Promise<void>;
+  connectCode?: () => Promise<{ host: string; code: string }>;
+  discoverBackends?: () => Promise<
+    | { status: "ok"; instances: { name: string; host: string }[] }
+    | { status: "unavailable"; error: string }
+  >;
+  pairWithBackend?: (req: { host: string; code: string }) => Promise<unknown>;
 }
 
 const electron = (): ElectronBridge | undefined =>
@@ -67,4 +78,44 @@ export const desktopPlatform: Platform = {
   // Main-process notifications: renderer HTML5 notifications have no
   // permission store for the app://kotys origin.
   notify: ({ title, body }) => electron()?.notify({ title, body }),
+  // The Electron bridge can host or join a shared backend; the window
+  // reloads against the persisted choice.
+  backend: {
+    get: async () => electron()?.getBackend?.(),
+    set: (mode) => {
+      const bridge = electron();
+      if (!bridge?.setBackend) throw new Error("Backend not configurable");
+      return bridge.setBackend(mode);
+    },
+    restart: async () => {
+      await electron()?.restartWithBackend?.();
+    },
+    connectCode: async () =>
+      (await electron()?.connectCode?.()) ?? { host: "", code: "" },
+    discover: async () => {
+      const bridge = electron();
+      if (!bridge?.discoverBackends) {
+        return {
+          status: "unavailable" as const,
+          error: "Pairing needs the desktop app.",
+        };
+      }
+      return bridge.discoverBackends();
+    },
+    pair: async (req) => {
+      const bridge = electron();
+      if (!bridge?.pairWithBackend) {
+        throw new Error("Pairing needs the desktop app.");
+      }
+      const result = await bridge.pairWithBackend(req);
+      if (
+        !result ||
+        typeof result !== "object" ||
+        (result as { kind?: unknown }).kind !== "connect"
+      ) {
+        throw new Error("Pairing failed");
+      }
+      return { kind: "connect" as const, host: req.host };
+    },
+  },
 };
