@@ -69,6 +69,26 @@ export function BackendSettings() {
     setError("");
   }, []);
 
+  const handleCopy = useCallback(async () => {
+    if (!backend) return;
+    const { code: shareCode } = await backend.connectCode();
+    if (!shareCode) {
+      setError(
+        "No backend is running on this Mac yet, so there is nothing to share.",
+      );
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError(
+        "Clipboard access was denied — select the code and copy it manually.",
+      );
+    }
+  }, [backend]);
+
   const handleApply = useCallback(async () => {
     if (!backend || isBusy) return;
     setIsBusy(true);
@@ -89,26 +109,6 @@ export function BackendSettings() {
       setIsBusy(false);
     }
   }, [backend, code, isBusy, selected]);
-
-  const handleCopy = useCallback(async () => {
-    if (!backend) return;
-    const { code: shareCode } = await backend.connectCode();
-    if (!shareCode) {
-      setError(
-        "No backend is running on this Mac yet, so there is nothing to share.",
-      );
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(shareCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setError(
-        "Clipboard access was denied — select the code and copy it manually.",
-      );
-    }
-  }, [backend]);
 
   if (!backend) return null;
 
@@ -180,7 +180,7 @@ export function BackendSettings() {
           </p>
           <button
             type="button"
-            onClick={() => void handleCopy()}
+            onClick={handleCopy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-surface-2"
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
@@ -201,7 +201,7 @@ export function BackendSettings() {
 
       <button
         type="button"
-        onClick={() => void handleApply()}
+        onClick={handleApply}
         disabled={isBusy || !isDirty}
         className="mt-4 px-3 py-1.5 rounded-lg border border-accent text-accent text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-2"
       >
