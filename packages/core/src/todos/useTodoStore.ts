@@ -23,7 +23,6 @@ interface TodoState {
   filter: TodoFilter;
   loading: boolean;
   error: string | null;
-  pendingPrompt: string | null;
   /** Set while a delete is undoable; the row is already hidden. */
   pendingDelete: PendingDelete | null;
   /** Row to scroll to and focus — set when a reminder notification is clicked. */
@@ -42,8 +41,7 @@ interface TodoState {
   setFilter: (filter: Partial<TodoFilter>) => void;
   setError: (error: string | null) => void;
   setFocusTodoId: (id: number | null) => void;
-  chatAboutTodo: (todoId: number) => Promise<void>;
-  consumePendingPrompt: () => string | null;
+  chatAboutTodo: (todoId: number) => Promise<number | null>;
 }
 
 const MIN_SIDEBAR_WIDTH = 240;
@@ -86,7 +84,6 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   filter: { status: "pending", hasDueDate: false },
   loading: false,
   error: null,
-  pendingPrompt: null,
   pendingDelete: null,
   focusTodoId: null,
 
@@ -307,21 +304,17 @@ export const useTodoStore = create<TodoState>((set, get) => ({
         todoId,
         model: useAppStore.getState().defaultModel,
       });
-      // The chat row is created on the server, so the client's chat list has
-      // to be told to reload — without this the chat is missing from the
-      // sidebar and `activeChat` stays undefined.
+      // The chat row (and its prompt message) are created on the server, so
+      // the client's chat list has to be told to reload — without this the
+      // chat is missing from the sidebar and `activeChat` stays undefined.
       useAppStore.getState().bumpChatsVersion();
       useAppStore.getState().setActiveChatId(result.chat_id);
-      set({ sidebarOpen: false, pendingPrompt: result.prompt, error: null });
+      set({ sidebarOpen: false, error: null });
+      return result.chat_id;
     } catch (err) {
       set({ error: message(err) });
+      return null;
     }
-  },
-
-  consumePendingPrompt: () => {
-    const prompt = get().pendingPrompt;
-    if (prompt !== null) set({ pendingPrompt: null });
-    return prompt;
   },
 }));
 

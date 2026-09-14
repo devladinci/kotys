@@ -4,7 +4,6 @@ import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
 import { parseSlashCommand } from "../skills/slashCommand.js";
 import { SkillMessage } from "../skills/SkillMessage.js";
-import { useTodoStore } from "../todos/useTodoStore.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
 import type { ToolDelta } from "./streamThrottle.js";
 import { StreamCollector, mergeChunks, mergeTools } from "./streamThrottle.js";
@@ -93,7 +92,6 @@ export function useChat(args: UseChatArgs) {
     insertMessage,
     updateMessage,
     openSearchResult,
-    messagesReadyForRef,
     highlightId,
     refresh: refreshMessages,
   } = useMessages(activeChatId);
@@ -535,21 +533,6 @@ export function useChat(args: UseChatArgs) {
       enqueue,
     ],
   );
-
-  // Auto-send a pending todo prompt once messages land.
-  useEffect(() => {
-    if (activeChatId === null || isLoading) return;
-    if (messagesReadyForRef.current !== activeChatId) return;
-    const prompt = useTodoStore.getState().consumePendingPrompt();
-    if (!prompt) return;
-    let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) void send(prompt, [], { skipTitleInference: true });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeChatId, messages, isLoading, send, messagesReadyForRef]);
 
   // Drain the queue: one message per idle transition, FIFO.
   useEffect(() => {

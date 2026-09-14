@@ -358,14 +358,6 @@ describe("useTodoStore", () => {
     expect(useTodoStore.getState().sidebarWidth).toBe(320);
   });
 
-  it("hands out a pending prompt exactly once", () => {
-    useTodoStore.setState({ pendingPrompt: "Let's work on this todo:" });
-    expect(useTodoStore.getState().consumePendingPrompt()).toBe(
-      "Let's work on this todo:",
-    );
-    expect(useTodoStore.getState().consumePendingPrompt()).toBeNull();
-  });
-
   it("optimistically reorders within the local list and persists the order", async () => {
     const due = toSeconds(asEpochMillis(Date.now() + 86_400_000));
     useTodoStore.setState({

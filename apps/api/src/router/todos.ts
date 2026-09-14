@@ -10,9 +10,11 @@ import {
   getChatByTodoId,
   createChatForTodo,
   getChatMessageCount,
+  insertMessage,
 } from "@kotys/db";
 import { MODEL_LISTING_SCHEMA, asEpochSeconds } from "@kotys/contracts";
 import { pub } from "./base.js";
+import { events } from "../services/events.js";
 
 const todoStatus = z.enum(["pending", "in_progress", "completed", "archived"]);
 const todoPriority = z.enum(["low", "medium", "high"]);
@@ -78,11 +80,14 @@ export const todosRouter = {
       const todo = getTodoById(input.todoId);
       if (!todo) throw new Error("Todo not found");
       let chatId = getChatByTodoId(todo.id);
-      let prompt: string | null = null;
       if (chatId === null) {
         const title = `Todo: ${todo.title}`;
         chatId = createChatForTodo(todo.id, title, input.model);
       }
+      // The prompt is persisted server-side: clients only have to open the
+      // chat and render the rows. A client-side "pending prompt" lost races
+      // with navigation and chat-list reloads, silently dropping the message.
+      let prompt: string | null = null;
       if (getChatMessageCount(chatId) === 0) {
         const parts = [`Let's work on this todo:`, ``, `**${todo.title}**`, ``];
         if (todo.description)
@@ -94,6 +99,11 @@ export const todosRouter = {
             `Due: ${new Date(todo.due_at).toISOString().slice(0, 10)}`,
           );
         prompt = parts.join("\n");
+        const messageId = insertMessage(chatId, "user", prompt);
+        if (messageId !== null) {
+          events.emitEvent("chats:changed", { chatId });
+          events.emitEvent("messages:changed", { chatId, messageId });
+        }
       }
       return { chat_id: chatId, prompt };
     }),
