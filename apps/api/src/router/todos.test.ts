@@ -22,9 +22,7 @@ const MODEL: ModelListing = {
 
 const callable = todosRouter.chatAbout.callable({
   context: { clientId: null },
-}) as unknown as (
-  input: { todoId: number; model: ModelListing },
-) => Promise<{
+}) as unknown as (input: { todoId: number; model: ModelListing }) => Promise<{
   chat_id: number;
   prompt: string | null;
 }>;
@@ -57,10 +55,14 @@ describe("todos.chatAbout", () => {
     expect(messages[0].role).toBe("user");
     expect(messages[0].content).toContain("Let's work on this todo:");
     expect(messages[0].content).toContain("**Ship the release**");
-    expect(messages[0].content).toContain("Description: Tag v1 and write notes");
+    expect(messages[0].content).toContain(
+      "Description: Tag v1 and write notes",
+    );
     expect(messages[0].content).toContain("Status: pending");
 
-    expect(emitEvent).toHaveBeenCalledWith("chats:changed", { chatId: result.chat_id });
+    expect(emitEvent).toHaveBeenCalledWith("chats:changed", {
+      chatId: result.chat_id,
+    });
     expect(emitEvent).toHaveBeenCalledWith("messages:changed", {
       chatId: result.chat_id,
       messageId: messages[0].id,
