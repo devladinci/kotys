@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   usePomodoroStore,
   useTodoStore,
@@ -50,6 +51,7 @@ export default function TodosScreen() {
   // Subscribe to the action only — the whole-store subscription re-renders the
   // screen (and the FlatList below) on every pomodoro:tick.
   const pomodoroStart = usePomodoroStore((st) => st.start);
+  const router = useRouter();
   const [draft, setDraft] = useState("");
   const [formTodo, setFormTodo] = useState<TodoRecord | "new" | null>(null);
 
@@ -87,7 +89,13 @@ export default function TodosScreen() {
         (idx) => {
           if (idx === 0) setFormTodo(todo);
           if (idx === 1) startPomodoroFor(todo);
-          if (idx === 2) void chatAboutTodo(todo.id);
+          if (idx === 2) {
+            // The server persists the prompt as the first message of the new
+            // chat, so opening it is just navigation.
+            void chatAboutTodo(todo.id).then((chatId) => {
+              if (chatId !== null) router.push(`/chat/${chatId}`);
+            });
+          }
           if (idx === 3) void toggleStatus(todo.id);
           if (idx === 4)
             Alert.alert("Delete task", `“${todo.title}” will be removed.`, [
@@ -101,7 +109,7 @@ export default function TodosScreen() {
         },
       );
     },
-    [toggleStatus, deleteTodo, chatAboutTodo, startPomodoroFor],
+    [toggleStatus, deleteTodo, chatAboutTodo, startPomodoroFor, router],
   );
 
   const [now, setNow] = useState(() => Date.now());

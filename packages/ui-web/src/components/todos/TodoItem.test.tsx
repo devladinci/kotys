@@ -7,6 +7,7 @@ import {
   type MockedFunction,
 } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import type { TodoRecord } from "@kotys/contracts";
 
@@ -58,14 +59,16 @@ const renderItem = (
   const todo = makeTodo(overrides);
   useTodoStore.setState({ todos: [todo] });
   return render(
-    <TodoItem
-      todo={todo}
-      dueLabel={props.dueLabel ?? null}
-      dueTitle={null}
-      remindLabel={props.remindLabel ?? null}
-      remindTitle={null}
-      overdue={props.overdue ?? false}
-    />,
+    <MemoryRouter>
+      <TodoItem
+        todo={todo}
+        dueLabel={props.dueLabel ?? null}
+        dueTitle={null}
+        remindLabel={props.remindLabel ?? null}
+        remindTitle={null}
+        overdue={props.overdue ?? false}
+      />
+    </MemoryRouter>,
   );
 };
 

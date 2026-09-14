@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bot,
   ChevronDown,
@@ -60,6 +61,7 @@ function TodoItemBase({
   const deleteTodo = useTodoStore((s) => s.deleteTodo);
   const updateTodo = useTodoStore((s) => s.updateTodo);
   const chatAboutTodo = useTodoStore((s) => s.chatAboutTodo);
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [inlineTitle, setInlineTitle] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -139,6 +141,16 @@ function TodoItemBase({
     });
   }, [toggleStatus, todo.id]);
 
+  // The server persists the prompt as the first message, so the chat is
+  // complete the moment it opens — the client only has to navigate to it.
+  // Navigating (rather than letting a store field drive the view) is what
+  // keeps the URL and the active chat from fighting each other.
+  const openTodoChat = useCallback(() => {
+    return chatAboutTodo(todo.id).then((chatId) => {
+      if (chatId !== null) navigate(`/chat/${chatId}`);
+    });
+  }, [chatAboutTodo, navigate, todo.id]);
+
   const onRootKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     // Only when the row itself has focus. Without this the handler swallows
     // keys meant for the controls inside it — and because it calls
@@ -160,7 +172,7 @@ function TodoItemBase({
       deleteTodo(todo.id);
     } else if (e.key.toLowerCase() === "c") {
       e.preventDefault();
-      void chatAboutTodo(todo.id);
+      void openTodoChat();
     }
   };
 
@@ -318,7 +330,7 @@ function TodoItemBase({
         </button>
         <button
           type="button"
-          onClick={() => void chatAboutTodo(todo.id)}
+          onClick={openTodoChat}
           aria-label={`Chat about ${todo.title}`}
           title="Chat about this task (C)"
           className="p-1 rounded text-text-muted hover:text-text hover:bg-surface-2"
