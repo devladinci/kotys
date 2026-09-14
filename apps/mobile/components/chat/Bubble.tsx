@@ -51,11 +51,21 @@ function BubbleBase({
         },
       );
     } else {
+      const failed = message.content.includes("**Error:**");
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Regenerate", "Copy", "Cancel"], cancelButtonIndex: 2 },
+        {
+          options: failed
+            ? ["Retry", "Regenerate", "Copy", "Cancel"]
+            : ["Regenerate", "Copy", "Cancel"],
+          cancelButtonIndex: failed ? 3 : 2,
+        },
         (idx) => {
-          if (idx === 0) onRegenerate(message.id);
-          if (idx === 1) void setStringAsync(message.content);
+          if (failed) {
+            if (idx === 0 || idx === 1) onRegenerate(message.id);
+          } else if (idx === 0) {
+            onRegenerate(message.id);
+          }
+          if (idx === (failed ? 2 : 1)) void setStringAsync(message.content);
         },
       );
     }

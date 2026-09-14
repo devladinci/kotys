@@ -187,3 +187,20 @@ export function deleteTurnsAfter(chatId: number, afterId: number) {
     .prepare("DELETE FROM messages WHERE chat_id = ? AND id > ?")
     .run(chatId, afterId);
 }
+
+/**
+ * Reset an assistant row so a retry starts clean: streamed text, thinking,
+ * tool-call trace and the replayable tool results all go. Keeps the row
+ * itself (and its id, which clients may already reference as streamingId).
+ */
+export function resetAssistantMessage(id: number): void {
+  const db = getDb();
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE messages SET content = '', thinking = NULL, tool_calls = NULL,
+       prompt_tokens = NULL, eval_tokens = NULL, tokens_measured = NULL
+       WHERE id = ? AND role = 'assistant'`,
+    ).run(id);
+    db.prepare("DELETE FROM tool_results WHERE message_id = ?").run(id);
+  })();
+}

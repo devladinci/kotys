@@ -602,6 +602,12 @@ export function useChat(args: UseChatArgs) {
             : m,
         ),
       );
+      // Wipe the DB row before replaying. A failed turn's persisted
+      // `**Error:** …` text would otherwise be rebuilt as history on the
+      // next request and shown to the model as its own prior reply — and a
+      // second failure would stack another error onto it. Old tool results
+      // must go too: their replay budget could crowd out the fresh turn.
+      await rpc.messages.resetForRetry({ id: assistantId });
       setIsLoading(true);
       setStreamingId(assistantId);
       claimLiveStream(assistantId, activeChatId);

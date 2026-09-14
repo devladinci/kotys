@@ -52,6 +52,11 @@ function MessageBubbleBase({
     !message.thinking &&
     !message.toolCalls?.length;
 
+  // Error turns are marked `**Error:** …` (finaliseError / server persist);
+  // retry must wipe the row, which regenerate now does.
+  const isFailed =
+    !isUser && !isStreamingThis && message.content.includes("**Error:**");
+
   const startEdit = () => {
     setDraft(message.content);
     setEditing(true);
@@ -273,18 +278,33 @@ function MessageBubbleBase({
               ) : editing ? null : isUser ? (
                 <UserMessageBody content={message.content} />
               ) : (
-                <StreamingProvider value={isStreamingThis}>
-                  {splitContentByWidgets(
-                    message.content,
-                    message.toolCalls ?? [],
-                  ).map((segment, i) =>
-                    segment.kind === "text" ? (
-                      <MarkdownBody key={i} content={segment.text} />
-                    ) : (
-                      <WidgetFor key={i} widget={segment.widget} />
-                    ),
+                <>
+                  <StreamingProvider value={isStreamingThis}>
+                    {splitContentByWidgets(
+                      message.content,
+                      message.toolCalls ?? [],
+                    ).map((segment, i) =>
+                      segment.kind === "text" ? (
+                        <MarkdownBody key={i} content={segment.text} />
+                      ) : (
+                        <WidgetFor key={i} widget={segment.widget} />
+                      ),
+                    )}
+                  </StreamingProvider>
+                  {isFailed && onRegenerate && !isLoading && (
+                    <div className="mt-1.5">
+                      <button
+                        onClick={() => onRegenerate(message.id)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs text-text-muted hover:text-text hover:bg-surface-2 transition"
+                        title="Retry this response"
+                        aria-label="Retry response"
+                      >
+                        <RotateCw size={12} />
+                        Retry
+                      </button>
+                    </div>
                   )}
-                </StreamingProvider>
+                </>
               )}
             </>
           )}
