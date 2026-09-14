@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# One command before the first `bin/dev`.
+#
+# Verifies Node 22+, makes sure pnpm exists (corepack as the fallback), checks
+# Ollama, installs dependencies, and builds the workspace packages the dev
+# stack resolves at runtime. Idempotent — safe to re-run.
+#
+# The check suite is advisory: no cloud key or oMLX at startup, the script
+# still succeeds. Ollama only matters for local models and speech-to-text.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
+else
+  BOLD=''; RED=''; GREEN=''; YELLOW=''; DIM=''; OFF=''
+fi
+
+step() { printf '%s==>%s %s%s%s\n' "$GREEN" "$OFF" "$BOLD" "$1" "$OFF"; }
+info() { printf '    %s%s%s\n' "$DIM" "$1" "$OFF"; }
+warn() { printf '%swarning:%s %s\n' "$YELLOW" "$1" >&2; }
+die()  { printf '%serror:%s %s\n' "$RED" "$1" >&2; exit 1; }
+
+step "Checking Node"
+if ! command -v node >/dev/null 2>&1; then
+  die "node not found — install Node.js 22+ from https://nodejs.org (or via nvm/fnm/brew)"
+fi
+NODE_MAJOR="$(node --version | sed 's/^v//' | cut -d. -f1)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  die "node $(node --version) is too old — Kotys needs 22+"
+fi
+info "node $(node --version)"
+
+step "Checking pnpm"
+if ! command -v pnpm >/dev/null 2>&1; then
+  info "pnpm not found — enabling corepack"
+  export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  if ! corepack enable pnpm 2>/dev/null; then
+    die "could not enable corepack (try: sudo corepack enable pnpm, or: npm install -g pnpm)"
+  fi
+fi
+command -v pnpm >/dev/null 2>&1 || die "pnpm still not on PATH — install pnpm 10+ (npm install -g pnpm)"
+info "pnpm $(pnpm --version)"
+
+step "Checking Ollama"
+if curl -s --max-time 2 "http://localhost:11434/api/version" | grep -q '"version"'; then
+  info "running at http://localhost:11434"
+else
+  if command -v ollama >/dev/null 2>&1; then
+    warn "ollama is installed but not reachable on :11434 — start it (open the Ollama app, or: ollama serve)"
+  else
+    warn "no Ollama and no API key needed yet — fine if you use Ollama Cloud or oMLX; otherwise install from https://ollama.com"
+  fi
+fi
+
+step "Installing dependencies"
+pnpm install
+
+step "Building workspace packages"
+pnpm exec turbo run build
+
+step "Setup complete"
+info "start the stack:    bin/dev   (daemon :3017 + Electron + web)"
+info "phone dev server:   bin/mobile   (pair it with bin/dev — see docs/recipes.md)"
