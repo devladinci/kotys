@@ -57,18 +57,18 @@ describe("encodeConnectCode", () => {
 describe("isBackendMode", () => {
   it("accepts own and valid connect modes", () => {
     expect(isBackendMode({ kind: "own" })).toBe(true);
-    expect(isBackendMode({ kind: "connect", host: "1.2.3.4", token: "t" })).toBe(
-      true,
-    );
+    expect(
+      isBackendMode({ kind: "connect", host: "1.2.3.4", token: "t" }),
+    ).toBe(true);
   });
 
   it("rejects invalid modes so the app falls back to own", () => {
     expect(isBackendMode(null)).toBe(false);
     expect(isBackendMode("own")).toBe(false);
     expect(isBackendMode({ kind: "wat" })).toBe(false);
-    expect(isBackendMode({ kind: "connect", host: "bad host", token: "t" })).toBe(
-      false,
-    );
+    expect(
+      isBackendMode({ kind: "connect", host: "bad host", token: "t" }),
+    ).toBe(false);
     expect(isBackendMode({ kind: "connect", host: "1.2.3.4", token: "" })).toBe(
       false,
     );

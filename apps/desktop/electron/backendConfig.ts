@@ -15,8 +15,7 @@
  */
 
 export type BackendMode =
-  | { kind: "own" }
-  | { kind: "connect"; host: string; token: string };
+  { kind: "own" } | { kind: "connect"; host: string; token: string };
 
 export interface BackendConfig {
   mode: BackendMode;
@@ -47,9 +46,7 @@ export function encodeConnectCode(host: string, token: string): string {
 
 /** Same shape as daemonHost's plausibleHost: IPv4 or a sane hostname. */
 function plausibleConnectHost(host: string): boolean {
-  return (
-    /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || /^[a-zA-Z0-9.-]+$/.test(host)
-  );
+  return /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || /^[a-zA-Z0-9.-]+$/.test(host);
 }
 
 /** Validate a mode read back from disk or IPC; anything else → own. */

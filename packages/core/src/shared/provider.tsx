@@ -56,9 +56,7 @@ export type Platform = {
      * restarting; takes effect on the next restart or backend:restart.
      */
     set: (
-      mode:
-        | { kind: "own" }
-        | { kind: "connect"; connectCode: string },
+      mode: { kind: "own" } | { kind: "connect"; connectCode: string },
     ) => Promise<unknown>;
     /** Reload the window against the persisted backend config. */
     restart: () => Promise<void>;

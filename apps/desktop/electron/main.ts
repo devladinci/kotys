@@ -177,8 +177,7 @@ async function createWindow() {
   // token file belongs to a daemon that isn't ours and would 401 on every
   // call. The connect config's token is the one the remote daemon issued.
   const mode = readBackendConfig().mode;
-  const token =
-    mode.kind === "connect" ? mode.token : readToken();
+  const token = mode.kind === "connect" ? mode.token : readToken();
 
   applyCsp(base);
 

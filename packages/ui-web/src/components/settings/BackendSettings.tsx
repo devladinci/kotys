@@ -64,13 +64,10 @@ export function BackendSettings() {
     };
   }, [backend]);
 
-  const handleSelect = useCallback(
-    (kind: "own" | "connect") => {
-      setSelected(kind);
-      setError("");
-    },
-    [],
-  );
+  const handleSelect = useCallback((kind: "own" | "connect") => {
+    setSelected(kind);
+    setError("");
+  }, []);
 
   const handleApply = useCallback(async () => {
     if (!backend || isBusy) return;
@@ -80,7 +77,8 @@ export function BackendSettings() {
       if (selected === "own") {
         await backend.set({ kind: "own" });
       } else {
-        if (!code.trim()) throw new Error("Paste the other instance's connect code first.");
+        if (!code.trim())
+          throw new Error("Paste the other instance's connect code first.");
         await backend.set({ kind: "connect", connectCode: code });
       }
       // The choice only takes effect through a restart against the freshly
@@ -96,7 +94,9 @@ export function BackendSettings() {
     if (!backend) return;
     const { code: shareCode } = await backend.connectCode();
     if (!shareCode) {
-      setError("No backend is running on this Mac yet, so there is nothing to share.");
+      setError(
+        "No backend is running on this Mac yet, so there is nothing to share.",
+      );
       return;
     }
     try {
@@ -104,7 +104,9 @@ export function BackendSettings() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError("Clipboard access was denied — select the code and copy it manually.");
+      setError(
+        "Clipboard access was denied — select the code and copy it manually.",
+      );
     }
   }, [backend]);
 
@@ -112,8 +114,7 @@ export function BackendSettings() {
 
   const isDirty =
     persisted !== null &&
-    (persisted.kind !== selected ||
-      (selected === "connect" && !code.trim()));
+    (persisted.kind !== selected || (selected === "connect" && !code.trim()));
 
   return (
     <section className="bg-surface border border-border rounded-xl p-5">
@@ -137,7 +138,12 @@ export function BackendSettings() {
             }`}
           >
             <span className="flex items-center gap-2 text-sm font-medium">
-              <Icon size={14} className={selected === kind ? "text-accent" : "text-text-muted"} />
+              <Icon
+                size={14}
+                className={
+                  selected === kind ? "text-accent" : "text-text-muted"
+                }
+              />
               {label}
             </span>
             <span className="block text-xs text-text-muted mt-1">{hint}</span>
@@ -191,9 +197,7 @@ export function BackendSettings() {
         </p>
       )}
 
-      {error && (
-        <p className="text-xs text-red-400 mt-3">{error}</p>
-      )}
+      {error && <p className="text-xs text-red-400 mt-3">{error}</p>}
 
       <button
         type="button"

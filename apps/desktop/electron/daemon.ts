@@ -48,8 +48,7 @@ function tailscaleHost(): Promise<string | null> {
 }
 
 type RemoteProbe =
-  | { status: "ok"; base: string }
-  | { status: "unreachable"; error: string };
+  { status: "ok"; base: string } | { status: "unreachable"; error: string };
 
 /**
  * Health-probe a remote host once. Used by ensureDaemon when the backend
