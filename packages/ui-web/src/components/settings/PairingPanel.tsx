@@ -125,8 +125,8 @@ export function PairingPanel({ onPaired }: IProps) {
 
       {discovery.phase === "list" && discovery.instances.length === 0 && (
         <p className="text-xs text-text-muted mt-2">
-          No other Kotys instances found. Kotys must be running on the other
-          machine, with Tailscale connected on both — then Scan again.
+          No other Kotys instances found. Is Tailscale connected on both
+          machines?
         </p>
       )}
 
