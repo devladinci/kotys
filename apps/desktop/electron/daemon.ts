@@ -47,7 +47,7 @@ function tailscaleHost(): Promise<string | null> {
   });
 }
 
-export type RemoteProbe =
+type RemoteProbe =
   | { status: "ok"; base: string }
   | { status: "unreachable"; error: string };
 
