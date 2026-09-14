@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import os from "node:os";
 import { serve, upgradeWebSocket } from "@hono/node-server";
 import { WebSocketServer } from "ws";
 import { RPCHandler } from "@orpc/server/fetch";
@@ -8,7 +7,6 @@ import { initDatabase, DB_PATH } from "@kotys/db";
 import { router } from "./router/index.js";
 import { HOST, isAllowedOrigin, PORT } from "./config.js";
 import { registerSttRoute } from "./sttRoute.js";
-import { registerPairingRoute } from "./pairingRoute.js";
 import {
   getOrCreateToken,
   isValidToken,
@@ -52,18 +50,7 @@ app.use(
 );
 app.use("*", originGuard());
 
-/**
- * Instance name for pairing/discovery UIs. The Tailscale hostname is
- * unique and human-readable on a tailnet; fall back to the literal
- * hostname, then a generic label.
- */
-function instanceName(): string {
-  return process.env.KOTYS_INSTANCE_NAME ?? os.hostname().split(".")[0];
-}
-
-app.get("/health", (c) => c.json({ ok: true, name: instanceName() }));
-
-registerPairingRoute(app);
+app.get("/health", (c) => c.json({ ok: true }));
 
 app.use("/rpc/*", requireAuth());
 

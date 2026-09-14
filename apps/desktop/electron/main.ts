@@ -10,24 +10,11 @@ import {
   session,
   shell,
 } from "electron";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DB_PATH } from "@kotys/db/config";
-import {
-  isBackendMode,
-  OWN_BACKEND,
-  parseConnectCode,
-  type BackendConfig,
-} from "./backendConfig";
-import {
-  currentBindHost,
-  ensureDaemon,
-  stopDaemon,
-  claimPairing,
-  discoverInstances,
-} from "./daemon";
-import { isDottedQuad } from "./discovery";
+import { ensureDaemon, stopDaemon } from "./daemon";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let win: BrowserWindow | null = null;
@@ -44,8 +31,6 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
-
-const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 
 const DIST_DIR = path.join(__dirname, "../dist");
 
@@ -73,34 +58,6 @@ function readToken(): string {
   } catch {
     return "";
   }
-}
-
-/**
- * backend.json lives beside the token file: the one setting that must be
- * readable before any daemon exists (the daemon's own database cannot hold
- * the decision of whether to start that daemon). Written via IPC from the
- * settings UI; missing or malformed file means "own", the historical default.
- */
-function backendConfigPath(): string {
-  return path.join(path.dirname(DB_PATH), "backend.json");
-}
-
-function readBackendConfig(): BackendConfig {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(backendConfigPath(), "utf8"),
-    );
-    return isBackendMode(parsed) ? { mode: parsed } : OWN_BACKEND;
-  } catch {
-    return OWN_BACKEND;
-  }
-}
-
-function writeBackendConfig(config: BackendConfig): void {
-  writeFileSync(backendConfigPath(), JSON.stringify(config, null, 2) + "\n", {
-    encoding: "utf8",
-    mode: 0o600,
-  });
 }
 
 /**
@@ -147,47 +104,8 @@ function applyCsp(apiBase: string): void {
 }
 
 async function createWindow() {
-  let base: string;
-  try {
-    base = await ensureDaemon(readBackendConfig());
-  } catch (err) {
-    const detail = String(err);
-    // The user chose "connect" and the remote is down: offer the way out
-    // explicitly, and make clear that the alternative shows this Mac's own
-    // (separate) database — never present a fallback as the same data.
-    if (detail.includes("refusing to start a local daemon")) {
-      const choice = await dialog.showMessageBox({
-        type: "error",
-        title: "Kotys",
-        message: "Can't reach the backend instance",
-        detail:
-          detail +
-          "\n\nUse this Mac's own daemon instead? That shows this Mac's " +
-          "own (separate) database — your shared data lives wherever the " +
-          "other instance runs.",
-        buttons: ["Retry", "Use this Mac's own daemon", "Quit"],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (choice.response === 0) return createWindow();
-      if (choice.response === 1) {
-        writeBackendConfig(OWN_BACKEND);
-        return createWindow();
-      }
-      app.quit();
-      return;
-    }
-    console.error("[desktop] failed to start daemon:", err);
-    dialog.showErrorBox("Kotys daemon failed to start", detail);
-    app.quit();
-    return;
-  }
-  // In connect mode the remote daemon has its own pairing token; the local
-  // token file belongs to a daemon that isn't ours and would 401 on every
-  // call. The connect config's token is the one the remote daemon issued.
-  const mode = readBackendConfig().mode;
-  const token = mode.kind === "connect" ? mode.token : readToken();
-
+  const base = await ensureDaemon();
+  const token = readToken();
   applyCsp(base);
 
   win = new BrowserWindow({
@@ -256,71 +174,6 @@ app.whenReady().then(() => {
       }).show();
     }
   });
-  /**
-   * Backend-mode IPC. The renderer only writes what the user picked; all
-   * validation happens through isBackendMode/parseConnectCode before
-   * anything touches disk, and restarts go through the same createWindow
-   * path as a fresh launch.
-   */
-  ipcMain.handle("backend:get", () => readBackendConfig());
-  ipcMain.handle("backend:set", (_e, raw: unknown) => {
-    let config: BackendConfig;
-    if (
-      raw &&
-      typeof raw === "object" &&
-      (raw as Record<string, unknown>).kind === "own"
-    ) {
-      config = OWN_BACKEND;
-    } else if (
-      raw &&
-      typeof raw === "object" &&
-      typeof (raw as Record<string, unknown>).connectCode === "string"
-    ) {
-      const mode = parseConnectCode(
-        (raw as Record<string, unknown>).connectCode as string,
-      );
-      if (!mode) throw new Error("Invalid connect code — use host|token");
-      config = { mode };
-    } else if (isBackendMode(raw)) {
-      config = { mode: raw };
-    } else {
-      throw new Error("Invalid backend mode");
-    }
-    writeBackendConfig(config);
-    return readBackendConfig();
-  });
-  ipcMain.handle("backend:restart", async () => {
-    // Release the local daemon only if we own one; attach sessions hold no
-    // handle, and a remote daemon is never ours to stop.
-    await stopDaemon();
-    if (win) {
-      win.destroy();
-      win = null;
-    }
-    await createWindow();
-  });
-  // For the server machine's settings UI: `<tailscale-or-bind-host>|<token>`
-  // to paste into another machine's connect field. The token file is
-  // rewritten by the daemon on every start, so the code never goes stale
-  // while the daemon runs.
-  ipcMain.handle("backend:connectCode", async () => {
-    const host = await currentBindHost();
-    const token = readToken();
-    return { host, code: token ? `${host}|${token}` : "" };
-  });
-  /**
-   * Pairing instead of pasting: list tailnet peers that run a Kotys daemon,
-   * then trade the owner's 4-digit code for its token. Discovery degrades
-   * to an error string the UI shows as-is (no Tailscale, or no peers).
-   */
-  ipcMain.handle("backend:discover", async () => discoverInstances(PORT));
-  ipcMain.handle("backend:pair", async (_e, raw: unknown) => {
-    const parsed = asPairRequest(raw);
-    if (!parsed) throw new Error("Invalid pairing request");
-    const outcome = await claimPairing(parsed.host, PORT, parsed.code);
-    if (!outcome.ok) throw new Error(outcome.error);
-    return { kind: "connect", host: parsed.host, token: outcome.token };
-  });
   if (!process.env.VITE_DEV_SERVER_URL) {
     protocol.handle("app", serveRenderer);
   }
@@ -342,13 +195,3 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   if (process.env.KOTYS_KEEP_DAEMON !== "1") void stopDaemon();
 });
-
-/** Guard the cross-boundary pair request before it reaches the network. */
-function asPairRequest(raw: unknown): { host: string; code: string } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const host = (raw as { host?: unknown }).host;
-  const code = (raw as { code?: unknown }).code;
-  if (typeof host !== "string" || !isDottedQuad(host)) return null;
-  if (typeof code !== "string" || !/^\d{4}$/.test(code)) return null;
-  return { host, code };
-}
