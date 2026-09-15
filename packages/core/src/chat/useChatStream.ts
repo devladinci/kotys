@@ -50,19 +50,16 @@ export type StreamFrameHandlers = {
 export function useChatStream(
   handlers: StreamFrameHandlers,
   activeChatId: number | null,
-  streamingId: number | null,
 ) {
   const socket = useSocket();
   const handlersRef = useRef(handlers);
   const activeChatIdRef = useRef(activeChatId);
-  const streamingIdRef = useRef(streamingId);
   useEffect(() => {
     // The subscription below reads the refs only from socket callbacks, which
     // fire after commit — so this keeps them current without touching refs
     // during render.
     handlersRef.current = handlers;
     activeChatIdRef.current = activeChatId;
-    streamingIdRef.current = streamingId;
   });
 
   useEffect(() => {
@@ -80,7 +77,6 @@ export function useChatStream(
       const decision = classifyFrame(
         requestId,
         "chatId" in msg ? msg.chatId : undefined,
-        streamingIdRef.current,
         activeChatIdRef.current,
       );
       if (decision === "ignore") return;

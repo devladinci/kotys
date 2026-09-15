@@ -1,4 +1,5 @@
 import type { ChatStreamResult, ToolActivity } from "@kotys/contracts";
+import { hasLiveStream } from "./liveStreams.js";
 import type { Message } from "./types.js";
 
 /**
@@ -8,13 +9,19 @@ import type { Message } from "./types.js";
  */
 export type FrameDecision = "own" | "visible" | "ignore";
 
+/**
+ * `own` is decided by the live-stream registry (requestId → chatId claims),
+ * not by a single active streamingId: several chats can stream in parallel
+ * and frames for a background chat must keep flowing to its buffers. The
+ * claim check must not depend on which chat is open — a stream this client
+ * started is its own even when the user is reading another chat.
+ */
 export function classifyFrame(
   requestId: number,
   frameChatId: number | undefined,
-  streamingId: number | null,
   activeChatId: number | null,
 ): FrameDecision {
-  if (streamingId !== null && requestId === streamingId) return "own";
+  if (hasLiveStream(requestId)) return "own";
   if (frameChatId !== undefined && frameChatId === activeChatId) {
     return "visible";
   }

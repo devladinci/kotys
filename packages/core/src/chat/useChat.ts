@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { ChatStreamResult, ModelListing } from "@kotys/contracts";
 import { ERROR_TURN_PREFIX } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
@@ -8,12 +9,21 @@ import { SkillMessage } from "../skills/SkillMessage.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
 import type { ToolDelta } from "./streamThrottle.js";
 import { StreamCollector, mergeChunks, mergeTools } from "./streamThrottle.js";
-import { declareStreamActivity } from "./echoGuard.js";
+import { clearStreamActivity, declareStreamActivity } from "./echoGuard.js";
 import {
   candidateLiveStream,
+  chatIdFor,
   claimLiveStream,
   releaseLiveStream,
 } from "./liveStreams.js";
+import {
+  finishStreamEntry,
+  getStreamingId,
+  isChatBusy,
+  isStreaming,
+  startStreamEntry,
+  subscribeStreaming,
+} from "./streamState.js";
 import { useMessages } from "./useMessages.js";
 import { applyChunk, applyDone, applyToolActivity } from "./streamFrames.js";
 import { useChatActions } from "./useChatActions.js";
@@ -59,8 +69,24 @@ export function useChat(args: UseChatArgs) {
   const permissionMode = useAppStore((s) => s.permissionMode);
   const rpc = getRpc();
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamingId, setStreamingId] = useState<number | null>(null);
+  // Per-chat streaming state lives in the module-level streamState registry,
+  // not in this hook: two chats can stream at once, and the state must
+  // survive navigating to /settings (which unmounts this hook). The hook
+  // subscribes only to its own chat's slice.
+  const busy = useSyncExternalStore(
+    subscribeStreaming,
+    () => activeChatId !== null && isChatBusy(activeChatId),
+    () => activeChatId !== null && isChatBusy(activeChatId),
+  );
+  // Registry read: the sentinel -1 marks "busy, assistant row not inserted
+  // yet" — the UI must treat it as no stream (pending indicator, not stop).
+  const rawStreamingId = useSyncExternalStore(
+    subscribeStreaming,
+    () => (activeChatId === null ? null : getStreamingId(activeChatId)),
+    () => (activeChatId === null ? null : getStreamingId(activeChatId)),
+  );
+  const streamingId = rawStreamingId === -1 ? null : rawStreamingId;
+  const isLoading = busy;
   const [isCompacting, setIsCompacting] = useState(false);
   const { queuedMessages, enqueue, dequeue, drain } =
     useMessageQueue(activeChatId);
@@ -83,9 +109,6 @@ export function useChat(args: UseChatArgs) {
     >
   >(new Map());
   const mountedRef = useRef(true);
-  // Synchronous busy flag: send() runs after an await, where isLoading state
-  // is still stale, so the queue drain could double-fire without this.
-  const busyRef = useRef(false);
 
   const {
     messages,
@@ -233,7 +256,6 @@ export function useChat(args: UseChatArgs) {
       },
     },
     activeChatId,
-    streamingId,
   );
 
   useEffect(() => {
@@ -248,17 +270,15 @@ export function useChat(args: UseChatArgs) {
   // (button back to "stop"), or clear a stale registry claim.
   useStreamAdoption(activeChatId, {
     adopt: (requestId) => {
-      busyRef.current = true;
-      setIsLoading(true);
-      setStreamingId(requestId);
+      if (activeChatId === null) return;
+      startStreamEntry(activeChatId, requestId);
       declareStreamActivity(activeChatId);
     },
     onGone: (requestId) => {
+      if (activeChatId === null) return;
       releaseLiveStream(requestId);
-      busyRef.current = false;
-      setIsLoading(false);
-      setStreamingId(null);
-      declareStreamActivity(null);
+      finishStreamEntry(activeChatId);
+      clearStreamActivity(activeChatId);
       refreshMessages();
     },
   });
@@ -307,13 +327,17 @@ export function useChat(args: UseChatArgs) {
       );
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
-      setStreamingId(null);
-      setIsLoading(false);
-      busyRef.current = false;
-      declareStreamActivity(null);
+      // Resolve the chat from the request, not the open view: in parallel
+      // streaming the done frame of a background chat must not clear the
+      // state of the chat the user is reading.
+      const doneChatId = chatIdFor(assistantId) ?? activeChatId;
+      if (doneChatId !== null) {
+        finishStreamEntry(doneChatId);
+        clearStreamActivity(doneChatId);
+      }
       return { finalContent, result };
     },
-    [chatModel.name, setMessages, updateMessage],
+    [activeChatId, chatModel.name, setMessages, updateMessage],
   );
 
   const finaliseError = useCallback(
@@ -341,12 +365,13 @@ export function useChat(args: UseChatArgs) {
       );
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
-      setStreamingId(null);
-      setIsLoading(false);
-      busyRef.current = false;
-      declareStreamActivity(null);
+      const doneChatId = chatIdFor(assistantId) ?? activeChatId;
+      if (doneChatId !== null) {
+        finishStreamEntry(doneChatId);
+        clearStreamActivity(doneChatId);
+      }
     },
-    [setMessages, updateMessage],
+    [activeChatId, setMessages, updateMessage],
   );
 
   const send = useCallback(
@@ -385,27 +410,22 @@ export function useChat(args: UseChatArgs) {
         }
       }
 
-      // While a stream is running, park the message; it drains FIFO on idle.
+      // While this chat's stream is running, park the message; it drains FIFO
+      // on idle. Other chats are unaffected — their streams are their own.
       // The registry check covers a remount that landed before adoption
       // restored the busy state — the daemon may still be streaming.
       if (
-        busyRef.current ||
-        isLoading ||
-        streamingId !== null ||
-        (activeChatId !== null && candidateLiveStream(activeChatId) !== null)
+        activeChatId !== null &&
+        (isChatBusy(activeChatId) || candidateLiveStream(activeChatId) !== null)
       ) {
         enqueue(content, images);
         return { needsSettings: false as const };
       }
       // Claimed before the first await: the drain effect re-runs on the
       // setQueuedMessages render and must not double-fire while this send
-      // is still awaiting its RPCs.
-      busyRef.current = true;
-
-      // Presence, not value: the key never leaves the daemon (write-only RPC).
-      if (!apiKeyPresent && chatModel.source !== "local") {
-        return { needsSettings: true as const };
-      }
+      // is still awaiting its RPCs. The sentinel -1 marks "busy before the
+      // assistant row exists"; startStreamEntry swaps in the real id below.
+      if (activeChatId !== null) startStreamEntry(activeChatId, -1);
 
       let currentChatId = activeChatId;
       if (!currentChatId) {
@@ -436,7 +456,6 @@ export function useChat(args: UseChatArgs) {
 
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
-      setIsLoading(true);
       // Own RPC writes echo back as broadcasts until finalise — see echoGuard.
       declareStreamActivity(currentChatId);
 
@@ -454,9 +473,10 @@ export function useChat(args: UseChatArgs) {
           "",
         );
         if (newAssistantId === null) {
-          declareStreamActivity(null); // chat deleted mid-send
-          setIsLoading(false);
-          busyRef.current = false;
+          // Chat deleted mid-send: unbusy only this chat; other chats'
+          // streams must keep their echo guard.
+          clearStreamActivity(currentChatId);
+          finishStreamEntry(currentChatId);
           return { needsSettings: false as const };
         }
         assistantMessageId = newAssistantId;
@@ -470,7 +490,7 @@ export function useChat(args: UseChatArgs) {
             model: chatModel.name,
           },
         ]);
-        setStreamingId(newAssistantId);
+        startStreamEntry(currentChatId, newAssistantId);
         claimLiveStream(newAssistantId, currentChatId);
 
         // Registered before stream() so an instant done/error finds it.
@@ -493,9 +513,8 @@ export function useChat(args: UseChatArgs) {
         );
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        declareStreamActivity(null);
-        setIsLoading(false);
-        busyRef.current = false;
+        clearStreamActivity(currentChatId);
+        finishStreamEntry(currentChatId);
         if (assistantMessageId !== null) {
           await finaliseError(assistantMessageId, errorMsg);
         } else {
@@ -521,7 +540,6 @@ export function useChat(args: UseChatArgs) {
       finaliseError,
       insertMessage,
       inferTitle,
-      isLoading,
       messages,
       onChatCreated,
       onTitleInferred,
@@ -529,7 +547,6 @@ export function useChat(args: UseChatArgs) {
       rpc,
       setMessages,
       stream,
-      streamingId,
       thinkingEffort,
       enqueue,
     ],
@@ -537,7 +554,8 @@ export function useChat(args: UseChatArgs) {
 
   // Drain the queue: one message per idle transition, FIFO.
   useEffect(() => {
-    if (isLoading || streamingId !== null || busyRef.current) return;
+    if (activeChatId === null) return;
+    if (isChatBusy(activeChatId) || isStreaming(activeChatId)) return;
     if (queuedMessages.length === 0) return;
     const [next, ...rest] = queuedMessages;
     drain(next, rest);
@@ -551,19 +569,16 @@ export function useChat(args: UseChatArgs) {
     return () => {
       cancelled = true;
     };
-  }, [isLoading, streamingId, queuedMessages, send, drain]);
+  }, [activeChatId, busy, streamingId, queuedMessages, send, drain]);
 
   const abort = useCallback(() => {
-    if (streamingId !== null) {
-      abortStream(streamingId);
-      releaseLiveStream(streamingId);
-      // If the socket died, chat:done never arrives — clear the guard here too.
-      declareStreamActivity(null);
-      setIsLoading(false);
-      setStreamingId(null);
-      busyRef.current = false;
-    }
-  }, [streamingId, abortStream]);
+    if (streamingId === null || activeChatId === null) return;
+    abortStream(streamingId);
+    releaseLiveStream(streamingId);
+    // If the socket died, chat:done never arrives — clear the guard here too.
+    clearStreamActivity(activeChatId);
+    finishStreamEntry(activeChatId);
+  }, [activeChatId, streamingId, abortStream]);
 
   // A manual compact and the pre-send auto-compact must not race summary RPCs.
   const compactNow = useCallback(async (): Promise<
@@ -609,8 +624,7 @@ export function useChat(args: UseChatArgs) {
       // second failure would stack another error onto it. Old tool results
       // must go too: their replay budget could crowd out the fresh turn.
       await rpc.messages.resetForRetry({ id: assistantId });
-      setIsLoading(true);
-      setStreamingId(assistantId);
+      startStreamEntry(activeChatId, assistantId);
       claimLiveStream(assistantId, activeChatId);
       declareStreamActivity(activeChatId);
       stream(
@@ -667,8 +681,7 @@ export function useChat(args: UseChatArgs) {
           model: chatModel.name,
         },
       ]);
-      setIsLoading(true);
-      setStreamingId(newAssistantId);
+      startStreamEntry(activeChatId, newAssistantId);
       claimLiveStream(newAssistantId, activeChatId);
       declareStreamActivity(activeChatId);
       stream(

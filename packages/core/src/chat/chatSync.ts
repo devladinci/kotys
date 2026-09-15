@@ -1,10 +1,7 @@
 import { getSocket } from "../shared/clients.js";
 import { useAppStore } from "../shared/useAppStore.js";
 import { debounceSync } from "./useMessages.js";
-import {
-  markGenerating,
-  markGeneratingDone,
-} from "./generating.js";
+import { markGenerating, markGeneratingDone } from "./generating.js";
 
 let subscribed = false;
 

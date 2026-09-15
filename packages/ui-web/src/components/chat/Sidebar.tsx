@@ -1,4 +1,10 @@
-import { memo, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
+import {
+  memo,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import { fmtChatTime } from "@kotys/contracts";
 import {
   BarChart2,

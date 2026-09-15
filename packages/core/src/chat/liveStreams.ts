@@ -21,6 +21,16 @@ export function candidateLiveStream(chatId: number): number | null {
   return null;
 }
 
+/** True when this client started the stream behind this requestId. */
+export function hasLiveStream(requestId: number): boolean {
+  return live.has(requestId);
+}
+
+/** The chat a claimed stream belongs to (used on done/error cleanup). */
+export function chatIdFor(requestId: number): number | null {
+  return live.get(requestId) ?? null;
+}
+
 /** Reset to pristine — for tests only. */
 export function resetLiveStreams(): void {
   live.clear();
