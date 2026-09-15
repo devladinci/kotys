@@ -19,7 +19,7 @@
 # exit. If launchd is unavailable, falls back to a perl double-fork+setsid.
 #
 # Safety:
-#   - every action is logged to kotys-install.log next to this script;
+#   - every action is logged to ~/.kotys/kotys-install.log;
 #     acting runs log their pid/ppid/pgid/session up front and trap
 #     SIGTERM/HUP/INT, so a mid-flight death always leaves a trace
 #   - loop guard: refuses to install the same bundle twice within
@@ -43,15 +43,20 @@
 
 # SCRIPT_DIR is needed by the detach block below, so it comes first.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG="$SCRIPT_DIR/kotys-install.log"
-STATE="$SCRIPT_DIR/.kotys-install.state"
-LOCK="$SCRIPT_DIR/.kotys-install.lock"
+# Runtime artifacts (log/state/lock/plist) live in ~/.kotys, never next to
+# the script: this file sits in a public repo checkout and must not
+# accumulate machine-specific state (privacy rule, memory #61).
+RUNTIME_DIR="${HOME}/.kotys"
+mkdir -p "$RUNTIME_DIR"
+LOG="$RUNTIME_DIR/kotys-install.log"
+STATE="$RUNTIME_DIR/kotys-install.state"
+LOCK="$RUNTIME_DIR/kotys-install.lock"
 
 if [ -z "${KOTYS_INSTALL_DETACHED:-}" ]; then
   export KOTYS_INSTALL_DETACHED=1
   UIX="$(id -u)"
   LABEL="kotys-install.$$"
-  PLIST="$SCRIPT_DIR/.kotys-install-$$.plist"
+  PLIST="$RUNTIME_DIR/.kotys-install-$$.plist"
 
   # Forward every KOTYS_* variable from the caller's env to the acting run,
   # plus the label and plist paths so it can clean up after itself.
