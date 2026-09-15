@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   declareStreamActivity,
+  clearStreamActivity,
   isEchoSuppressed,
   resetEchoGuard,
 } from "./echoGuard.js";
@@ -10,18 +11,47 @@ beforeEach(() => {
   resetEchoGuard();
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
-describe("echoGuard", () => {
-  it("suppresses a guarded chat only", () => {
-    declareStreamActivity(7);
-    expect(isEchoSuppressed(7)).toBe(true);
-    expect(isEchoSuppressed(8)).toBe(false);
+describe("echoGuard per-chat clear", () => {
+  it("clearing one chat keeps the other guarded", () => {
+    declareStreamActivity(1);
+    declareStreamActivity(2);
+    clearStreamActivity(1);
+    expect(isEchoSuppressed(2)).toBe(true);
+    expect(isEchoSuppressed(1)).toBe(true);
   });
 
-  it("clearing releases all chats after the grace period", () => {
+  it("cleared chat resumes sync after the grace period", () => {
+    declareStreamActivity(1);
+    declareStreamActivity(2);
+    const at = Date.now();
+    clearStreamActivity(1);
+    expect(isEchoSuppressed(1, at + 999)).toBe(true);
+    expect(isEchoSuppressed(1, at + 1001)).toBe(false);
+    // The other chat stays guarded well past that grace window.
+    expect(isEchoSuppressed(2, at + 10_000)).toBe(true);
+  });
+
+  it("clearing an unguarded chat does not stamp a grace period", () => {
+    clearStreamActivity(9);
+    expect(isEchoSuppressed(9)).toBe(false);
+  });
+
+  it("stale guards expire per chat", () => {
+    declareStreamActivity(1);
+    declareStreamActivity(2);
+    vi.advanceTimersByTime(10 * 60_000 + 1);
+    expect(isEchoSuppressed(1)).toBe(false);
+    expect(isEchoSuppressed(2)).toBe(false);
+  });
+});
+
+describe("echoGuard legacy clear-all", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetEchoGuard();
+  });
+
+  it("null still releases every chat after the grace period", () => {
     declareStreamActivity(1);
     declareStreamActivity(2);
     declareStreamActivity(null);
@@ -30,6 +60,12 @@ describe("echoGuard", () => {
     vi.advanceTimersByTime(1001);
     expect(isEchoSuppressed(1)).toBe(false);
     expect(isEchoSuppressed(2)).toBe(false);
+  });
+
+  it("suppresses a guarded chat only", () => {
+    declareStreamActivity(7);
+    expect(isEchoSuppressed(7)).toBe(true);
+    expect(isEchoSuppressed(8)).toBe(false);
   });
 
   it("grace period suppresses after clear, then expires", () => {
@@ -44,7 +80,6 @@ describe("echoGuard", () => {
     declareStreamActivity(1);
     declareStreamActivity(null);
     declareStreamActivity(2);
-    // The grace stamp no longer suppresses a refetch for an unguarded chat.
     expect(isEchoSuppressed(1)).toBe(false);
     expect(isEchoSuppressed(2)).toBe(true);
   });
@@ -58,8 +93,6 @@ describe("echoGuard", () => {
   it("a lost stream cannot guard a chat forever", () => {
     declareStreamActivity(7);
     vi.advanceTimersByTime(10 * 60_000 + 1);
-    // chat:done never arrived (socket died mid-stream), yet live sync for the
-    // chat must recover — this is what unfreezes a reopened chat screen.
     expect(isEchoSuppressed(7)).toBe(false);
   });
 

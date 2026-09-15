@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "turbo run build --filter=@kotys/desktop^... && vite",
     "build": "tsc -b && vite build",
     "dist": "vite build && node -e \"require('fs').copyFileSync('../api/dist/main.bundle.cjs','dist-electron/api-daemon.cjs')\" && node electron/copy-sqlite.mjs && electron-builder",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",

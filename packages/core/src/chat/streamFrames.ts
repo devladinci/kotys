@@ -1,4 +1,5 @@
 import type { ChatStreamResult, ToolActivity } from "@kotys/contracts";
+import { hasLiveStream } from "./liveStreams.js";
 import type { Message } from "./types.js";
 
 /**
@@ -11,10 +12,9 @@ export type FrameDecision = "own" | "visible" | "ignore";
 export function classifyFrame(
   requestId: number,
   frameChatId: number | undefined,
-  streamingId: number | null,
   activeChatId: number | null,
 ): FrameDecision {
-  if (streamingId !== null && requestId === streamingId) return "own";
+  if (hasLiveStream(requestId)) return "own";
   if (frameChatId !== undefined && frameChatId === activeChatId) {
     return "visible";
   }

@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useRef, useState, memo } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+  useSyncExternalStore,
+} from "react";
 import {
   ActionSheetIOS,
   Alert,
@@ -12,7 +19,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppStore, useChatList, useNow, getRpc } from "@kotys/core";
+import {
+  useAppStore,
+  useChatList,
+  useNow,
+  getRpc,
+  isGenerating,
+  subscribeGenerating,
+} from "@kotys/core";
 import type { Chat } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import {
@@ -113,6 +127,11 @@ const ChatRow = memo(function ChatRow({
 }) {
   const mode = useThemeMode();
   const t = theme(mode);
+  const generating = useSyncExternalStore(
+    subscribeGenerating,
+    () => isGenerating(chat.id),
+    () => isGenerating(chat.id),
+  );
   return (
     <Pressable
       onPress={() => onOpen(chat.id)}
@@ -137,6 +156,14 @@ const ChatRow = memo(function ChatRow({
           >
             {chat.title || "New chat"}
           </Text>
+          {generating ? (
+            <Ionicons
+              name="sparkles"
+              size={12}
+              color={t.accent}
+              accessibilityLabel="Generating"
+            />
+          ) : null}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           {chat.topics.length > 0 ? (
