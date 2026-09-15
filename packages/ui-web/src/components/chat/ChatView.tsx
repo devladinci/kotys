@@ -95,6 +95,7 @@ export default function ChatView({
     editAndResend,
     queuedMessages,
     dequeue,
+    steer,
   } = useChat({
     activeChatId,
     chatSummary: activeChat?.summary ?? null,
@@ -457,6 +458,7 @@ export default function ChatView({
               onSend={handleSend}
               onAbort={abort}
               onDequeue={dequeue}
+              onSteer={steer}
             />
           )}
           <div className="relative flex items-center mt-1.5 text-[11px] text-text-muted">

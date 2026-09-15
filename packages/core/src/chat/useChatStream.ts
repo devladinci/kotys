@@ -152,5 +152,13 @@ export function useChatStream(
     [socket],
   );
 
-  return { stream, abort };
+  /** Steering: inject a user text into a running turn at the next tool-round boundary. */
+  const appendStream = useCallback(
+    (requestId: number, content: string) => {
+      socket.send({ type: "chat:append", payload: { requestId, content } });
+    },
+    [socket],
+  );
+
+  return { stream, abort, appendStream };
 }

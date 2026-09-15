@@ -262,6 +262,19 @@ describe("KotysSocket send queue", () => {
     // Never a stale ping, and no resume for a stream this client never saw.
     expect(lastSocket!.sent).not.toContain(JSON.stringify({ type: "ping" }));
     expect(lastSocket!.sent).toHaveLength(0);
+  });
+
+  it("does not park a chat:append — it targets one live turn", () => {
+    const socket = newSocket();
+    socket.send({
+      type: "chat:append",
+      payload: { requestId: 3, content: "stop, do X instead" },
+    });
+    socket.connect();
+    lastSocket!.open();
+    // Replayed after reconnect it would land after the turn ended; dropping
+    // it lets the client queue drain the text as a normal message instead.
+    expect(lastSocket!.sent).toHaveLength(0);
     socket.close();
   });
 

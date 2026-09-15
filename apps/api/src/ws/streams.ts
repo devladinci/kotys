@@ -9,6 +9,8 @@ type Live = {
   /** Chat the assistant message belongs to; frames fan out to that chat. */
   chatId?: number;
   done: boolean;
+  /** Steering texts waiting to enter the turn at the next round boundary. */
+  pending: string[];
 };
 
 const streams = new Map<number, Live>();
@@ -24,8 +26,24 @@ export function beginStream(
     abort,
     chatId,
     done: false,
+    pending: [],
   });
   return abort;
+}
+
+/** Queue a steering append for a live stream. False if the stream is gone. */
+export function queueAppend(requestId: number, content: string): boolean {
+  const live = streams.get(requestId);
+  if (!live || live.done) return false;
+  live.pending.push(content);
+  return true;
+}
+
+/** Take every queued append for this stream, in order. */
+export function drainAppends(requestId: number): string[] {
+  const live = streams.get(requestId);
+  if (!live || live.pending.length === 0) return [];
+  return live.pending.splice(0, live.pending.length);
 }
 
 /** Stamps a frame with the next seq and records it for replay. */

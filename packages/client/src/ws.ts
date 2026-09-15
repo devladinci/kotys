@@ -234,8 +234,16 @@ export class KotysSocket {
   }
 
   private enqueue(msg: ClientMessage): void {
-    // Heartbeat noise: resume is re-issued by onopen from lastSeq.
-    if (msg.type === "ping" || msg.type === "chat:resume") return;
+    // Heartbeat noise: resume is re-issued by onopen from lastSeq. An append
+    // targets a specific live turn; parked and replayed it would land after
+    // the turn ended, so it is dropped instead — the client queue still holds
+    // the text and drains as a normal message once the chat goes idle.
+    if (
+      msg.type === "ping" ||
+      msg.type === "chat:resume" ||
+      msg.type === "chat:append"
+    )
+      return;
     this.queue.push(msg);
     if (this.queue.length > MAX_QUEUE) this.queue.shift();
   }

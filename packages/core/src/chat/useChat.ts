@@ -168,7 +168,11 @@ export function useChat(args: UseChatArgs) {
     ),
   );
 
-  const { stream, abort: abortStream } = useChatStream(
+  const {
+    stream,
+    abort: abortStream,
+    appendStream,
+  } = useChatStream(
     {
       onOwnChunk: (requestId, thinkingDelta, contentDelta) => {
         const buf = streamBuffersRef.current.get(requestId) ?? {
@@ -565,6 +569,55 @@ export function useChat(args: UseChatArgs) {
     finishStreamEntry(activeChatId);
   }, [activeChatId, streamingId, abortStream]);
 
+  // Steering: inject a queued message into the running turn at the next
+  // tool-round boundary. Persistence-first — the row is written before the
+  // append is sent, so even if the turn ends before consuming it, the text
+  // is already in history and reaches the model next turn. No double-send:
+  // the queue entry is removed here, and the drain effect never sees it.
+  const steer = useCallback(
+    async (queuedId: number) => {
+      if (activeChatId === null) return;
+      // Turn already over (or still pending): leave it queued — the idle
+      // drain sends it as a normal message.
+      if (streamingId === null || isChatBusy(activeChatId)) return;
+      const item = queuedMessages.find((q) => q.id === queuedId);
+      if (!item) return;
+      const userMessageId = await insertMessage(
+        activeChatId,
+        "user",
+        item.text,
+        item.images && item.images.length > 0 ? item.images : undefined,
+      );
+      if (userMessageId === null) return;
+      // Echo guard suppresses refetches while the turn streams, so the
+      // bubble is added to local state directly; other viewers get it via
+      // the messages:changed broadcast.
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: userMessageId,
+          role: "user",
+          content: item.text,
+          images:
+            item.images && item.images.length > 0 ? item.images : undefined,
+        },
+      ]);
+      // Images are persisted with the row but not injected live — the
+      // append frame carries text only; the model sees them next turn.
+      appendStream(streamingId, item.text);
+      dequeue(queuedId);
+    },
+    [
+      activeChatId,
+      streamingId,
+      queuedMessages,
+      insertMessage,
+      setMessages,
+      appendStream,
+      dequeue,
+    ],
+  );
+
   // A manual compact and the pre-send auto-compact must not race summary RPCs.
   const compactNow = useCallback(async (): Promise<
     "compacted" | "nothing" | "error"
@@ -719,5 +772,6 @@ export function useChat(args: UseChatArgs) {
     editAndResend,
     queuedMessages,
     dequeue,
+    steer,
   };
 }

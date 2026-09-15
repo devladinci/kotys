@@ -19,9 +19,11 @@ import {
   abortStream,
   beginStream,
   chatIdOf,
+  drainAppends,
   finishStream,
   framesAfter,
   isLive,
+  queueAppend,
   record,
 } from "./streams.js";
 
@@ -228,6 +230,7 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
               });
               if (frame) broadcastFrame(requestId, frame);
             },
+            pendingAppends: () => drainAppends(requestId),
           },
           controller.signal,
         );
@@ -257,6 +260,10 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
 
     case "chat:abort":
       abortStream(msg.payload.requestId);
+      return;
+
+    case "chat:append":
+      queueAppend(msg.payload.requestId, msg.payload.content);
       return;
 
     case "chat:resume": {
