@@ -44,6 +44,7 @@ import {
 import { buildDaemonMessages } from "./context.js";
 import { logTokenAccounting, recordTurnUsage } from "./context-budget.js";
 import { getSkillAdvertisement } from "../skills/registry.js";
+import { spawnAgentDefinition, SPAWN_AGENT_NAME } from "./subagentSpawn.js";
 import { getEnabledTools } from "./toolEnabled.js";
 import { maybeNotify } from "./notify.js";
 import { createTurnStreamer, isAbortError } from "./turnStream.js";
@@ -151,6 +152,7 @@ export async function streamChat(
     ),
     ...(toolRoster.loadTool ? [toolRoster.loadTool] : []),
     ...(skills.loadTool ? [skills.loadTool] : []),
+    ...(toolEnabled(SPAWN_AGENT_NAME) ? [spawnAgentDefinition()] : []),
     ...preloadedMcp,
   ];
 
@@ -226,6 +228,12 @@ export async function streamChat(
     signal,
     requestApproval: consent,
     requestUserInput: (req) => requestUserInput(req, signal),
+    parentModel: {
+      name: model.name,
+      ...(req.provider ? { provider: req.provider } : {}),
+      ...(model.source ? { source: model.source } : {}),
+      contextLength,
+    },
   };
 
   const executor = createToolExecutor({

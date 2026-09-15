@@ -12,6 +12,7 @@ import {
 import { requestApproval } from "../approval.js";
 import { rememberLoadedMcpTools } from "./mcpIndex.js";
 import { loadSkill, LOAD_SKILL_NAME } from "../skills/registry.js";
+import { spawnSubagent, SPAWN_AGENT_NAME } from "./subagentSpawn.js";
 import { DEDUPED_TOOLS, TODO_TOOLS, stableArgsKey } from "./toolDedup.js";
 import type { RoundToolCall } from "./turnStream.js";
 
@@ -166,6 +167,15 @@ export function createToolExecutor(args: ToolExecutorArgs): ToolExecutor {
             ...baseMeta,
             status: "done",
             query: loaded.summary,
+          });
+        } else if (name === SPAWN_AGENT_NAME) {
+          const spawned = await spawnSubagent(callArgs, args.toolContext);
+          resultContent = spawned.content;
+          entry = finish({
+            ...baseMeta,
+            status: spawned.ok ? "done" : "error",
+            query: spawned.summary,
+            ...(spawned.ok ? {} : { error: spawned.summary }),
           });
         } else if (name === MCP_LOAD_TOOLS_NAME) {
           // Live-array push: the next round advertises these natively.

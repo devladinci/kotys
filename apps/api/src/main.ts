@@ -19,6 +19,7 @@ import { connectMcpServers } from "./services/mcp.js";
 import { recoverPomodoroSession } from "./services/pomodoro.js";
 import { startReminderScheduler } from "./services/reminders.js";
 import { initSkills } from "./services/skills/registry.js";
+import { initAgents } from "./services/agents/registry.js";
 import { installShutdownHandlers, registerHttpServer } from "./shutdown.js";
 
 initDatabase(DB_PATH);
@@ -30,6 +31,9 @@ startReminderScheduler();
 // Scan + fs.watch the skills roots; fire-and-forget like MCP connect.
 void initSkills().catch((err) => {
   console.error("[skills] startup scan failed:", err);
+});
+void initAgents().catch((err) => {
+  console.error("[agents] startup scan failed:", err);
 });
 
 // Fire-and-forget: keep listening while slow stdio servers boot.

@@ -249,6 +249,13 @@ export function initDatabase(dbPath: string = DB_PATH): void {
     db.exec("CREATE INDEX IF NOT EXISTS idx_chats_todo ON chats(todo_id)");
   }
 
+  if (!chatColsHas(chatsColsNow, "parent_id")) {
+    db.exec(
+      "ALTER TABLE chats ADD COLUMN parent_id INTEGER REFERENCES chats(id) ON DELETE CASCADE",
+    );
+    db.exec("CREATE INDEX IF NOT EXISTS idx_chats_parent ON chats(parent_id)");
+  }
+
   const messageColsNow = db.prepare("PRAGMA table_info(messages)").all() as {
     name: string;
   }[];
