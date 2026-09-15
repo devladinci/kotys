@@ -5,8 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -21,29 +25,54 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Format (prettier)
+        run: pnpm format:check
+
       - name: Lint
         run: pnpm lint
 
       - name: Lint guard (layering zones)
         run: pnpm lint:guard
 
-      - name: Typecheck
-        run: pnpm typecheck
-
       - name: Knip
         run: pnpm knip
 
-      - name: Test
-        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: Format
-        run: pnpm format:check
+  # Each job builds its own package chain first (test dependsOn build+^build in
+  # turbo.json) — a fresh CI checkout has no dist/, and contracts' tests import
+  # its own package name, so a missing dist fails vitest with a resolve error.
+  test:
+    runs-on: ubuntu-latest
+    needs: static
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@kotys/contracts"
+          - "@kotys/db"
+          - "@kotys/core"
+          - "@kotys/api"
+    steps:
+      - uses: actions/checkout@v5
 
-      - name: Build
-        run: pnpm build
+      - uses: pnpm/action-setup@v6
 
-  macos:
-    runs-on: macos-latest
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test ${{ matrix.package }}
+        run: pnpm exec turbo run test --filter=${{ matrix.package }} --output-logs=errors-only
+
+  build:
+    runs-on: ubuntu-latest
+    needs: static
     steps:
       - uses: actions/checkout@v5
 
@@ -60,5 +89,25 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Test
-        run: pnpm test
+  # Only the api suite runs here; the rest is platform-independent (covered on ubuntu).
+  macos:
+    runs-on: macos-latest
+    needs: static
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test api
+        run: pnpm exec turbo run test --filter=@kotys/api --output-logs=errors-only
