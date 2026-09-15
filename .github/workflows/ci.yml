@@ -5,8 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  # Fast static checks on the smallest runner, fully parallel with each other.
+  # Fails in <1min instead of after the whole build/test chain.
+  static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -21,29 +27,54 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Format (prettier)
+        run: pnpm format:check
+
       - name: Lint
         run: pnpm lint
 
       - name: Lint guard (layering zones)
         run: pnpm lint:guard
 
-      - name: Typecheck
-        run: pnpm typecheck
-
       - name: Knip
         run: pnpm knip
 
-      - name: Test
-        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: Format
-        run: pnpm format:check
+  # Tests split into parallel jobs so a failure in one doesn't wait for the other.
+  # Each runs `turbo --filter` so turbo's `dependsOn: ["^build"]` still builds deps
+  # (contracts/core) before running that package's tests.
+  test:
+    runs-on: ubuntu-latest
+    needs: static
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@kotys/contracts"
+          - "@kotys/db"
+          - "@kotys/core"
+          - "@kotys/api"
+    steps:
+      - uses: actions/checkout@v5
 
-      - name: Build
-        run: pnpm build
+      - uses: pnpm/action-setup@v6
 
-  macos:
-    runs-on: macos-latest
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test ${{ matrix.package }}
+        run: pnpm exec turbo run test --filter=${{ matrix.package }} --only --output-logs=errors-only
+
+  build:
+    runs-on: ubuntu-latest
+    needs: static
     steps:
       - uses: actions/checkout@v5
 
@@ -60,5 +91,27 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Test
-        run: pnpm test
+  # macos-latest is ~5x slower to provision than ubuntu; the app build is the only
+  # mac-specific concern. Kept minimal: build + the api test suite only, parallel
+  # with the ubuntu test matrix.
+  macos:
+    runs-on: macos-latest
+    needs: static
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test api
+        run: pnpm exec turbo run test --filter=@kotys/api --only --output-logs=errors-only
