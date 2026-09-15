@@ -10,11 +10,15 @@ import {
 export type { QueuedMessage } from "./queueStore.js";
 import type { QueuedMessage } from "./queueStore.js";
 
+// A stable shared reference: useSyncExternalStore re-renders whenever two
+// getSnapshot calls differ, so a fresh [] per call would loop forever.
+const EMPTY: QueuedMessage[] = [];
+
 export function useMessageQueue(activeChatId: number | null) {
   const queuedMessages = useSyncExternalStore(
     subscribeQueued,
-    activeChatId === null ? () => [] : () => getQueued(activeChatId),
-    activeChatId === null ? () => [] : () => getQueued(activeChatId),
+    activeChatId === null ? () => EMPTY : () => getQueued(activeChatId),
+    activeChatId === null ? () => EMPTY : () => getQueued(activeChatId),
   );
 
   const enqueue = useCallback(
