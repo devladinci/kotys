@@ -427,6 +427,8 @@ describe("streamChat request shaping", () => {
     const { TOOL_DEFINITIONS } = await import("../../tools/index.js");
     const allDisabled: Record<string, boolean> = {};
     for (const d of TOOL_DEFINITIONS) allDisabled[d.function.name] = false;
+    // spawn_agent is not in TOOL_DEFINITIONS (executor branch, like load_skill).
+    allDisabled["spawn_agent"] = false;
     state.toolsEnabled = allDisabled;
     state.scripts.push([doneText("Only prose.")]);
     await streamChat(baseReq(), cbs(), new AbortController().signal);

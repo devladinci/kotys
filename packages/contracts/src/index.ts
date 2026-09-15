@@ -13,6 +13,7 @@ export * from "./types/image.js";
 
 export * from "./schemas/mcp.js";
 export * from "./schemas/skill.js";
+export * from "./schemas/agent.js";
 export * from "./schemas/tool.js";
 export * from "./schemas/input.js";
 

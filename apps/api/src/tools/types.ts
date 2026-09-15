@@ -36,6 +36,15 @@ export type ToolContext = {
     submitLabel?: string;
     cancelLabel?: string;
   }) => Promise<Record<string, string> | null>;
+  /** True inside a subagent turn — spawn_agent denies nesting on it. */
+  isSubagent?: boolean;
+  /** The parent turn's model; spawn_agent runs the child on it. */
+  parentModel?: {
+    name: string;
+    provider?: string;
+    source?: "cloud" | "local";
+    contextLength?: number | null;
+  };
 };
 
 export type ToolModule = {

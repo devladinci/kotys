@@ -37,6 +37,8 @@ type ServerEvents = {
 
   "skills:changed": [];
 
+  "agents:changed": [];
+
   "open-url": [{ url: string }];
 
   notify: [{ title: string; body: string; at?: number; todoId?: number }];

@@ -183,6 +183,29 @@ export function listChatsWithTopics() {
   })[];
 }
 
+export function createSubagentChat(
+  parentChatId: number,
+  title: string,
+  model: ModelListing,
+): number {
+  const modelId = upsertModel(model);
+  const result = getDb()
+    .prepare("INSERT INTO chats (title, parent_id, model_id) VALUES (?, ?, ?)")
+    .run(title, parentChatId, modelId);
+  return Number(result.lastInsertRowid);
+}
+
+export function getSubagentChat(parentChatId: number, agentName: string) {
+  const row = getDb()
+    .prepare(
+      `SELECT c.id FROM chats c
+       WHERE c.parent_id = ? AND c.title = ?
+       ORDER BY c.updated_at DESC LIMIT 1`,
+    )
+    .get(parentChatId, `subagent:${agentName}`) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 export function getChatById(id: number) {
   const row = getDb().prepare(`${CHAT_SELECT} WHERE c.id = ?`).get(id) as
     | (ChatRow & {
