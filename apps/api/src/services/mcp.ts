@@ -114,6 +114,9 @@ async function connectHttp(
     const codePromise = skipOAuth
       ? null
       : startCallbackServer(name, expectedState);
+    // The callback promise is awaited only on the OAuth path. Without a
+    // catch its rejection (EADDRINUSE, port hijack) kills the daemon.
+    codePromise?.catch(() => {});
     let connected = false;
     try {
       await client.connect(transport);
