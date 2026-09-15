@@ -191,7 +191,6 @@ export function useChat(args: UseChatArgs) {
         toolCollectorRef.current.add(requestId, [[index, activity]]);
       },
       onOwnDone: (requestId, result) => {
-        releaseLiveStream(requestId);
         collectorRef.current.flushNow(); // tail deltas pending on the cadence timer
         toolCollectorRef.current.flushNow();
         finaliseStream(requestId, result);
@@ -221,7 +220,6 @@ export function useChat(args: UseChatArgs) {
         }
       },
       onOwnError: (requestId, error) => {
-        releaseLiveStream(requestId);
         collectorRef.current.flushNow();
         toolCollectorRef.current.flushNow();
         finaliseError(requestId, error);
@@ -322,8 +320,10 @@ export function useChat(args: UseChatArgs) {
       );
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
-      // A background chat's done frame must not clear the open chat's state.
+      // Resolve the finishing chat from the claim before releasing it — a
+      // background chat's done must clear its own entry, not the open chat's.
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
+      releaseLiveStream(assistantId);
       if (doneChatId !== null) {
         finishStreamEntry(doneChatId);
         clearStreamActivity(doneChatId);
@@ -359,6 +359,7 @@ export function useChat(args: UseChatArgs) {
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
+      releaseLiveStream(assistantId);
       if (doneChatId !== null) {
         finishStreamEntry(doneChatId);
         clearStreamActivity(doneChatId);
