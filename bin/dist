@@ -5,6 +5,9 @@
 # Resolves the repo root so it works from any subdirectory, builds the API
 # daemon output (packaged as an extraResource) and the desktop bundle, then
 # runs electron-builder. The dmg lands in <repo>/release/.
+#
+# Arguments go to electron-builder. `bin/dist --dir` skips the dmg and only
+# builds release/mac-arm64/Kotys.app — all scripts/kotys-install.sh needs.
 
 set -euo pipefail
 
@@ -21,4 +24,4 @@ fi
 pnpm exec turbo run build --filter=@kotys/desktop --filter=@kotys/api --filter=@kotys/ui-web --filter=@kotys/core
 
 mkdir -p release
-exec pnpm --filter @kotys/desktop run dist
+exec pnpm --filter @kotys/desktop run dist -- "$@"

@@ -20,6 +20,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await fs.rm(home, { recursive: true, force: true });
 });
 
@@ -89,6 +90,16 @@ describe("bash approval contract", () => {
       /command is required/,
     );
     expect(approve).not.toHaveBeenCalled();
+  });
+
+  it("does not pass the daemon's ELECTRON_RUN_AS_NODE to the shell", async () => {
+    vi.stubEnv("ELECTRON_RUN_AS_NODE", "1");
+    const result = await execute(
+      { command: 'printf "%s" "${ELECTRON_RUN_AS_NODE-unset}"', cwd: home },
+      ctxWith(home, async () => true),
+    );
+    const parsed = JSON.parse(result.content) as { stdout: string };
+    expect(parsed.stdout).toBe("unset");
   });
 
   it("declares itself as a per-invocation approval tool in its schema", () => {

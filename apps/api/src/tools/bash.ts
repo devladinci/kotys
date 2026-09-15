@@ -77,11 +77,18 @@ const SENSITIVE_ENV_KEYS = new Set([
   "OLLAMA_API_KEY",
 ]);
 
+// The desktop app runs the daemon on its own Electron binary with
+// ELECTRON_RUN_AS_NODE=1. A shell must not inherit it: every Electron app the
+// command starts — Kotys itself included, relaunched by the self-update
+// installer — would run as plain Node and exit immediately.
+const DAEMON_ONLY_ENV_KEYS = new Set(["ELECTRON_RUN_AS_NODE"]);
+
 function sanitizeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const clean: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(env)) {
     if (SENSITIVE_ENV_KEYS.has(key)) continue;
     if (SECRET_ENV_PATTERNS.test(key)) continue;
+    if (DAEMON_ONLY_ENV_KEYS.has(key)) continue;
     clean[key] = value;
   }
   return clean;
