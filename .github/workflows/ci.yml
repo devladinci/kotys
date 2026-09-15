@@ -10,8 +10,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fast static checks on the smallest runner, fully parallel with each other.
-  # Fails in <1min instead of after the whole build/test chain.
   static:
     runs-on: ubuntu-latest
     steps:
@@ -42,9 +40,7 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-  # Tests split into parallel jobs so a failure in one doesn't wait for the other.
-  # Each runs `turbo --filter` so turbo's `dependsOn: ["^build"]` still builds deps
-  # (contracts/core) before running that package's tests.
+  # turbo's ^build dependency builds contracts/core before the filtered test runs.
   test:
     runs-on: ubuntu-latest
     needs: static
@@ -91,9 +87,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # macos-latest is ~5x slower to provision than ubuntu; the app build is the only
-  # mac-specific concern. Kept minimal: build + the api test suite only, parallel
-  # with the ubuntu test matrix.
+  # Only the api suite runs here; the rest is platform-independent (covered on ubuntu).
   macos:
     runs-on: macos-latest
     needs: static
