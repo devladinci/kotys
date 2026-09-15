@@ -4,7 +4,14 @@ import type {
   ChangeEvent as ReactChangeEvent,
 } from "react";
 import { EditorContent } from "@tiptap/react";
-import { ImagePlus, ListPlus, Send, Square, X } from "lucide-react";
+import {
+  CornerDownRight,
+  ImagePlus,
+  ListPlus,
+  Send,
+  Square,
+  X,
+} from "lucide-react";
 import {
   usePlatform,
   useSkills,
@@ -59,6 +66,7 @@ interface IProps {
   onSend: (text: string, images: string[]) => void;
   onAbort: () => void;
   onDequeue: (id: number) => void;
+  onSteer?: (id: number) => void;
 }
 
 function ComposerBase({
@@ -72,6 +80,7 @@ function ComposerBase({
   onSend,
   onAbort,
   onDequeue,
+  onSteer,
 }: IProps) {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -255,7 +264,9 @@ function ComposerBase({
           <div className="mb-2" role="status" aria-live="polite">
             <div className="flex items-center gap-1.5 mb-1 text-[11px] text-text-muted">
               <ListPlus size={11} />
-              {queuedMessages.length} queued — sends when the reply finishes
+              {streamingId !== null
+                ? "Queued — inject now to steer this reply, or wait for it to finish"
+                : `${queuedMessages.length} queued — sends when the reply finishes`}
             </div>
             <div className="flex flex-col gap-1">
               {queuedMessages.map((q) => (
@@ -266,6 +277,16 @@ function ComposerBase({
                   <span className="flex-1 min-w-0 truncate text-text-muted">
                     {q.text || "(images)"}
                   </span>
+                  {streamingId !== null && onSteer && (
+                    <button
+                      onClick={() => onSteer(q.id)}
+                      aria-label="Inject into the running reply"
+                      title="Inject at the next tool round"
+                      className="shrink-0 p-0.5 rounded text-text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-text transition"
+                    >
+                      <CornerDownRight size={12} />
+                    </button>
+                  )}
                   <button
                     onClick={() => onDequeue(q.id)}
                     aria-label="Remove queued message"

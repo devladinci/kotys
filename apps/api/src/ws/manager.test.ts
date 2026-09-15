@@ -38,7 +38,7 @@ vi.mock("../services/events.js", () => ({
 import type { ChatStreamResult } from "@kotys/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { onMessage, onOpen } from "./manager.js";
-import { resetStreams } from "./streams.js";
+import { drainAppends, resetStreams } from "./streams.js";
 
 type FakeWs = {
   id: string;
@@ -183,6 +183,44 @@ describe("ws manager: fan-out", () => {
     expect(h.updateMessage).toHaveBeenCalledWith(9, {
       content: "unmeasured",
     });
+  });
+});
+
+describe("ws manager: chat:append", () => {
+  it("hands a queued steering append to the running turn", async () => {
+    const a = connect();
+    let settle: (r: ChatStreamResult) => void = () => {};
+    h.streamChat.mockReturnValue(
+      new Promise<ChatStreamResult>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const pending = send(a, streamReq(9, 5));
+    await send(a, {
+      type: "chat:append",
+      payload: { requestId: 9, content: "stop, do X instead" },
+    });
+    // The loop drain takes it once, in order, then the mailbox is empty.
+    expect(drainAppends(9)).toEqual(["stop, do X instead"]);
+    expect(drainAppends(9)).toEqual([]);
+    settle(result("ok"));
+    await pending;
+  });
+
+  it("ignores appends for unknown or finished streams", async () => {
+    const fake = connect();
+    h.streamChat.mockResolvedValue(result("done"));
+    await send(fake, streamReq(9, 5));
+    await send(fake, {
+      type: "chat:append",
+      payload: { requestId: 9, content: "late" },
+    });
+    await send(fake, {
+      type: "chat:append",
+      payload: { requestId: 42, content: "never existed" },
+    });
+    expect(drainAppends(9)).toEqual([]);
+    expect(drainAppends(42)).toEqual([]);
   });
 });
 

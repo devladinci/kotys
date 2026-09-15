@@ -166,6 +166,44 @@ const cbs = (): StreamCallbacks & { activity: ToolActivity[] } => {
   } as never;
 };
 
+describe("streamChat steering", () => {
+  it("injects an append as a user message at the next round boundary", async () => {
+    state.scripts.push([toolCallPart("list", { path: "." })]);
+    state.scripts.push([doneText("Followed the steer.")]);
+    // Nothing queued before round 0; the text arrives while round 0's
+    // tools are running, so round 1 is the first round that sees it.
+    const pendingAppends = vi
+      .fn()
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce(["stop, do X instead"])
+      .mockReturnValue([]);
+
+    await streamChat(
+      baseReq(),
+      { ...cbs(), pendingAppends } as never,
+      new AbortController().signal,
+    );
+
+    // Round 0 was built without it; round 1 carries the injected user turn.
+    expect(
+      state.roundBodies[0].messages.some(
+        (m) =>
+          (m as { role: string }).role === "user" &&
+          (m as { content: string }).content === "stop, do X instead",
+      ),
+    ).toBe(false);
+    expect(
+      state.roundBodies[1].messages.some(
+        (m) =>
+          (m as { role: string }).role === "user" &&
+          (m as { content: string }).content === "stop, do X instead",
+      ),
+    ).toBe(true);
+    // The drain is queried before every round, including the final one.
+    expect(pendingAppends).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("streamChat loop persistence", () => {
   it("runs many tool rounds by default and only stops when the model stops calling tools", async () => {
     const rounds = 30;

@@ -12,6 +12,11 @@ import type {
 export type ClientMessage =
   | { type: "chat:stream"; payload: StreamRequest }
   | { type: "chat:abort"; payload: { requestId: number } }
+  /**
+   * Inject a user message into a running turn at the next tool-round
+   * boundary (steering). Ignored when the requestId is not live.
+   */
+  | { type: "chat:append"; payload: { requestId: number; content: string } }
   /** Sent after reconnecting: replay everything past lastSeq. */
   | { type: "chat:resume"; payload: { requestId: number; lastSeq: number } }
   /** Heartbeat from clients probing a possibly half-dead socket. */

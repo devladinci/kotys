@@ -59,6 +59,11 @@ import {
 export interface StreamCallbacks {
   onChunk: (chunk: { thinkingDelta: string; contentDelta: string }) => void;
   onToolActivity: (activity: ToolActivity, index: number) => void;
+  /**
+   * Steering texts queued while the turn was running, taken at the next
+   * round boundary. Called before every round; may return several.
+   */
+  pendingAppends?: () => string[];
 }
 
 const LAST_ROUND_INDEX = MAX_TOOL_ROUNDS - 1;
@@ -257,6 +262,13 @@ export async function streamChat(
         contextLength,
       );
       if (stop) break;
+      // Steering: user texts queued while tools were running enter the turn
+      // here, before the next round sees the conversation.
+      if (callbacks.pendingAppends) {
+        for (const content of callbacks.pendingAppends()) {
+          chatMessages.push({ role: "user", content });
+        }
+      }
       if (rounds === LAST_ROUND_INDEX && !lastRoundPrefillSent) {
         lastRoundPrefillSent = true;
         chatMessages.push({ role: "assistant", content: LAST_ROUND_PREFILL });

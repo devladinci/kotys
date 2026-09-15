@@ -128,6 +128,7 @@ function ChatScreen() {
     editAndResend,
     queuedMessages,
     dequeue,
+    steer,
   } = useChat({
     activeChatId: chatId,
     chatSummary: chat?.summary ?? null,
@@ -587,7 +588,9 @@ function ChatScreen() {
               accessibilityLiveRegion="polite"
             >
               <Text style={{ color: t.textMuted, fontSize: 11 }}>
-                {queuedMessages.length} queued — sends when the reply finishes
+                {streamingId !== null
+                  ? "Queued — inject now to steer this reply, or wait for it to finish"
+                  : `${queuedMessages.length} queued — sends when the reply finishes`}
               </Text>
               {queuedMessages.map((q) => (
                 <View
@@ -603,6 +606,20 @@ function ChatScreen() {
                   >
                     {q.text || "(images)"}
                   </Text>
+                  {streamingId !== null && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Inject into the running reply"
+                      onPress={() => void steer(q.id)}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name="return-down-forward"
+                        size={14}
+                        color={t.textMuted}
+                      />
+                    </Pressable>
+                  )}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Remove queued message"
