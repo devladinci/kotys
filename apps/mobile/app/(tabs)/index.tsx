@@ -24,7 +24,6 @@ import {
   useChatList,
   useNow,
   getRpc,
-  clearExpiredGenerating,
   isGenerating,
   subscribeGenerating,
 } from "@kotys/core";
@@ -195,9 +194,6 @@ export default function ChatListScreen() {
   const t = theme(mode);
   const router = useRouter();
   const now = useNow(DATE_TICK_MS);
-  // The 60s clock doubles as the generating-registry sweeper: heartbeats keep
-  // entries alive, a stalled stream ages out at the next sweep.
-  clearExpiredGenerating();
   const { chats, loadChats, deleteChat, renameChat } = useChatList();
   const { setActiveChatId, bumpChatsVersion, pinnedChatIds, togglePinned } =
     useAppStore();

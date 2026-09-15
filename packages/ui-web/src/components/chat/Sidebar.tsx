@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import {
-  clearExpiredGenerating,
   generatingChatIdsSnapshot,
   subscribeGenerating,
   useNow,
@@ -128,9 +127,6 @@ function SidebarBase({
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isAnalyticsRoute = location.pathname.startsWith("/analytics");
   const now = useNow(DATE_TICK_MS);
-  // The 30s clock doubles as the generating-registry sweeper: heartbeats keep
-  // entries alive, a stalled stream ages out at the next sweep.
-  clearExpiredGenerating();
   const generatingChatIds = useGeneratingChatIds();
   // Rename editing lives here, not in App: the input value and the "which
   // row is being edited" pointer change together on every keystroke.
