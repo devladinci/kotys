@@ -2,336 +2,572 @@
 #
 # Self-update installer for the Kotys desktop dist.
 #
-# Designed to be armed by the running app instance and survive its death:
-# sleeps so the caller can exit, quits the installed app, swaps
-# /Applications/Kotys.app with the freshly built release bundle, re-signs,
-# relaunches, and cleans up the old copy.
+# Replaces /Applications/Kotys.app with a freshly built release bundle and
+# relaunches it - typically armed by the agent inside the very app being
+# replaced. Two runs of this script cooperate:
 #
-# Detach strategy (this failed twice in real runs before landing here):
-# the arming run re-launches itself as a launchd agent (bootstrap gui/$UID
-# with RunAtLoad). launchd gives the acting run its own GUI session, which
-# nothing in the app's process tree can kill - the app quit, a daemon
-# teardown, or a process-group kill from the tool that armed the script all
-# leave the acting run untouched. The two prior attempts (plain `disown`,
-# then a perl double-fork + setsid) both died silently mid-flight in real
-# installs; launchd-mediated runs are the only ones observed to always
-# complete (5/5 clean installs). The acting run bootouts its own label on
-# exit. If launchd is unavailable, falls back to a perl double-fork+setsid.
+#   arming run   kotys-install.sh [path-to-new-app]
+#     Writes a launchd job for the acting run, bootstraps it into the user's
+#     GUI domain, waits for the acting run's checks, prints the verdict and
+#     exits (status 1 when the checks failed).
+#
+#   acting run   kotys-install.sh --acting <src> <label>
+#     Runs as that launchd job, outside the app's process tree, so quitting
+#     the app, the daemon's teardown or a process-group kill aimed at the
+#     caller cannot stop it. Checks, waits, stages and verifies the new
+#     bundle, quits the app, swaps the bundles with two renames and
+#     relaunches. If the new version does not come up, it restores the
+#     previous bundle and relaunches that instead.
+#
+# Environment hygiene: open(1) gives the launched app the caller's
+# environment, which then reaches its daemon and every shell the agent runs -
+# including the next arming run. So nothing the acting run carries may change
+# how the relaunched app, or the next install, behaves:
+#   - the acting run is selected by argv, never by an environment variable
+#   - only KOTYS_INSTALL_* settings are forwarded to it, and it unsets them
+#     before relaunching
+#   - ELECTRON_RUN_AS_NODE is dropped: the daemon runs with it, the agent's
+#     shells used to inherit it, and it makes the app binary run as plain
+#     Node and exit immediately
+#
+# All logic lives in functions dispatched from the last lines, so bash has read
+# the whole file before an install starts: editing or checking out this script
+# mid-install cannot change a run in flight.
 #
 # Safety:
-#   - every action is logged to ~/.kotys/kotys-install.log;
-#     acting runs log their pid/ppid/pgid/session up front and trap
-#     SIGTERM/HUP/INT, so a mid-flight death always leaves a trace
-#   - loop guard: refuses to install the same bundle twice within
-#     KOTYS_INSTALL_GUARD seconds (default 600); override with
-#     KOTYS_INSTALL_FORCE=1
-#   - pid lock: refuses to run concurrently with another instance
-#
-# Process detection uses `ps` with an anchored pattern, NOT pgrep -
-# pgrep cannot see this app's main process (its comm is the full path),
-# which causes false "app stopped" verdicts and swap-under-running-app.
+#   - every step is logged to ~/.kotys/kotys-install.log; the output of the
+#     commands it runs goes to ~/.kotys/kotys-install.out
+#   - the new bundle must pass `codesign --verify --deep --strict` before the
+#     app is touched, and again once copied next to the installed bundle
+#   - the app counts as up only when its main process runs and the daemon
+#     port is listening; anything less rolls back, and so does a signal
+#     arriving after the bundles were swapped
+#   - loop guard: refuses to install the same build twice within
+#     KOTYS_INSTALL_GUARD seconds; KOTYS_INSTALL_FORCE=1 overrides
+#   - lock: refuses to run concurrently with another install
 #
 # Usage: kotys-install.sh [path-to-new-app]
 # Env:
-#   KOTYS_REPO_ROOT      repo checkout holding the built bundle
-#                        (default: parent of this script's dir)
-#   KOTYS_INSTALL_DELAY  seconds to sleep before acting (default 30)
-#   KOTYS_INSTALL_DRY    if set to 1, only log the actions
-#   KOTYS_INSTALL_GUARD  loop-guard window in seconds (default 600)
-#   KOTYS_INSTALL_FORCE  set to 1 to bypass the loop guard
-#   KOTYS_INSTALL_APP_NAME  app bundle name to swap (default Kotys)
-
-# SCRIPT_DIR is needed by the detach block below, so it comes first.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Runtime artifacts (log/state/lock/plist) live in ~/.kotys, never next to
-# the script: this file sits in a public repo checkout and must not
-# accumulate machine-specific state.
-RUNTIME_DIR="${HOME}/.kotys"
-mkdir -p "$RUNTIME_DIR"
-LOG="$RUNTIME_DIR/kotys-install.log"
-STATE="$RUNTIME_DIR/kotys-install.state"
-LOCK="$RUNTIME_DIR/kotys-install.lock"
-
-if [ -z "${KOTYS_INSTALL_DETACHED:-}" ]; then
-  export KOTYS_INSTALL_DETACHED=1
-  UIX="$(id -u)"
-  LABEL="kotys-install.$$"
-  PLIST="$RUNTIME_DIR/.kotys-install-$$.plist"
-
-  # Forward every KOTYS_* variable from the caller's env to the acting run,
-  # plus the label and plist paths so it can clean up after itself.
-  ENV_XML="    <key>KOTYS_INSTALL_DETACHED</key><string>1</string>"
-  ENV_XML+=$'\n'"    <key>KOTYS_LAUNCH_LABEL</key><string>$LABEL</string>"
-  ENV_XML+=$'\n'"    <key>KOTYS_INSTALL_PLIST</key><string>$PLIST</string>"
-  for k in $(env | grep '^KOTYS_' | cut -d= -f1 || true); do
-    case "$k" in
-      KOTYS_INSTALL_DETACHED|KOTYS_LAUNCH_LABEL|KOTYS_INSTALL_PLIST) continue ;;
-    esac
-    v="${!k}"
-    v="${v//&/&amp;}"; v="${v//</&lt;}"; v="${v//>/&gt;}"
-    ENV_XML+=$'\n'"    <key>$k</key><string>$v</string>"
-  done
-
-  SELF="$(cd "$SCRIPT_DIR" && pwd)/$(basename "$0")"
-  ARGS_XML=""
-  for a in "$@"; do
-    a="${a//&/&amp;}"; a="${a//</&lt;}"; a="${a//>/&gt;}"
-    ARGS_XML+=$'\n'"    <string>$a</string>"
-  done
-
-  cat > "$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array>
-    <string>/bin/bash</string>
-    <string>$SELF</string>$ARGS_XML
-  </array>
-  <key>EnvironmentVariables</key><dict>
-$ENV_XML
-  </dict>
-  <key>RunAtLoad</key><true/>
-  <key>StandardOutPath</key><string>/tmp/kotys-install-launchd.out</string>
-  <key>StandardErrorPath</key><string>/tmp/kotys-install-launchd.err</string>
-</dict></plist>
-EOF
-
-  if launchctl bootstrap "gui/$UIX" "$PLIST" 2>/dev/null; then
-    # Confirm the acting run actually started (a bad plist or instant crash
-    # would otherwise leave the arming run silently successful).
-    for _ in 1 2 3; do
-      sleep 1
-      grep -q "label=$LABEL " "$LOG" 2>/dev/null && break
-    done
-    if grep -q "label=$LABEL " "$LOG" 2>/dev/null; then
-      exit 0
-    fi
-    launchctl bootout "gui/$UIX/$LABEL" >/dev/null 2>&1 || true
-    rm -f "$PLIST"
-  elif launchctl load "$PLIST" 2>/dev/null; then
-    sleep 3
-    if grep -q "label=$LABEL " "$LOG" 2>/dev/null; then
-      exit 0
-    fi
-    launchctl bootout "gui/$UIX/$LABEL" >/dev/null 2>&1 || true
-    rm -f "$PLIST"
-  fi
-
-  # launchd unavailable: perl double-fork + setsid fallback.
-  exec perl -e '
-    use POSIX qw(setsid);
-    fork and exit 0;
-    POSIX::setsid();
-    if (fork) { exit 0; }
-    exec $ARGV[0], @ARGV[1 .. $#ARGV];
-  ' "$SELF" "$@"
-fi
+#   KOTYS_REPO_ROOT            repo checkout holding the built bundle
+#                              (default: parent of this script's dir)
+#   KOTYS_INSTALL_DELAY        seconds to wait before quitting the app (default 30)
+#   KOTYS_INSTALL_DRY          1 = run the checks, then only log the actions
+#   KOTYS_INSTALL_GUARD        loop-guard window in seconds (default 600)
+#   KOTYS_INSTALL_FORCE        1 = bypass the loop guard
+#   KOTYS_INSTALL_APP_NAME     app bundle name (default Kotys)
+#   KOTYS_INSTALL_DEST_DIR     directory holding the installed app (default /Applications)
+#   KOTYS_INSTALL_PORT         daemon port that proves the app is up
+#                              (default $KOTYS_PORT, else 3017)
+#   KOTYS_INSTALL_UP_TIMEOUT   seconds to wait for a relaunched app (default 45)
+#   KOTYS_INSTALL_RUNTIME_DIR  log/state/lock directory (default ~/.kotys)
 
 set -euo pipefail
 
-# Release any inherited caller pipes immediately: a bash-tool parent reads
-# stdout until EOF and would otherwise hang for this run's whole lifetime.
-exec >/tmp/kotys-install-launchd.out 2>&1 </dev/null
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-DELAY="${KOTYS_INSTALL_DELAY:-30}"
-DRY="${KOTYS_INSTALL_DRY:-0}"
-GUARD="${KOTYS_INSTALL_GUARD:-600}"
-FORCE="${KOTYS_INSTALL_FORCE:-0}"
+RUNTIME_DIR="${KOTYS_INSTALL_RUNTIME_DIR:-$HOME/.kotys}"
+LOG="$RUNTIME_DIR/kotys-install.log"
+OUT="$RUNTIME_DIR/kotys-install.out"
+STATE="$RUNTIME_DIR/kotys-install.state"
+LOCK="$RUNTIME_DIR/kotys-install.lock.d"
+RUNS="$RUNTIME_DIR/install-runs"
 
-APP_NAME="${KOTYS_INSTALL_APP_NAME:-Kotys}"
-DEST="/Applications/$APP_NAME.app"
-OLD="/Applications/.$APP_NAME-old.$$"
-SRC_DIR="${KOTYS_REPO_ROOT:-"$(cd "$SCRIPT_DIR/.." && pwd)"}/release/mac-arm64"
-KILL_RE="^$DEST/Contents/MacOS/$APP_NAME"
-
-log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG" >&2; }
-
-# A signal (other than SIGKILL, which nothing can catch) always leaves a
-# trace, so a mid-flight death is diagnosable from the log alone.
-trap 'log "fatal: SIGTERM received (external kill); aborting"; exit 143' TERM
-trap 'log "fatal: SIGHUP received (session hangup); aborting"; exit 129' HUP
-trap 'log "fatal: SIGINT received; aborting"; exit 130' INT
-
-if [ -n "${KOTYS_LAUNCH_LABEL:-}" ]; then
-  log "acting run: pid=$$ ppid=$(ps -o ppid= -p $$ | tr -d ' ') pgid=$(ps -o pgid= -p $$ | tr -d ' ') sess=$(ps -o sess= -p $$ | tr -d ' ') label=$KOTYS_LAUNCH_LABEL "
-else
-  log "acting run: pid=$$ ppid=$(ps -o ppid= -p $$ | tr -d ' ') pgid=$(ps -o pgid= -p $$ | tr -d ' ') sess=$(ps -o sess= -p $$ | tr -d ' ') (no launchd label)"
-fi
-
-if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
-  log "error: installer pid $(cat "$LOCK") still running, aborting"
-  exit 1
-fi
-echo $$ > "$LOCK"
-# NOTE: the acting run must NOT bootout its own launchd label on exit.
-# launchd sends SIGTERM to job processes on bootout; racing the acting
-# run's own exit path with that signal leaves the run dead before its
-# final log line and cleanup (observed in test runs as a 'fatal: SIGTERM'
-# pair and a leftover .<App>-old dir right after 'exec fallback'). Each
-# acting run uses a unique label (kotys-install.$$), so the leftover job
-# definition is inert and gets removed with the plist; nothing lingers.
-cleanup() {
-  rm -f "$LOCK"
-  if [ -n "${KOTYS_INSTALL_PLIST:-}" ]; then
-    rm -f "$KOTYS_INSTALL_PLIST"
-  fi
+log() {
+  local line
+  line="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+  printf '%s\n' "$line" >>"$LOG"
+  printf '%s\n' "$line" >&2 || true
 }
-trap cleanup EXIT
 
-SRC="${1:-$SRC_DIR/$APP_NAME.app}"
-if [ ! -d "$SRC" ] || [ ! -x "$SRC/Contents/MacOS/$APP_NAME" ] || [ ! -f "$SRC/Contents/Resources/app.asar" ]; then
-  log "error: no valid bundle at '$SRC'"
-  exit 1
-fi
-log "installer started (pid $$, src=$SRC, delay=${DELAY}s, dry=${DRY})"
+is_uint() {
+  case "$1" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+}
 
-# Loop guard: the acting run records the bundle before acting, so any
-# respawn for the same bundle inside the window aborts immediately.
-KEY="$(stat -f '%m:%z' "$SRC/Contents/MacOS/$APP_NAME")"
-if [ -f "$STATE" ] && [ "$FORCE" != "1" ]; then
-  read -r PREV_KEY PREV_TS < "$STATE"
-  NOW="$(date +%s)"
-  if [ "$PREV_KEY" = "$KEY" ] && [ $((NOW - PREV_TS)) -lt "$GUARD" ]; then
-    log "loop guard: same bundle installed $((NOW - PREV_TS))s ago, refusing to reinstall (KOTYS_INSTALL_FORCE=1 to override)"
+xml_escape() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+# ------------------------------------------------------------------ arming run
+
+# A finished job stays loaded until it is booted out, and the acting run
+# cannot boot out its own job: launchd would SIGTERM it mid-cleanup. Jobs of
+# earlier runs are removed here instead - but not young ones, which may belong
+# to a concurrent arming run and simply not have started yet.
+reap_finished_jobs() {
+  local uid="$1" now pid label started
+  now="$(date +%s)"
+  launchctl list 2>/dev/null | while read -r pid _ label; do
+    case "$label" in
+      kotys-install.*) ;;
+      *) continue ;;
+    esac
+    started="${label#kotys-install.}"
+    started="${started%%.*}"
+    if [ "$pid" != "-" ] || { is_uint "$started" && [ $((now - started)) -lt 300 ]; }; then
+      continue
+    fi
+    launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true
+  done
+}
+
+write_job() {
+  local label="$1" run_dir="$2" src="$3" name env_xml=""
+  for name in $(compgen -e | grep '^KOTYS_INSTALL_' || true); do
+    env_xml+="
+    <key>$name</key><string>$(xml_escape "${!name}")</string>"
+  done
+  cat >"$run_dir/job.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string>
+    <string>$(xml_escape "$SELF")</string>
+    <string>--acting</string>
+    <string>$(xml_escape "$src")</string>
+    <string>$label</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>$env_xml
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$(xml_escape "$OUT")</string>
+  <key>StandardErrorPath</key><string>$(xml_escape "$OUT")</string>
+</dict></plist>
+EOF
+}
+
+# Waits for the acting run's verdict. Returns 0 once it is armed (or already
+# gone), exits 1 when its checks failed, returns 1 when it never reported.
+await_acting_run() {
+  local run_dir="$1" status=""
+  for _ in $(seq 1 80); do
+    status="$(cat "$run_dir/status" 2>/dev/null || true)"
+    case "$status" in
+      armed:*)
+        echo "kotys-install:${status#armed:}"
+        return 0
+        ;;
+      failed:*)
+        echo "kotys-install:${status#failed:}" >&2
+        exit 1
+        ;;
+    esac
+    if [ ! -d "$run_dir" ]; then
+      echo "kotys-install: the installer already finished; see $LOG"
+      return 0
+    fi
+    sleep 0.25
+  done
+  if [ "$status" = started ]; then
+    echo "kotys-install: the installer is still running its checks; see $LOG"
+    return 0
+  fi
+  return 1
+}
+
+arm() {
+  local repo_root src uid label run_dir
+  repo_root="${KOTYS_REPO_ROOT:-$(cd "$(dirname "$SELF")/.." && pwd)}"
+  src="${1:-$repo_root/release/mac-arm64/${KOTYS_INSTALL_APP_NAME:-Kotys}.app}"
+  if [ ! -d "$src" ]; then
+    echo "kotys-install: no app bundle at $src (build one with bin/dist)" >&2
     exit 1
   fi
-fi
+  src="$(cd "$src" && pwd)"
+  uid="$(id -u)"
+  mkdir -p "$RUNS"
+  reap_finished_jobs "$uid"
 
-log "sleeping ${DELAY}s before install"
-sleep "$DELAY"
+  label="kotys-install.$(date +%s).$$"
+  run_dir="$RUNS/$label"
+  mkdir "$run_dir"
+  write_job "$label" "$run_dir" "$src"
+  if launchctl bootstrap "gui/$uid" "$run_dir/job.plist" 2>>"$OUT"; then
+    if await_acting_run "$run_dir"; then
+      exit 0
+    fi
+    case "$(launchctl print "gui/$uid/$label" 2>/dev/null || true)" in
+      *"state = running"*)
+        echo "kotys-install: the installer started but has not reported yet; see $LOG"
+        exit 0
+        ;;
+    esac
+    launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$run_dir"
 
-if [ "$DRY" = "1" ]; then
-  log "dry-run: would quit $DEST, replace with $SRC, relaunch"
-  exit 0
-fi
-
-printf '%s %s\n' "$KEY" "$(date +%s)" > "$STATE"
-
-# Stop the running app: graceful quit (with a timeout guard), then SIGKILL
-# by PID, verified via ps.
-osascript -e "tell application \"$APP_NAME\" to quit" >/dev/null 2>&1 &
-OSA_PID=$!
-for _ in 1 2 3 4 5; do
-  kill -0 "$OSA_PID" 2>/dev/null || break
-  sleep 1
-done
-kill "$OSA_PID" 2>/dev/null || true
-wait "$OSA_PID" 2>/dev/null || true
-
-for _ in $(seq 1 20); do
-  kotys_running() { [ -n "$(ps -axww -o pid=,args= | awk -v re="$KILL_RE" '$2 ~ re {print $1}')" ]; }
-  kotys_running || break
-  sleep 1
-done
-if kotys_running; then
-  log "app still running, sending SIGKILL by pid"
-  ps -axww -o pid=,args= | awk -v re="$KILL_RE" '$2 ~ re {print $1}' | xargs kill -9 2>/dev/null || true
-  sleep 2
-fi
-if kotys_running; then
-  log "error: could not stop the running app, aborting (nothing was replaced)"
+  # No launchd GUI domain (an SSH session, say), or the job never started:
+  # detach with a double fork + setsid instead. From here the acting run
+  # inherits this environment, so drop what the daemon injected into it.
+  unset KOTYS_HOST KOTYS_PORT
+  label="$label.fallback"
+  run_dir="$RUNS/$label"
+  mkdir "$run_dir"
+  perl -e '
+    use POSIX qw(setsid);
+    my $out = shift @ARGV;
+    exit 0 if fork;
+    setsid();
+    exit 0 if fork;
+    open STDIN, "<", "/dev/null";
+    open STDOUT, ">>", $out;
+    open STDERR, ">&", \*STDOUT;
+    exec { $ARGV[0] } @ARGV;
+  ' "$OUT" /bin/bash "$SELF" --acting "$src" "$label"
+  if await_acting_run "$run_dir"; then
+    exit 0
+  fi
+  rm -rf "$run_dir"
+  echo "kotys-install: the installer failed to start; see $OUT" >&2
   exit 1
-fi
-log "old app stopped"
+}
 
-if [ -d "$DEST" ]; then
-  mv "$DEST" "$OLD"
-  log "old bundle moved aside"
-else
-  log "note: no existing bundle at $DEST (first install)"
-fi
-if ! cp -R "$SRC" "$DEST"; then
-  log "error: copy failed, restoring old app"
-  if [ -d "$OLD" ]; then
-    mv "$OLD" "$DEST"
+# ------------------------------------------------------------------ acting run
+
+set_status() {
+  if [ -d "$RUN_DIR" ]; then
+    printf '%s\n' "$1" >"$RUN_DIR/status.tmp"
+    mv -f "$RUN_DIR/status.tmp" "$RUN_DIR/status"
+  fi
+}
+
+fail() {
+  log "error: $1"
+  if [ "$PHASE" = checks ]; then
+    set_status "failed: $1"
   fi
   exit 1
-fi
-log "new bundle installed at $DEST"
+}
 
-# Re-sign: TCC grants (Screen Recording etc.) key on the code identity; a
-# broken or ad-hoc-shifted signature makes every permission grant useless.
-log "re-sign: starting"
-if codesign --force --deep --sign "Kotys Dev" "$DEST" >>"$LOG" 2>&1; then
-  log "re-sign: ok"
-else
-  log "warning: re-sign failed (see codesign output above); permissions may need re-granting"
-fi
-
-# Re-register with LaunchServices so `open` resolves the new inode instead
-# of a stale cache entry for the replaced bundle.
-LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-if [ -x "$LSREG" ]; then
-  "$LSREG" -f "$DEST" >/dev/null 2>&1 || true
-  log "launch services re-registered"
-fi
-
-# Bring the app up: open, retry, then direct exec as a last resort.
-bring_up() {
-  log "relaunch: open attempt 1"
-  if ! open "$DEST" 2>>"$LOG"; then
-    log "relaunch: open exited nonzero"
-  fi
-  sleep 2
-  for _ in $(seq 1 15); do
-    if kotys_running; then
-      log "relaunch: app detected (attempt 1)"
+acquire_lock() {
+  local holder=""
+  for _ in $(seq 1 10); do
+    if mkdir "$LOCK" 2>/dev/null; then
+      echo $$ >"$LOCK/pid"
+      HAVE_LOCK=1
       return 0
     fi
-    sleep 1
-  done
-
-  log "relaunch: not up after attempt 1, retrying"
-  if ! open "$DEST" 2>>"$LOG"; then
-    log "relaunch: open(2) exited nonzero"
-  fi
-  sleep 5
-  for _ in $(seq 1 10); do
-    if kotys_running; then
-      log "relaunch: app detected (attempt 2)"
-      return 0
+    holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$holder" ]; then
+      case "$(ps -o args= -p "$holder" 2>/dev/null || true)" in
+        *kotys-install*) ;;
+        *)
+          log "removing stale lock of pid $holder"
+          rm -rf "$LOCK"
+          continue
+          ;;
+      esac
     fi
-    sleep 1
+    sleep 0.3
   done
+  fail "another install is running (pid ${holder:-unknown}); if none is, remove $LOCK"
+}
 
-  log "relaunch: still not up, re-register + open attempt 3"
-  "$LSREG" -f "$DEST" >/dev/null 2>&1 || true
-  if ! open "$DEST" 2>>"$LOG"; then
-    log "relaunch: open(3) exited nonzero"
+# Prints why a bundle cannot be installed; prints nothing when it can.
+bundle_problem() {
+  if [ ! -x "$1/Contents/MacOS/$APP_NAME" ]; then
+    echo "no executable Contents/MacOS/$APP_NAME"
+  elif [ ! -f "$1/Contents/Resources/app.asar" ]; then
+    echo "no Contents/Resources/app.asar"
+  elif ! codesign --verify --deep --strict "$1" >>"$OUT" 2>&1; then
+    echo "code signature does not verify (incomplete build, or modified after signing)"
+  else
+    return 0
   fi
-  sleep 5
-  for _ in $(seq 1 10); do
-    if kotys_running; then
-      log "relaunch: app detected (attempt 3)"
-      return 0
-    fi
-    sleep 1
-  done
+  return 1
+}
 
-  log "relaunch: still not up, exec fallback"
-  nohup "$DEST/Contents/MacOS/$APP_NAME" >>"$LOG" 2>&1 &
-  sleep 3
-  for _ in $(seq 1 10); do
-    if kotys_running; then
-      log "relaunch: app detected (exec fallback)"
-      return 0
+asar_key() {
+  /usr/bin/stat -f '%m:%z' "$1/Contents/Resources/app.asar"
+}
+
+check_loop_guard() {
+  local prev_key="" prev_ts="" now
+  if [ "$FORCE" = 1 ] || [ ! -f "$STATE" ]; then
+    return 0
+  fi
+  read -r prev_key prev_ts <"$STATE" || true
+  now="$(date +%s)"
+  if [ "$prev_key" = "$(asar_key "$SRC")" ] && is_uint "$prev_ts" &&
+    [ $((now - prev_ts)) -lt "$GUARD" ]; then
+    fail "loop guard: this build was installed $((now - prev_ts))s ago; refusing to reinstall it (KOTYS_INSTALL_FORCE=1 overrides)"
+  fi
+}
+
+# Main process and daemon both run the app executable; helpers live elsewhere.
+app_pids() {
+  ps -axww -o pid=,comm= |
+    awk -v exe="$EXE" '{ pid = $1; sub(/^ *[0-9]+ /, ""); if ($0 == exe) print pid }'
+}
+
+# The main process runs the executable without arguments; the daemon passes
+# its script path.
+main_running() {
+  ps -axww -o args= | awk -v exe="$EXE" '$0 == exe { found = 1 } END { exit !found }'
+}
+
+port_listening() {
+  [ -n "$(/usr/sbin/lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null)" ]
+}
+
+wait_app_gone() {
+  local deadline=$(($(date +%s) + $1))
+  while [ -n "$(app_pids)" ]; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
+# SIGTERM is a graceful quit for Electron (before-quit runs and stops the
+# daemon) and, unlike an Apple Event, needs no Automation permission.
+stop_app() {
+  local pids
+  pids="$(app_pids)"
+  if [ -z "$pids" ]; then
+    log "$APP_NAME is not running"
+    return 0
+  fi
+  log "quitting $APP_NAME (pids $(echo $pids))"
+  kill -TERM $pids 2>/dev/null || true
+  if wait_app_gone 20; then
+    log "$APP_NAME stopped"
+    return 0
+  fi
+  pids="$(app_pids)"
+  log "$APP_NAME still running 20s after SIGTERM, sending SIGKILL (pids $(echo $pids))"
+  kill -KILL $pids 2>/dev/null || true
+  if wait_app_gone 5; then
+    log "$APP_NAME stopped"
+    return 0
+  fi
+  return 1
+}
+
+# Up means the main process runs and the daemon port is listening, and both
+# still hold a moment later. The process alone proves little: when the daemon
+# fails to start, the app sits on an error dialog.
+wait_app_up() {
+  local deadline=$(($(date +%s) + $1))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if main_running && port_listening; then
+      sleep 3
+      if main_running && port_listening; then
+        return 0
+      fi
     fi
     sleep 1
   done
   return 1
 }
 
-if bring_up; then
-  log "install complete"
-  rm -rf "$OLD"
-  exit 0
-fi
+relaunch() {
+  local what="$1" attempt
+  for attempt in 1 2; do
+    log "relaunching $what (attempt $attempt)"
+    open "$DEST" >>"$OUT" 2>&1 || log "open exited nonzero"
+    if wait_app_up "$UP_TIMEOUT"; then
+      log "$what is up"
+      return 0
+    fi
+    log "$what is not up after ${UP_TIMEOUT}s"
+    stop_app || true
+    "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+  done
+  return 1
+}
 
-log "error: app failed to relaunch; old copy kept at $OLD (relaunch manually: open $DEST)"
-{
-  echo "--- relaunch failure diagnostics $(date '+%Y-%m-%d %H:%M:%S') ---"
-  ls -la "$DEST/Contents/MacOS" 2>&1
-  codesign -dv "$DEST" 2>&1 | head -5
-} >>"$LOG" 2>&1
-exit 1
+log_diagnostics() {
+  {
+    echo "--- relaunch diagnostics $(date '+%Y-%m-%d %H:%M:%S') ---"
+    echo "app processes:"
+    ps -axww -o pid=,args= | awk -v exe="$EXE" 'index($0, exe)'
+    echo "listening on port $PORT:"
+    /usr/sbin/lsof -nP -iTCP:"$PORT" -sTCP:LISTEN || true
+    codesign -dv "$DEST" || true
+  } >>"$LOG" 2>&1
+}
+
+# Puts the previous bundle back and brings it up. $1 is "wait" to verify the
+# relaunch, or "nowait" when a signal leaves no time for that.
+rollback() {
+  PHASE=rollback
+  log "rolling back to the previous version"
+  stop_app || log "rollback: could not stop the new version"
+  if [ -d "$OLD" ]; then
+    rm -rf "$DEST"
+    if ! mv "$OLD" "$DEST"; then
+      log "rollback: could not move $OLD back to $DEST; restore it by hand"
+      return 1
+    fi
+    "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+  elif [ -n "$SWAPPED" ]; then
+    log "rollback: no previous version to restore (first install); leaving $DEST in place"
+    return 1
+  fi
+  if [ "$1" = nowait ]; then
+    open "$DEST" >>"$OUT" 2>&1 || true
+    log "rollback: previous version restored and opened"
+  elif relaunch "the previous version"; then
+    log "rollback complete"
+  else
+    log "rollback: the previous version did not come up either; open $DEST by hand"
+  fi
+}
+
+on_signal() {
+  SIGNALED="$1"
+  log "received SIG$1 during phase '$PHASE'"
+  exit "$2"
+}
+
+on_exit() {
+  local code=$?
+  set +e
+  trap '' TERM HUP INT
+  case "$PHASE" in
+    checks)
+      # Give the arming run a moment to read the verdict.
+      if [ "$code" -ne 0 ]; then
+        sleep 1
+      fi
+      ;;
+    stopping)
+      # The previous bundle is untouched; bring it back if it went down.
+      if [ -z "$(app_pids)" ] && [ -d "$DEST" ]; then
+        open "$DEST" >>"$OUT" 2>&1
+        log "reopened the untouched previous version"
+      fi
+      ;;
+    swapping | relaunching)
+      if [ -n "$SIGNALED" ]; then
+        rollback nowait
+      else
+        rollback wait
+      fi
+      code=1
+      ;;
+  esac
+  if [ -n "$STAGE" ]; then
+    rm -rf "$STAGE"
+  fi
+  if [ -n "$HAVE_LOCK" ]; then
+    rm -rf "$LOCK"
+  fi
+  rm -rf "$RUN_DIR"
+  exit "$code"
+}
+
+act() {
+  local name problem
+  SRC="$1"
+  LABEL="$2"
+  RUN_DIR="$RUNS/$LABEL"
+  PHASE=checks
+  STAGE=""
+  OLD=""
+  HAVE_LOCK=""
+  SIGNALED=""
+  SWAPPED=""
+  mkdir -p "$RUNTIME_DIR"
+  trap on_exit EXIT
+  trap 'on_signal TERM 143' TERM
+  trap 'on_signal HUP 129' HUP
+  trap 'on_signal INT 130' INT
+  set_status started
+
+  DELAY="${KOTYS_INSTALL_DELAY:-30}"
+  DRY="${KOTYS_INSTALL_DRY:-0}"
+  GUARD="${KOTYS_INSTALL_GUARD:-600}"
+  FORCE="${KOTYS_INSTALL_FORCE:-0}"
+  APP_NAME="${KOTYS_INSTALL_APP_NAME:-Kotys}"
+  DEST_DIR="${KOTYS_INSTALL_DEST_DIR:-/Applications}"
+  PORT="${KOTYS_INSTALL_PORT:-${KOTYS_PORT:-3017}}"
+  UP_TIMEOUT="${KOTYS_INSTALL_UP_TIMEOUT:-45}"
+  # open(1) hands this environment to the relaunched app: the installer's
+  # own settings end here.
+  for name in $(compgen -e | grep '^KOTYS_INSTALL_' || true); do
+    unset "$name"
+  done
+
+  DEST="$DEST_DIR/$APP_NAME.app"
+  EXE="$DEST/Contents/MacOS/$APP_NAME"
+  STAGE="$DEST_DIR/.$APP_NAME-new.$$"
+  OLD="$DEST_DIR/.$APP_NAME-old.$$"
+
+  log "acting run: pid=$$ ppid=$PPID label=$LABEL src=$SRC delay=${DELAY}s dry=$DRY"
+  for name in DELAY GUARD PORT UP_TIMEOUT; do
+    is_uint "${!name}" || fail "KOTYS_INSTALL_$name must be a whole number, got '${!name}'"
+  done
+  acquire_lock
+  problem="$(bundle_problem "$SRC")" || fail "cannot install $SRC: $problem"
+  check_loop_guard
+
+  if [ "$DRY" = 1 ]; then
+    set_status "armed: dry run - checks passed for $SRC, nothing will change (log: $LOG)"
+  else
+    set_status "armed: $APP_NAME quits in ${DELAY}s, then installs $SRC and relaunches (log: $LOG)"
+  fi
+  PHASE=waiting
+  log "checks passed; waiting ${DELAY}s"
+  sleep "$DELAY" &
+  wait $!
+
+  if [ "$DRY" = 1 ]; then
+    log "dry run: would stage $SRC, quit $APP_NAME, swap it into $DEST and relaunch"
+    PHASE=done
+    exit 0
+  fi
+
+  PHASE=staging
+  rm -rf "$STAGE"
+  ditto "$SRC" "$STAGE" >>"$OUT" 2>&1 || fail "could not copy $SRC to $STAGE"
+  problem="$(bundle_problem "$STAGE")" || fail "the staged copy cannot be installed: $problem"
+  printf '%s %s\n' "$(asar_key "$STAGE")" "$(date +%s)" >"$STATE"
+  log "new bundle staged and verified"
+
+  PHASE=stopping
+  stop_app || fail "could not stop $APP_NAME; nothing was replaced"
+  if port_listening; then
+    log "warning: port $PORT is still in use; the relaunched app will attach to whatever holds it"
+  fi
+
+  PHASE=swapping
+  if [ -d "$DEST" ]; then
+    mv "$DEST" "$OLD"
+  fi
+  mv "$STAGE" "$DEST"
+  SWAPPED=1
+  "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+  log "new bundle swapped in"
+
+  PHASE=relaunching
+  if relaunch "the new version"; then
+    PHASE=done
+    rm -rf "$OLD"
+    log "install complete"
+    exit 0
+  fi
+  log_diagnostics
+  rollback wait
+  exit 1
+}
+
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+# Never wanted by anything this script starts (see the header).
+unset ELECTRON_RUN_AS_NODE
+
+if [ "${1:-}" = --acting ]; then
+  if [ $# -ne 3 ]; then
+    echo "usage: $0 --acting <src> <label>" >&2
+    exit 2
+  fi
+  act "$2" "$3"
+else
+  arm "$@"
+fi
