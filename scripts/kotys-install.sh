@@ -45,7 +45,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Runtime artifacts (log/state/lock/plist) live in ~/.kotys, never next to
 # the script: this file sits in a public repo checkout and must not
-# accumulate machine-specific state (privacy rule, memory #61).
+# accumulate machine-specific state.
 RUNTIME_DIR="${HOME}/.kotys"
 mkdir -p "$RUNTIME_DIR"
 LOG="$RUNTIME_DIR/kotys-install.log"
