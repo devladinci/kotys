@@ -55,6 +55,7 @@ type PendingAuth = {
   state: string;
   resolve: (code: string | null) => void;
   server: http.Server;
+  timeout: NodeJS.Timeout;
 };
 
 const pendingAuths = new Map<string, PendingAuth>();
@@ -146,11 +147,20 @@ export class KotysOAuthProvider implements OAuthClientProvider {
   }
 }
 
+export function pendingServerFor(serverName: string): http.Server | null {
+  return pendingAuths.get(serverName)?.server ?? null;
+}
+
 export function startCallbackServer(
   serverName: string,
   expectedState: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    const existing = pendingAuths.get(serverName);
+    if (existing) {
+      existing.server.close();
+      clearTimeout(existing.timeout);
+    }
     const httpServer = http.createServer((req, res) => {
       const url = new URL(
         req.url ?? "",
@@ -173,24 +183,31 @@ export function startCallbackServer(
       }
     });
     httpServer.on("error", (err) => reject(err));
+    const timeout = setTimeout(() => {
+      const pending = pendingAuths.get(serverName);
+      if (pending) {
+        pending.resolve(null);
+        pendingAuths.delete(serverName);
+        httpServer.close();
+      }
+    }, 300_000);
     httpServer.listen(OAUTH_CALLBACK_PORT, () => {
       pendingAuths.set(serverName, {
         codeVerifier: "",
         state: expectedState,
         resolve: (code) => resolve(code ?? ""),
         server: httpServer,
+        timeout,
       });
     });
-    setTimeout(() => {
-      const pending = pendingAuths.get(serverName);
-      if (pending) pending.resolve(null);
-    }, 300_000);
   });
 }
 
 export function stopCallbackServer(serverName: string): void {
   const pending = pendingAuths.get(serverName);
   if (pending) {
+    clearTimeout(pending.timeout);
     pendingAuths.delete(serverName);
+    pending.server.close();
   }
 }
