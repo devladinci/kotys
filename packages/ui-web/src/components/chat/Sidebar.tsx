@@ -1,9 +1,10 @@
-import { memo, useMemo, useState, type CSSProperties } from "react";
+import { memo, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { fmtChatTime } from "@kotys/contracts";
 import {
   BarChart2,
   ChevronDown,
   Edit3,
+  Loader2,
   Pin,
   Plus,
   Search,
@@ -12,12 +13,27 @@ import {
   X,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { useNow, type Chat } from "@kotys/core";
+import {
+  clearExpiredGenerating,
+  generatingChatIdsSnapshot,
+  subscribeGenerating,
+  useNow,
+  type Chat,
+} from "@kotys/core";
 import type { SearchResultRow } from "@kotys/contracts";
 import { renderSnippet } from "./widgets";
 
 /** Date labels ("5m ago", Today/Yesterday) tick on this clock. */
 const DATE_TICK_MS = 30_000;
+
+/** Ids of chats with a live stream, from the daemon's progress heartbeats. */
+function useGeneratingChatIds(): number[] {
+  return useSyncExternalStore(
+    subscribeGenerating,
+    generatingChatIdsSnapshot,
+    generatingChatIdsSnapshot,
+  );
+}
 
 interface IProps {
   chats: Chat[];
@@ -106,6 +122,10 @@ function SidebarBase({
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isAnalyticsRoute = location.pathname.startsWith("/analytics");
   const now = useNow(DATE_TICK_MS);
+  // The 30s clock doubles as the generating-registry sweeper: heartbeats keep
+  // entries alive, a stalled stream ages out at the next sweep.
+  clearExpiredGenerating();
+  const generatingChatIds = useGeneratingChatIds();
   // Rename editing lives here, not in App: the input value and the "which
   // row is being edited" pointer change together on every keystroke.
   const [editingTitle, setEditingTitle] = useState<number | null>(null);
@@ -150,6 +170,7 @@ function SidebarBase({
   const renderChatItem = (chat: Chat) => {
     const isActive = activeChatId === chat.id;
     const isPinned = pinnedChatIds.has(chat.id);
+    const isGenerating = generatingChatIds.includes(chat.id);
     const [primaryTopic, ...otherTopics] = chat.topics;
     const isEditing = editingTitle === chat.id;
     const tooltip = [
@@ -246,6 +267,13 @@ function SidebarBase({
             <span className="shrink-0">
               {fmtChatTime(chat.updated_at, now)}
             </span>
+            {isGenerating && (
+              <Loader2
+                size={11}
+                className="shrink-0 animate-spin text-accent"
+                aria-label="Generating"
+              />
+            )}
           </div>
         </div>
 

@@ -1,6 +1,10 @@
 import { getSocket } from "../shared/clients.js";
 import { useAppStore } from "../shared/useAppStore.js";
 import { debounceSync } from "./useMessages.js";
+import {
+  markGenerating,
+  markGeneratingDone,
+} from "./generating.js";
 
 let subscribed = false;
 
@@ -32,6 +36,16 @@ export function subscribeChatSync(): void {
       !useAppStore.getState().knownChatIds.has(msg.chatId)
     ) {
       bump();
+    }
+    // Generating indicator: the daemon pulses `messages:progress` every second
+    // per live stream, so heartbeats cover streams started on any client,
+    // including through long silent tool calls. done/error end the pulse and
+    // clear instantly; a lost heartbeat ages the entry out (generating TTL).
+    if (msg.type === "messages:progress") {
+      markGenerating(msg.payload.chatId, Date.now());
+    }
+    if (msg.type === "chat:done" || msg.type === "chat:error") {
+      if (typeof msg.chatId === "number") markGeneratingDone(msg.chatId);
     }
   });
   // Broadcasts emitted while disconnected are lost; refetch the list when the
