@@ -10,11 +10,6 @@ import {
 export type { QueuedMessage } from "./queueStore.js";
 import type { QueuedMessage } from "./queueStore.js";
 
-/**
- * Per-chat send queue backed by the module-level queueStore: messages typed
- * while this chat's stream runs park here and drain FIFO on idle. State is
- * keyed by chatId, so it survives chat switches and view unmounts.
- */
 export function useMessageQueue(activeChatId: number | null) {
   const queuedMessages = useSyncExternalStore(
     subscribeQueued,

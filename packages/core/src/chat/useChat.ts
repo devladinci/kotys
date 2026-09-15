@@ -69,17 +69,12 @@ export function useChat(args: UseChatArgs) {
   const permissionMode = useAppStore((s) => s.permissionMode);
   const rpc = getRpc();
 
-  // Per-chat streaming state lives in the module-level streamState registry,
-  // not in this hook: two chats can stream at once, and the state must
-  // survive navigating to /settings (which unmounts this hook). The hook
-  // subscribes only to its own chat's slice.
   const busy = useSyncExternalStore(
     subscribeStreaming,
     () => activeChatId !== null && isChatBusy(activeChatId),
     () => activeChatId !== null && isChatBusy(activeChatId),
   );
-  // Registry read: the sentinel -1 marks "busy, assistant row not inserted
-  // yet" — the UI must treat it as no stream (pending indicator, not stop).
+  // Sentinel -1 = busy before the assistant row exists; UI shows pending, not stop.
   const rawStreamingId = useSyncExternalStore(
     subscribeStreaming,
     () => (activeChatId === null ? null : getStreamingId(activeChatId)),
@@ -327,9 +322,7 @@ export function useChat(args: UseChatArgs) {
       );
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
-      // Resolve the chat from the request, not the open view: in parallel
-      // streaming the done frame of a background chat must not clear the
-      // state of the chat the user is reading.
+      // A background chat's done frame must not clear the open chat's state.
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
       if (doneChatId !== null) {
         finishStreamEntry(doneChatId);
@@ -410,10 +403,6 @@ export function useChat(args: UseChatArgs) {
         }
       }
 
-      // While this chat's stream is running, park the message; it drains FIFO
-      // on idle. Other chats are unaffected — their streams are their own.
-      // The registry check covers a remount that landed before adoption
-      // restored the busy state — the daemon may still be streaming.
       if (
         activeChatId !== null &&
         (isChatBusy(activeChatId) || candidateLiveStream(activeChatId) !== null)
@@ -421,10 +410,8 @@ export function useChat(args: UseChatArgs) {
         enqueue(content, images);
         return { needsSettings: false as const };
       }
-      // Claimed before the first await: the drain effect re-runs on the
-      // setQueuedMessages render and must not double-fire while this send
-      // is still awaiting its RPCs. The sentinel -1 marks "busy before the
-      // assistant row exists"; startStreamEntry swaps in the real id below.
+      // Claimed before the first await: the drain effect must not re-fire
+      // while this send awaits its RPCs. -1 = busy before the assistant row.
       if (activeChatId !== null) startStreamEntry(activeChatId, -1);
 
       let currentChatId = activeChatId;
@@ -473,8 +460,6 @@ export function useChat(args: UseChatArgs) {
           "",
         );
         if (newAssistantId === null) {
-          // Chat deleted mid-send: unbusy only this chat; other chats'
-          // streams must keep their echo guard.
           clearStreamActivity(currentChatId);
           finishStreamEntry(currentChatId);
           return { needsSettings: false as const };
@@ -575,7 +560,6 @@ export function useChat(args: UseChatArgs) {
     if (streamingId === null || activeChatId === null) return;
     abortStream(streamingId);
     releaseLiveStream(streamingId);
-    // If the socket died, chat:done never arrives — clear the guard here too.
     clearStreamActivity(activeChatId);
     finishStreamEntry(activeChatId);
   }, [activeChatId, streamingId, abortStream]);

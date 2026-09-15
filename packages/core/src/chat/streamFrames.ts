@@ -9,13 +9,6 @@ import type { Message } from "./types.js";
  */
 export type FrameDecision = "own" | "visible" | "ignore";
 
-/**
- * `own` is decided by the live-stream registry (requestId → chatId claims),
- * not by a single active streamingId: several chats can stream in parallel
- * and frames for a background chat must keep flowing to its buffers. The
- * claim check must not depend on which chat is open — a stream this client
- * started is its own even when the user is reading another chat.
- */
 export function classifyFrame(
   requestId: number,
   frameChatId: number | undefined,

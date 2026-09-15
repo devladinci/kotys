@@ -34,10 +34,6 @@ export function subscribeChatSync(): void {
     ) {
       bump();
     }
-    // Generating indicator: the daemon pulses `messages:progress` every second
-    // per live stream, so heartbeats cover streams started on any client,
-    // including through long silent tool calls. done/error end the pulse and
-    // clear instantly; a lost heartbeat ages the entry out (generating TTL).
     if (msg.type === "messages:progress") {
       markGenerating(msg.payload.chatId, Date.now());
     }

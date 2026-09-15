@@ -26,10 +26,7 @@ export function declareStreamActivity(chatId: number | null): void {
   state.lastClearedAt = 0;
 }
 
-/**
- * One chat's stream ended while others may still be running: guard only that
- * chat with the in-flight-echo grace period instead of releasing every chat.
- */
+// Releases one chat's guard; parallel streams keep theirs.
 export function clearStreamActivity(chatId: number): void {
   if (!state.lastActivityAt.has(chatId)) return;
   state.lastActivityAt.delete(chatId);

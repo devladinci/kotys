@@ -6,12 +6,6 @@ import { clearExpiredGenerating } from "../chat/generating.js";
  * Today/Yesterday buckets) otherwise freezes at the render that first
  * computed it — nothing re-renders just because time passed. Both platforms
  * use this one clock so sidebar dates can never drift apart.
- *
- * The hook owns the sweep of the generating registry: callers used to sweep
- * in their render body, which mutated store state during render. The tick
- * effect runs after commit, so expired entries drop post-render and the
- * follow-up emit re-renders the lists once — without touching state while
- * rendering.
  */
 export function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());

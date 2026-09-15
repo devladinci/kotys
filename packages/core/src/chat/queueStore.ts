@@ -1,8 +1,7 @@
 /**
  * Module-level per-chat send queue. Messages typed while a chat's stream is
  * running park here and drain FIFO once that chat goes idle. Keyed by chatId
- * so a queued message survives switching to another chat (the old
- * component-local state dropped it on chat switch), and survives view
+ * so a queued message survives switching to another chat, and survives view
  * unmounts (the settings route). Reactive via useSyncExternalStore.
  */
 
@@ -21,7 +20,6 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
-/** Park a message for `chatId`. */
 export function enqueueQueued(
   chatId: number,
   text: string,
@@ -32,7 +30,6 @@ export function enqueueQueued(
   emit();
 }
 
-/** Remove one queued message (user dismissed it). */
 export function dequeueQueued(chatId: number, id: number): void {
   const queue = queues.get(chatId);
   if (!queue) return;
@@ -43,10 +40,7 @@ export function dequeueQueued(chatId: number, id: number): void {
   emit();
 }
 
-/**
- * Pop the head of `chatId`'s queue: keeps `rest` only if the head is still
- * `next.id` (guards a dequeue that raced the drain).
- */
+// The head check guards a dequeue that raced the drain.
 export function drainQueued(
   chatId: number,
   next: QueuedMessage,
@@ -59,7 +53,6 @@ export function drainQueued(
   emit();
 }
 
-/** Current queue for `chatId` — stable reference between mutations. */
 export function getQueued(chatId: number): QueuedMessage[] {
   return queues.get(chatId) ?? EMPTY;
 }

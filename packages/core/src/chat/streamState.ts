@@ -1,12 +1,3 @@
-/**
- * Module-level registry of per-chat stream state. Chat streaming used to live
- * in useChat's useState, which made the whole app single-stream: one busy flag
- * and one streamingId were shared by every chat, so sending in chat B while
- * chat A generated parked B's message in a queue. State here is keyed by
- * chatId, survives view unmounts (the settings route), and is reactive via
- * subscribeStreaming — consumers read it with useSyncExternalStore.
- */
-
 export interface StreamStateSnapshot {
   streamingChatIds: number[];
 }
@@ -56,23 +47,17 @@ function mutate(chatId: number, patch: Partial<Entry>): void {
   emit();
 }
 
-/** Claim a stream for `chatId`: busy + streaming in one atomic call. */
 export function startStreamEntry(chatId: number, streamingId: number): void {
   mutate(chatId, { busy: true, streamingId });
 }
 
-/** Stream ended (done/error/abort): drop the entry entirely. */
 export function finishStreamEntry(chatId: number): void {
   if (!entries.has(chatId)) return;
   entries.delete(chatId);
   emit();
 }
 
-/**
- * The synchronous pre-await phase of a send ended without a stream (no API
- * key, deleted chat, insert failure): unbusy the chat but keep any live
- * streaming entry the daemon still owns.
- */
+// Unbusy without dropping a live streaming entry the daemon still owns.
 export function clearChatBusy(chatId: number): void {
   const entry = entries.get(chatId);
   if (!entry) return;
