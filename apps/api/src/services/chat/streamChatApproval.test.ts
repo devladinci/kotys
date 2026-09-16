@@ -476,3 +476,100 @@ describe("streamChat request shaping", () => {
     expect(result.evalTokens).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("streamChat stop", () => {
+  // An aborted request fails the pending read with the signal's reason, as
+  // undici does.
+  const sse =
+    (deltas: object[], end: "done" | "open" | Error) =>
+    (signal: AbortSignal | null | undefined) => {
+      const frames = deltas.map(
+        (delta) => `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`,
+      );
+      if (end === "done") frames.push("data: [DONE]\n\n");
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener(
+            "abort",
+            () => controller.error(signal.reason),
+            { once: true },
+          );
+        },
+        pull(controller) {
+          const frame = frames.shift();
+          if (frame) controller.enqueue(new TextEncoder().encode(frame));
+          else if (end === "done") controller.close();
+          else if (end instanceof Error) controller.error(end);
+        },
+      });
+    };
+
+  const stubOmlx = (replies: ReturnType<typeof sse>[]) => {
+    const fetchMock = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const reply = replies.shift();
+      if (!reply) throw new Error("unexpected request");
+      return new Response(reply(init?.signal), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  const omlxReq = (): StreamRequest => ({ ...baseReq(), provider: "omlx" });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("a stop mid-reply ends the turn with what streamed, not an error", async () => {
+    await fs.mkdir(HOME, { recursive: true });
+    const fetchMock = stubOmlx([
+      sse(
+        [
+          { content: "Checking." },
+          {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call_1",
+                function: { name: "list", arguments: '{"path":"."}' },
+              },
+            ],
+          },
+        ],
+        "done",
+      ),
+      sse([{ content: "Partial ans" }], "open"),
+    ]);
+    const streamed: string[] = [];
+    const controller = new AbortController();
+    const pending = streamChat(
+      omlxReq(),
+      {
+        onChunk: (c) => streamed.push(c.contentDelta),
+        onToolActivity: () => undefined,
+      },
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(streamed.join("")).toContain("Partial ans"));
+    controller.abort();
+
+    const result = await pending;
+    expect(result.content).toBe("Checking.\n\nPartial ans");
+    expect(result.toolCalls.map((t) => [t.tool, t.status])).toEqual([
+      ["list", "done"],
+    ]);
+    // No retry and no forced wrap-up round after a stop.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a provider failure mid-reply still fails the turn", async () => {
+    stubOmlx([sse([{ content: "Partial ans" }], new TypeError("terminated"))]);
+    await expect(
+      streamChat(omlxReq(), cbs(), new AbortController().signal),
+    ).rejects.toThrow("terminated");
+  });
+});

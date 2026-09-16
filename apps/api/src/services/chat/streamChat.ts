@@ -361,6 +361,10 @@ export async function streamChat(
         );
       }
     }
+  } catch (err) {
+    // A stop rejects the in-flight request (fetch throws AbortError): that is
+    // the turn ending as asked, not a failure.
+    if (!aborted) throw err;
   } finally {
     signal.removeEventListener("abort", onSignalAbort);
     stopTick();
