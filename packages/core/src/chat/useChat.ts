@@ -577,9 +577,9 @@ export function useChat(args: UseChatArgs) {
   const steer = useCallback(
     async (queuedId: number) => {
       if (activeChatId === null) return;
-      // Turn already over (or still pending): leave it queued — the idle
-      // drain sends it as a normal message.
-      if (streamingId === null || isChatBusy(activeChatId)) return;
+      // No live turn (streamingId is null while idle, -1 while the assistant
+      // row is still pending): leave it queued — the idle drain sends it.
+      if (streamingId === null) return;
       const item = queuedMessages.find((q) => q.id === queuedId);
       if (!item) return;
       const userMessageId = await insertMessage(
