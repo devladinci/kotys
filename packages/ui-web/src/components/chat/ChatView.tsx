@@ -448,9 +448,9 @@ export default function ChatView({
           <UserInputComposer />
           {!inputPending && (
             <Composer
-              needsApiKey={chatModel.source === "cloud" && !apiKeyPresent}
+              isApiKeyMissing={chatModel.source === "cloud" && !apiKeyPresent}
               modelName={chatModel.name}
-              visionCapable={visionCapable}
+              isVisionCapable={visionCapable}
               hasMessages={messages.length > 0}
               isLoading={isLoading}
               streamingId={streamingId}

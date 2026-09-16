@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  confirmSteer,
   dequeueQueued,
   drainQueued,
   enqueueQueued,
   getQueued,
+  markSteering,
   resetQueued,
   subscribeQueued,
 } from "./queueStore.js";
@@ -12,6 +14,7 @@ describe("queueStore", () => {
   beforeEach(() => {
     resetQueued();
   });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -58,5 +61,41 @@ describe("queueStore", () => {
     unsubscribe();
     enqueueQueued(1, "a", []);
     expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a steered message queued until its receipt arrives", () => {
+    enqueueQueued(1, "a", []);
+    enqueueQueued(1, "b", []);
+    const [a] = getQueued(1);
+    markSteering(1, a.id, { requestId: 500, key: "k1" });
+
+    expect(getQueued(1).map((q) => [q.text, q.steer?.key])).toEqual([
+      ["a", "k1"],
+      ["b", undefined],
+    ]);
+
+    confirmSteer("k1");
+    expect(getQueued(1).map((q) => q.text)).toEqual(["b"]);
+  });
+
+  it("finds a receipt's message in whichever chat queued it", () => {
+    enqueueQueued(1, "a", []);
+    enqueueQueued(2, "b", []);
+    markSteering(2, getQueued(2)[0].id, { requestId: 600, key: "k2" });
+    confirmSteer("unknown");
+    confirmSteer("k2");
+    expect(getQueued(1).map((q) => q.text)).toEqual(["a"]);
+    expect(getQueued(2)).toEqual([]);
+  });
+
+  it("ignores a mark for a message that already left the queue", () => {
+    enqueueQueued(1, "a", []);
+    const listener = vi.fn();
+    const unsubscribe = subscribeQueued(listener);
+    markSteering(1, 12345, { requestId: 500, key: "k1" });
+    markSteering(3, 1, { requestId: 500, key: "k1" });
+    unsubscribe();
+    expect(listener).not.toHaveBeenCalled();
+    expect(getQueued(1)[0].steer).toBeUndefined();
   });
 });

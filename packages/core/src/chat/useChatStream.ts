@@ -13,7 +13,6 @@ import { classifyFrame } from "./streamFrames.js";
 const stripDataUrl = (s: string) => s.replace(/^data:[^;,]+;base64,/, "");
 
 export type StreamFrameHandlers = {
-  /** This client's own stream — full lifecycle handling. */
   onOwnChunk: (
     requestId: number,
     thinkingDelta: string,
@@ -26,7 +25,6 @@ export type StreamFrameHandlers = {
   ) => void;
   onOwnDone: (requestId: number, result: ChatStreamResult) => void;
   onOwnError: (requestId: number, error: string) => void;
-  /** Someone else's stream into the chat this client is viewing. */
   onForeignChunk: (
     requestId: number,
     thinkingDelta: string,
@@ -41,12 +39,6 @@ export type StreamFrameHandlers = {
   onForeignError: () => void;
 };
 
-/**
- * Sends `chat:stream` over the socket and routes the chunk/tool/done/error
- * frames back to the caller. Resume is handled by `KotysSocket` — it tracks
- * `lastSeq` per request and re-requests on reconnect, so the caller sees a
- * continuous chunk sequence even across a dropped socket.
- */
 export function useChatStream(
   handlers: StreamFrameHandlers,
   activeChatId: number | null,
@@ -54,10 +46,9 @@ export function useChatStream(
   const socket = useSocket();
   const handlersRef = useRef(handlers);
   const activeChatIdRef = useRef(activeChatId);
+
+  // Latest-ref sync, not useEffectEvent: React Native does not guarantee it.
   useEffect(() => {
-    // The subscription below reads the refs only from socket callbacks, which
-    // fire after commit — so this keeps them current without touching refs
-    // during render.
     handlersRef.current = handlers;
     activeChatIdRef.current = activeChatId;
   });
@@ -82,29 +73,24 @@ export function useChatStream(
       if (decision === "ignore") return;
       const own = decision === "own";
       if (msg.type === "chat:chunk") {
-        if (own)
-          cb.onOwnChunk(
-            requestId,
-            msg.payload.thinkingDelta,
-            msg.payload.contentDelta,
-          );
-        else
-          cb.onForeignChunk(
-            requestId,
-            msg.payload.thinkingDelta,
-            msg.payload.contentDelta,
-          );
-      } else if (msg.type === "chat:tool") {
+        const { thinkingDelta, contentDelta } = msg.payload;
+        if (own) cb.onOwnChunk(requestId, thinkingDelta, contentDelta);
+        else cb.onForeignChunk(requestId, thinkingDelta, contentDelta);
+        return;
+      }
+      if (msg.type === "chat:tool") {
         const { requestId: id, index, ...activity } = msg.payload;
         if (own) cb.onOwnToolActivity(id, index, activity as ToolActivity);
         else cb.onForeignToolActivity(id, index, activity as ToolActivity);
-      } else if (msg.type === "chat:done") {
+        return;
+      }
+      if (msg.type === "chat:done") {
         if (own) cb.onOwnDone(requestId, msg.payload.result);
         else cb.onForeignDone(requestId, msg.payload.result);
-      } else if (msg.type === "chat:error") {
-        if (own) cb.onOwnError(requestId, msg.payload.error);
-        else cb.onForeignError();
+        return;
       }
+      if (own) cb.onOwnError(requestId, msg.payload.error);
+      else cb.onForeignError();
     });
   }, [socket]);
 
@@ -152,11 +138,13 @@ export function useChatStream(
     [socket],
   );
 
-  /** Steering: inject a user text into a running turn at the next tool-round boundary. */
+  // False when the socket is down: appends are never parked for replay.
   const appendStream = useCallback(
-    (requestId: number, content: string) => {
-      socket.send({ type: "chat:append", payload: { requestId, content } });
-    },
+    (requestId: number, content: string, id: string) =>
+      socket.send({
+        type: "chat:append",
+        payload: { requestId, content, id },
+      }),
     [socket],
   );
 

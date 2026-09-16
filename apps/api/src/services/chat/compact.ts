@@ -11,11 +11,9 @@ import {
   imagesOf,
   setChatSummary,
 } from "@kotys/db";
-import {
-  resolveConnector,
-  resolveOllamaConnector,
-  type ConnectorChatMessage,
-} from "../llm/registry.js";
+import { resolveConnector, resolveOllamaConnector } from "../llm/registry.js";
+import type { ConnectorChatMessage } from "../llm/registry.js";
+import { parseTrace, splitReplyAtSteers } from "./steers.js";
 
 const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
 <template>
@@ -48,7 +46,6 @@ const buildSummaryPrompt = (history: string, previousSummary?: string) =>
     history,
   ].join("\n\n");
 
-/** Tool output under each assistant turn, capped so one huge result cannot eat the summary prompt. */
 const TOOL_SUMMARY_CHARS = 4_000;
 
 const summarizeToolResults = (messageId: number): string => {
@@ -67,6 +64,23 @@ type Candidate = {
   role: string;
   content: string;
   images: string | null;
+  tool_calls?: string | null;
+};
+
+export const withSteerLines = (r: Candidate): string => {
+  const parts = splitReplyAtSteers(r.content, parseTrace(r.tool_calls));
+  if (parts.length === 1) return r.content;
+  return (
+    parts
+      .map((p, i) => {
+        const text = p.text.trim();
+        if (p.kind === "steer") return `[User]: ${text}`;
+        return i === 0 || !text ? text : `[Assistant]: ${text}`;
+      })
+      // Keep the first part even when empty: the caller prefixes its label.
+      .filter((line, i) => i === 0 || line)
+      .join("\n\n")
+  );
 };
 
 export function selectSummaryHead(
@@ -109,9 +123,8 @@ export async function compactChat(
       const label = r.role === "user" ? "User" : "Assistant";
       const imagePrefix = imagesOf(r)?.length ? "[image attached] " : "";
       const toolText = summarizeToolResults(r.id);
-      const body = toolText
-        ? `${r.content}\n\nTool output:\n${toolText}`
-        : r.content;
+      const text = r.role === "assistant" ? withSteerLines(r) : r.content;
+      const body = toolText ? `${text}\n\nTool output:\n${toolText}` : text;
       return `[${label}]: ${imagePrefix}${body}`;
     })
     .join("\n\n");

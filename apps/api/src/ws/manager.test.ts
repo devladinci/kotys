@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * The WS manager is the sync boundary between devices: it fans stream frames
- * out to every client, persists stream results server-side (a locked phone
- * must not lose the reply), answers resume with a DB fallback when the replay
- * buffer is gone, and replies to heartbeats. These tests pin all of that.
- */
-
 const h = vi.hoisted(() => ({
   streamChat: vi.fn(),
   updateMessage: vi.fn(),
@@ -48,7 +41,6 @@ type FakeWs = {
   };
 };
 
-/** onOpen assigns its own uuid; tests send messages under that id. */
 const connect = (): FakeWs => {
   const fake: FakeWs = {
     id: "",
@@ -160,7 +152,6 @@ describe("ws manager: fan-out", () => {
     h.getChatIdForMessage.mockReturnValue(5);
     h.streamChat.mockRejectedValue(new Error("boom"));
     await send(fake, streamReq(9, 5));
-    // No result on the error path: the token counts must stay NULL, not 0.
     expect(h.updateMessage).toHaveBeenCalledWith(9, {
       content: "partial answer\n\n**Error:** Error: boom",
     });
@@ -179,7 +170,6 @@ describe("ws manager: fan-out", () => {
       toolCalls: [],
     });
     await send(fake, streamReq(9, 5));
-    // 0 means "no measurement" — writing it would fake a measured anchor.
     expect(h.updateMessage).toHaveBeenCalledWith(9, {
       content: "unmeasured",
     });
@@ -198,10 +188,34 @@ describe("ws manager: chat:append", () => {
     const pending = send(a, streamReq(9, 5));
     await send(a, {
       type: "chat:append",
-      payload: { requestId: 9, content: "stop, do X instead" },
+      payload: { requestId: 9, content: "stop, do X instead", id: "k1" },
     });
-    // The loop drain takes it once, in order, then the mailbox is empty.
-    expect(drainAppends(9)).toEqual(["stop, do X instead"]);
+    await send(a, {
+      type: "chat:append",
+      payload: { requestId: 9, content: "and Y" },
+    });
+    expect(drainAppends(9)).toEqual([
+      { content: "stop, do X instead", id: "k1" },
+      { content: "and Y" },
+    ]);
+    expect(drainAppends(9)).toEqual([]);
+    settle(result("ok"));
+    await pending;
+  });
+
+  it("drops a blank append instead of feeding an empty turn", async () => {
+    const a = connect();
+    let settle: (r: ChatStreamResult) => void = () => {};
+    h.streamChat.mockReturnValue(
+      new Promise<ChatStreamResult>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const pending = send(a, streamReq(9, 5));
+    await send(a, {
+      type: "chat:append",
+      payload: { requestId: 9, content: "   ", id: "k1" },
+    });
     expect(drainAppends(9)).toEqual([]);
     settle(result("ok"));
     await pending;
@@ -241,7 +255,6 @@ describe("ws manager: chat:resume", () => {
       },
     );
     await send(a, streamReq(9, 5));
-    // A second client resumes from seq 0 and gets the whole buffered stream.
     const b = connect();
     await send(b, {
       type: "chat:resume",
@@ -254,7 +267,6 @@ describe("ws manager: chat:resume", () => {
 
   it("falls back to a DB-backed chat:done when the buffer is gone", async () => {
     const fake = connect();
-    // A requestId the server has no replay buffer for (expired or restarted).
     h.getMessage.mockReturnValue({
       id: 9,
       role: "assistant",
@@ -287,8 +299,6 @@ describe("ws manager: chat:resume", () => {
 
   it("does not end a still-live stream with a synthesized done", async () => {
     const a = connect();
-    // A stream that is still running: no frames past what the client has
-    // already seen, but the request is alive and must stay open.
     let settle: (r: ChatStreamResult) => void = () => {};
     h.streamChat.mockReturnValue(
       new Promise<ChatStreamResult>((resolve) => {

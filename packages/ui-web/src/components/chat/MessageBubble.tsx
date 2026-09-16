@@ -1,20 +1,22 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
-import { isErrorTurn } from "@kotys/contracts";
-import { SkillMessage, splitContentByWidgets } from "@kotys/core";
+import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
+import { splitContentByWidgets } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
+import { MessageImages } from "./MessageImages";
 import {
   MarkdownBody,
   StreamingProvider,
   ToolCallTimeline,
   WidgetFor,
 } from "./widgets";
+import { UserBubble } from "./widgets/UserBubble";
+import { UserMessageBody } from "./widgets/UserMessageBody";
 
 interface IProps {
   message: Message;
-  /** True when this message opens a new turn — gets extra top separation. */
-  startsTurn?: boolean;
+  isTurnStart?: boolean;
   isStreamingThis: boolean;
   isHighlighted: boolean;
   onImageClick: (src: string) => void;
@@ -27,13 +29,19 @@ interface IProps {
   isLoading?: boolean;
 }
 
-/** B64 image payloads may arrive raw; the <img> source needs a data-URI. */
-const imageSrc = (src: string): string =>
-  src.startsWith("data:") ? src : `data:image/png;base64,${src}`;
+const TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+};
+
+const ACTION_BUTTON_CLASS =
+  "p-1 rounded text-text-muted hover:text-text transition";
+
+const focusOnMount = (node: HTMLTextAreaElement | null) => node?.focus();
 
 function MessageBubbleBase({
   message,
-  startsTurn = false,
+  isTurnStart = false,
   isStreamingThis,
   isHighlighted,
   onImageClick,
@@ -44,72 +52,63 @@ function MessageBubbleBase({
   const isUser = message.role === "user";
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.content);
-  const editRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editing) editRef.current?.focus();
-  }, [editing]);
+  const [draft, setDraft] = useState("");
 
   const isEmptyStreaming =
     isStreamingThis &&
     !message.content &&
     !message.thinking &&
     !message.toolCalls?.length;
-
-  // Failed turns carry the shared **Error:** marker; retry wipes the row,
-  // which regenerate now does.
+  const isStillThinking = isStreamingThis && !message.content;
+  const timelineCalls = (message.toolCalls ?? []).filter(
+    (tc): tc is ToolActivity => !!tc && !isSteerActivity(tc),
+  );
   const isFailed = !isUser && !isStreamingThis && isErrorTurn(message.content);
+  const canRegenerate = !!onRegenerate && !isLoading;
+  const createdAt = message.createdAt
+    ? new Date(message.createdAt * 1000)
+    : undefined;
+  const time = createdAt?.toLocaleTimeString(undefined, TIME_FORMAT);
+  const fullTime = createdAt?.toLocaleString();
 
-  const startEdit = () => {
+  const handleEditStart = () => {
     setDraft(message.content);
     setEditing(true);
   };
 
-  const commitEdit = () => {
+  const handleEditCommit = () => {
     setEditing(false);
-    if (draft.trim() && draft !== message.content) {
-      onEditAndResend?.(message.id, draft, message.images);
-    }
+    if (!draft.trim() || draft === message.content) return;
+    onEditAndResend?.(message.id, draft, message.images);
   };
 
-  const cancelEdit = () => {
-    setEditing(false);
-    setDraft(message.content);
-  };
+  const handleEditCancel = () => setEditing(false);
 
   const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      commitEdit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      cancelEdit();
+      handleEditCommit();
+      return;
     }
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    handleEditCancel();
   };
 
-  // createdAt is unixepoch seconds; in-flight optimistic messages lack it.
-  const time = message.createdAt
-    ? new Date(message.createdAt * 1000).toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : undefined;
-  const fullTime = message.createdAt
-    ? new Date(message.createdAt * 1000).toLocaleString()
-    : undefined;
+  const handleDraftChange = (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+    setDraft(e.target.value);
+
+  const handleThinkingToggle = () => setThinkingOpen((open) => !open);
+
+  const handleRegenerate = () => onRegenerate?.(message.id);
 
   return (
     <div
       data-message-id={message.id}
-      className={`group relative ${startsTurn ? "pt-5" : "pt-1.5"} pb-1.5 px-6 ${
+      className={`group relative ${isTurnStart ? "pt-5" : "pt-1.5"} pb-1.5 px-6 ${
         isHighlighted ? "ring-2 ring-inset ring-accent/60" : ""
       }`}
     >
-      {/* Mobile-parity layout: only user messages are bubbles (right-aligned,
-          inside the content column); assistant replies render unboxed on the
-          background. Role is carried by shape + alignment, not by a full-width
-          row band. */}
       <div className="max-w-3xl mx-auto relative">
         {!isStreamingThis && message.content && (
           <span className="absolute right-0 top-0 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition flex items-center gap-0.5 rounded bg-surface/90 px-1 py-0.5">
@@ -124,18 +123,18 @@ function MessageBubbleBase({
             <CopyTextButton text={message.content} />
             {isUser && onEditAndResend && !isLoading && (
               <button
-                onClick={startEdit}
-                className="p-1 rounded text-text-muted hover:text-text transition"
+                onClick={handleEditStart}
+                className={ACTION_BUTTON_CLASS}
                 title="Edit & resend"
                 aria-label="Edit and resend"
               >
                 <Pencil size={13} />
               </button>
             )}
-            {!isUser && onRegenerate && !isLoading && (
+            {!isUser && canRegenerate && (
               <button
-                onClick={() => onRegenerate(message.id)}
-                className="p-1 rounded text-text-muted hover:text-text transition"
+                onClick={handleRegenerate}
+                className={ACTION_BUTTON_CLASS}
                 title="Regenerate"
                 aria-label="Regenerate response"
               >
@@ -145,109 +144,67 @@ function MessageBubbleBase({
           </span>
         )}
         <div className="max-w-3xl mx-auto">
-          {isUser && !editing ? (
-            /* Bubble (mobile parity): right-aligned, rounded, tinted, ~85%
-               max width. The bubble shape carries the role — no label row. */
+          {isUser && !editing && (
             <div className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-surface-user px-3 py-2">
-                {message.images && message.images.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {message.images.map((src) => {
-                      const url = imageSrc(src);
-                      return (
-                        <button
-                          key={url}
-                          onClick={() => onImageClick(url)}
-                          aria-label="Open image"
-                          className="max-h-48 max-w-60 rounded-lg border border-border cursor-zoom-in object-contain p-0 bg-transparent"
-                        >
-                          <img
-                            src={url}
-                            alt="Attached"
-                            className="max-h-48 max-w-60 rounded-lg object-contain"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <UserBubble>
+                <MessageImages
+                  images={message.images}
+                  onImageClick={onImageClick}
+                />
                 <UserMessageBody content={message.content} />
+              </UserBubble>
+            </div>
+          )}
+          {editing && (
+            <div className="mb-2">
+              <textarea
+                value={draft}
+                onChange={handleDraftChange}
+                onKeyDown={handleEditKeyDown}
+                ref={focusOnMount}
+                rows={3}
+                aria-label="Edit message"
+                className="w-full bg-bg border border-border rounded-lg p-2 text-sm text-text outline-none focus:border-accent resize-y min-h-16"
+              />
+              <div className="flex items-center gap-2 mt-1.5 text-xs text-text-muted">
+                <button
+                  onClick={handleEditCommit}
+                  className="px-2 py-1 rounded bg-accent text-white hover:bg-accent-hover transition"
+                >
+                  Send
+                </button>
+                <button
+                  onClick={handleEditCancel}
+                  className="px-2 py-1 rounded hover:bg-surface-2 transition"
+                >
+                  Cancel
+                </button>
+                <span className="ml-auto">Enter to send · Esc to cancel</span>
               </div>
             </div>
-          ) : (
+          )}
+          {!isUser && !editing && (
             <>
-              {!isUser &&
-                !editing &&
-                !isStreamingThis &&
-                (message.model || message.thinking) && (
-                  <div className="mb-1 text-[11px] text-text-muted/80 select-none">
-                    {message.model ?? "Assistant"}
-                  </div>
-                )}
-              {message.images && message.images.length > 0 && !editing && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {message.images.map((src) => {
-                    const url = imageSrc(src);
-                    return (
-                      <button
-                        key={url}
-                        onClick={() => onImageClick(url)}
-                        aria-label="Open image"
-                        className="max-h-48 max-w-60 rounded-lg border border-border cursor-zoom-in object-contain p-0 bg-transparent"
-                      >
-                        <img
-                          src={url}
-                          alt="Attached"
-                          className="max-h-48 max-w-60 rounded-lg object-contain"
-                        />
-                      </button>
-                    );
-                  })}
+              {!isStreamingThis && (message.model || message.thinking) && (
+                <div className="mb-1 text-[11px] text-text-muted/80 select-none">
+                  {message.model ?? "Assistant"}
                 </div>
               )}
-              {editing && (
-                <div className="mb-2">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={handleEditKeyDown}
-                    ref={editRef}
-                    rows={3}
-                    aria-label="Edit message"
-                    className="w-full bg-bg border border-border rounded-lg p-2 text-sm text-text outline-none focus:border-accent resize-y min-h-16"
-                  />
-                  <div className="flex items-center gap-2 mt-1.5 text-xs text-text-muted">
-                    <button
-                      onClick={commitEdit}
-                      className="px-2 py-1 rounded bg-accent text-white hover:bg-accent-hover transition"
-                    >
-                      Send
-                    </button>
-                    <button
-                      onClick={cancelEdit}
-                      className="px-2 py-1 rounded hover:bg-surface-2 transition"
-                    >
-                      Cancel
-                    </button>
-                    <span className="ml-auto">
-                      Enter to send · Esc to cancel
-                    </span>
-                  </div>
-                </div>
-              )}
-              {!editing && !isUser && message.thinking && (
+              <MessageImages
+                images={message.images}
+                onImageClick={onImageClick}
+              />
+              {message.thinking && (
                 <div className="mb-2">
                   <button
-                    onClick={() => setThinkingOpen((o) => !o)}
+                    onClick={handleThinkingToggle}
                     aria-expanded={thinkingOpen}
                     className={`flex items-center gap-1.5 text-xs text-text-muted hover:text-text transition ${
-                      isStreamingThis && !message.content ? "animate-pulse" : ""
+                      isStillThinking ? "animate-pulse" : ""
                     }`}
                   >
                     <Brain size={13} />
-                    {isStreamingThis && !message.content
-                      ? "Thinking\u2026"
-                      : "Thinking"}
+                    {isStillThinking ? "Thinking…" : "Thinking"}
                     <ChevronDown
                       size={12}
                       className={thinkingOpen ? "" : "-rotate-90"}
@@ -260,25 +217,18 @@ function MessageBubbleBase({
                   )}
                 </div>
               )}
-              {!editing &&
-                !isUser &&
-                message.toolCalls &&
-                message.toolCalls.length > 0 && (
-                  <ToolCallTimeline
-                    calls={message.toolCalls.filter(
-                      (tc): tc is ToolActivity => !!tc,
-                    )}
-                    isStreaming={isStreamingThis}
-                  />
-                )}
-              {!editing && isEmptyStreaming ? (
+              {timelineCalls.length > 0 && (
+                <ToolCallTimeline
+                  calls={timelineCalls}
+                  isStreaming={isStreamingThis}
+                />
+              )}
+              {isEmptyStreaming ? (
                 <div className="flex items-center gap-1 py-1.5">
                   <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" />
                   <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.2s]" />
                   <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.4s]" />
                 </div>
-              ) : editing ? null : isUser ? (
-                <UserMessageBody content={message.content} />
               ) : (
                 <>
                   <StreamingProvider value={isStreamingThis}>
@@ -293,10 +243,10 @@ function MessageBubbleBase({
                       ),
                     )}
                   </StreamingProvider>
-                  {isFailed && onRegenerate && !isLoading && (
+                  {isFailed && canRegenerate && (
                     <div className="mt-1.5">
                       <button
-                        onClick={() => onRegenerate(message.id)}
+                        onClick={handleRegenerate}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs text-text-muted hover:text-text hover:bg-surface-2 transition"
                         title="Retry this response"
                         aria-label="Retry response"
@@ -316,15 +266,4 @@ function MessageBubbleBase({
   );
 }
 
-const MessageBubble = memo(MessageBubbleBase);
-
-/** Skill invocations render through the same markdown body, minus the header. */
-function UserMessageBody({ content }: { content: string }) {
-  return (
-    <MarkdownBody
-      content={SkillMessage.fromContent(content)?.displayContent ?? content}
-    />
-  );
-}
-
-export { MessageBubble };
+export const MessageBubble = memo(MessageBubbleBase);

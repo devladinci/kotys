@@ -31,7 +31,6 @@ const h = vi.hoisted(() => ({
       content: string;
     }[],
     compactCalls: [] as number[],
-    /** Boundary the stubbed compaction moves to; null = it fails. */
     compactTo: null as number | null,
   },
   reset() {
@@ -211,7 +210,7 @@ describe("daemon context assembly", () => {
     expect(sent[0].role).toBe("system");
     expect(system).toContain("You are an agent");
     expect(system).toContain("Earlier: we discussed taxes.");
-    // Stable → volatile: BASE, roster, skills, memory, summary, date last.
+    // Blocks are ordered stable → volatile.
     const at = (needle: string) => system.indexOf(needle);
     expect(at("TOOL-ROSTER-INDEX")).toBeGreaterThan(at("You are an agent"));
     expect(at("SKILLS-INDEX")).toBeGreaterThan(at("TOOL-ROSTER-INDEX"));
@@ -222,7 +221,6 @@ describe("daemon context assembly", () => {
     expect(at("Current date and time")).toBeGreaterThan(
       at("Earlier: we discussed taxes"),
     );
-    // Client turns replaced by the DB replay.
     expect(sent.map((m) => m.role)).toEqual(["system", "user", "assistant"]);
     expect(sent[1].content).toBe("second question");
   });
@@ -397,8 +395,7 @@ describe("daemon context assembly", () => {
         tool_calls: null,
       },
     ];
-    // ~7.5k tokens of results: both turns fit under the 6k budget? No —
-    // each is 3.75k, together over. Oldest wins; newest is dropped.
+    // 3,750 tokens each: together they overrun the 6k replay budget.
     state.toolResults = [
       { message_id: 12, call_index: 0, content: "X".repeat(15_000) },
       { message_id: 14, call_index: 0, content: "Y".repeat(15_000) },
@@ -421,6 +418,125 @@ describe("daemon context assembly", () => {
       .filter((m) => m.role === "tool")
       .map((m) => m.content);
     expect(toolContents).toEqual(["Y".repeat(15_000)]);
+  });
+
+  const replayed = () =>
+    (
+      state.roundBodies[0].messages as {
+        role: string;
+        content: string;
+        tool_name?: string;
+      }[]
+    )
+      .filter((m) => m.role !== "system")
+      .map((m) =>
+        m.role === "tool"
+          ? `tool:${m.tool_name}:${m.content}`
+          : `${m.role}:${m.content}`,
+      );
+
+  it("a steered turn replays with the steer where the model received it", async () => {
+    state.chat = { id: 7, summary: null, summary_upto: null };
+    state.turns = [
+      {
+        id: 11,
+        role: "user",
+        content: "fix the bug",
+        images: null,
+        tool_calls: null,
+      },
+      {
+        id: 12,
+        role: "assistant",
+        content: "Looking.\n\nDone the way you asked.",
+        images: null,
+        tool_calls: JSON.stringify([
+          { tool: "list", status: "done" },
+          {
+            tool: "steer",
+            status: "done",
+            textOffset: "Looking.\n\n".length,
+            widget: { kind: "steer", text: "use Y instead", id: "k1" },
+          },
+          { tool: "read_file", status: "done" },
+        ]),
+      },
+      {
+        id: 13,
+        role: "user",
+        content: "thanks, next",
+        images: null,
+        tool_calls: null,
+      },
+    ];
+    // The steer holds trace slot 1 and never has a result of its own.
+    state.toolResults = [
+      { message_id: 12, call_index: 0, content: "LIST OUT" },
+      { message_id: 12, call_index: 2, content: "READ OUT" },
+    ];
+    scriptReply("ok");
+
+    await collect({
+      requestId: 900,
+      host: "http://127.0.0.1:11434",
+      model,
+      chatId: 7,
+      messages: [{ role: "user", content: "thanks, next" }],
+    });
+
+    expect(replayed()).toEqual([
+      "user:fix the bug",
+      "assistant:Looking.",
+      "tool:list:LIST OUT",
+      "user:use Y instead",
+      "assistant:Done the way you asked.",
+      "tool:read_file:READ OUT",
+      "user:thanks, next",
+    ]);
+  });
+
+  it("keeps a steer in place when the turn's tool results are over budget", async () => {
+    state.chat = { id: 7, summary: null, summary_upto: null };
+    state.turns = [
+      { id: 11, role: "user", content: "q1", images: null, tool_calls: null },
+      {
+        id: 12,
+        role: "assistant",
+        content: "Part one.\n\nPart two.",
+        images: null,
+        tool_calls: JSON.stringify([
+          { tool: "list", status: "done" },
+          {
+            tool: "steer",
+            status: "done",
+            textOffset: "Part one.\n\n".length,
+            widget: { kind: "steer", text: "and Z" },
+          },
+        ]),
+      },
+      { id: 13, role: "user", content: "q2", images: null, tool_calls: null },
+    ];
+    // Too big for the replay budget: the turn goes back as text only.
+    state.toolResults = [
+      { message_id: 12, call_index: 0, content: "X".repeat(30_000) },
+    ];
+    scriptReply("ok");
+
+    await collect({
+      requestId: 900,
+      host: "http://127.0.0.1:11434",
+      model,
+      chatId: 7,
+      messages: [{ role: "user", content: "q2" }],
+    });
+
+    expect(replayed()).toEqual([
+      "user:q1",
+      "assistant:Part one.",
+      "user:and Z",
+      "assistant:Part two.",
+      "user:q2",
+    ]);
   });
 
   it("legacy request: client messages pass through untouched", async () => {
@@ -461,9 +577,9 @@ describe("daemon context assembly", () => {
     expect(sent[0].role).toBe("system");
     expect(sent[0].content).toContain("client-built");
   });
+
   it("compacts on the measured prompt, not on a guess from message text", async () => {
     // 26k measured against a 32,768 window clears the 24,576 compact mark.
-    // Counting these two short turns' characters would read ~10 and never fire.
     state.chat = { id: 7, summary: null, summary_upto: null };
     state.turns = [
       { id: 11, role: "user", content: "hi", images: null, tool_calls: null },
@@ -497,7 +613,6 @@ describe("daemon context assembly", () => {
   });
 
   it("compacts a 4k chat whose last reply alone overruns the window", async () => {
-    // Chat 403 verbatim: 3,012 measured, a 4,774-char reply, 4,096 window.
     state.chat = { id: 7, summary: null, summary_upto: null };
     state.turns = [
       {
@@ -533,12 +648,11 @@ describe("daemon context assembly", () => {
       chatId: 7,
       messages: [{ role: "user", content: "z".repeat(40) }],
     });
-    // 3,012 + 1,203 estimated clears the 3,072 mark.
+    // 3,012 + 1,204 estimated clears the 3,072 mark.
     expect(state.compactCalls).toEqual([7]);
   });
 
-  it("retries the compact on the next message after a failed one", async () => {
-    // First send: compact throws, the request proceeds un-compacted.
+  it("does not retry a failed compact on the very next message", async () => {
     state.chat = { id: 7, summary: null, summary_upto: null };
     state.turns = [
       {
@@ -575,7 +689,7 @@ describe("daemon context assembly", () => {
     });
     expect(state.compactCalls).toEqual([7]);
 
-    // Second send right after: the failure gate blocks a second attempt.
+    // Still inside the failure cooldown, so no second attempt.
     state.compactCalls.length = 0;
     state.compactTo = 12;
     scriptReply("ok");

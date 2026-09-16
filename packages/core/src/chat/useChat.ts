@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSyncExternalStore } from "react";
-import type { ChatStreamResult, ModelListing } from "@kotys/contracts";
-import { ERROR_TURN_PREFIX } from "@kotys/contracts";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type {
+  ChatStreamResult,
+  ModelListing,
+  ToolActivity,
+} from "@kotys/contracts";
+import { ERROR_TURN_PREFIX, isSteerActivity } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
 import { parseSlashCommand } from "../skills/slashCommand.js";
 import { SkillMessage } from "../skills/SkillMessage.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
-import type { ToolDelta } from "./streamThrottle.js";
+import type { ChunkDeltas, ToolDelta } from "./streamThrottle.js";
 import { StreamCollector, mergeChunks, mergeTools } from "./streamThrottle.js";
 import { clearStreamActivity, declareStreamActivity } from "./echoGuard.js";
 import {
@@ -30,9 +40,11 @@ import { useChatActions } from "./useChatActions.js";
 import { useChatStream } from "./useChatStream.js";
 import { useStreamAdoption } from "./useStreamAdoption.js";
 import { useMessageQueue } from "./useMessageQueue.js";
+import { confirmSteer, getQueued, markSteering } from "./queueStore.js";
+import { steerStateOf } from "./queuedSteer.js";
 import type { Message } from "./types.js";
 
-interface UseChatArgs {
+interface IProps {
   activeChatId: number | null;
   chatSummary: string | null;
   chatSummaryUpto: number | null;
@@ -45,25 +57,37 @@ interface UseChatArgs {
   onSummaryChanged?: () => void;
 }
 
-/** UI cadence for streamed chunk flushes (~11 fps). */
+interface PendingInference {
+  chatId: number;
+  userText: string;
+  model: ModelListing;
+  needsTopics: boolean;
+  isFreshChat: boolean;
+}
+
 const STREAM_FLUSH_MS = 90;
 
 export type { QueuedMessage } from "./useMessageQueue.js";
 
-export function useChat(args: UseChatArgs) {
-  const {
-    activeChatId,
-    chatSummary,
-    chatSummaryUpto,
-    chatModel,
-    chatTitle,
-    chatTopics,
-    onChatCreated,
-    onTopicsInferred,
-    onTitleInferred,
-    onSummaryChanged,
-  } = args;
+// Settled on arrival, not on the flush cadence, so the done frame right
+// behind a receipt cannot find its entry still queued and send it twice.
+function settleSteer(activity: ToolActivity): void {
+  if (!isSteerActivity(activity) || !activity.widget.id) return;
+  confirmSteer(activity.widget.id);
+}
 
+export function useChat({
+  activeChatId,
+  chatSummary,
+  chatSummaryUpto,
+  chatModel,
+  chatTitle,
+  chatTopics,
+  onChatCreated,
+  onTopicsInferred,
+  onTitleInferred,
+  onSummaryChanged,
+}: IProps) {
   const { apiKeyPresent } = useAppStore();
   const thinkingEffort = useAppStore((s) => s.thinkingEffort);
   const permissionMode = useAppStore((s) => s.permissionMode);
@@ -74,36 +98,24 @@ export function useChat(args: UseChatArgs) {
     () => activeChatId !== null && isChatBusy(activeChatId),
     () => activeChatId !== null && isChatBusy(activeChatId),
   );
+
   // Sentinel -1 = busy before the assistant row exists; UI shows pending, not stop.
   const rawStreamingId = useSyncExternalStore(
     subscribeStreaming,
     () => (activeChatId === null ? null : getStreamingId(activeChatId)),
     () => (activeChatId === null ? null : getStreamingId(activeChatId)),
   );
+
   const streamingId = rawStreamingId === -1 ? null : rawStreamingId;
   const isLoading = busy;
   const [isCompacting, setIsCompacting] = useState(false);
+
   const { queuedMessages, enqueue, dequeue, drain } =
     useMessageQueue(activeChatId);
 
-  const streamBuffersRef = useRef<
-    Map<number, { content: string; thinking: string }>
-  >(new Map());
+  const streamBuffersRef = useRef<Map<number, ChunkDeltas>>(new Map());
   const toolBuffersRef = useRef<Map<number, Message["toolCalls"]>>(new Map());
-  // Inference needs the final stream content, so it's consumed on done.
-  const pendingInferenceRef = useRef<
-    Map<
-      number,
-      {
-        chatId: number;
-        userText: string;
-        model: ModelListing;
-        needsTopics: boolean;
-        isFreshChat: boolean;
-      }
-    >
-  >(new Map());
-  const mountedRef = useRef(true);
+  const pendingInferenceRef = useRef<Map<number, PendingInference>>(new Map());
 
   const {
     messages,
@@ -117,9 +129,8 @@ export function useChat(args: UseChatArgs) {
 
   const { inferTopics, inferTitle } = useChatActions();
 
-  // Collectors (see streamThrottle) flush to state on a cadence.
   const collectorRef = useRef(
-    new StreamCollector<number, { content: string; thinking: string }>(
+    new StreamCollector<number, ChunkDeltas>(
       STREAM_FLUSH_MS,
       mergeChunks,
       (snapshot) => {
@@ -129,7 +140,7 @@ export function useChat(args: UseChatArgs) {
             const idx = prev.findIndex((m) => m.id === requestId);
             if (idx === -1) continue;
             const m = prev[idx];
-            next ??= [...prev];
+            if (next === null) next = [...prev];
             next[idx] = {
               ...m,
               thinking: (m.thinking ?? "") + d.thinking,
@@ -141,6 +152,7 @@ export function useChat(args: UseChatArgs) {
       },
     ),
   );
+
   const toolCollectorRef = useRef(
     new StreamCollector<number, ToolDelta[]>(
       STREAM_FLUSH_MS,
@@ -150,7 +162,7 @@ export function useChat(args: UseChatArgs) {
           let next: Message[] | null = null;
           for (const [requestId, activities] of snapshot) {
             if (!prev.some((m) => m.id === requestId)) continue;
-            next ??= [...prev];
+            if (next === null) next = [...prev];
             next = next.map((m) => {
               if (m.id !== requestId) return m;
               const toolCalls = [...(m.toolCalls ?? [])];
@@ -182,12 +194,14 @@ export function useChat(args: UseChatArgs) {
         buf.content += contentDelta;
         buf.thinking += thinkingDelta;
         streamBuffersRef.current.set(requestId, buf);
+
         collectorRef.current.add(requestId, {
           content: contentDelta,
           thinking: thinkingDelta,
         });
       },
       onOwnToolActivity: (requestId, index, activity) => {
+        settleSteer(activity);
         const list = toolBuffersRef.current.get(requestId) ?? [];
         while (list.length < index) list.push(undefined as never);
         list[index] = activity;
@@ -195,32 +209,33 @@ export function useChat(args: UseChatArgs) {
         toolCollectorRef.current.add(requestId, [[index, activity]]);
       },
       onOwnDone: (requestId, result) => {
-        collectorRef.current.flushNow(); // tail deltas pending on the cadence timer
+        // The trace also settles a receipt whose own frame was never replayed.
+        result.toolCalls.forEach(settleSteer);
+        // Flush before finalise, or a late timer flush re-appends the tail.
+        collectorRef.current.flushNow();
         toolCollectorRef.current.flushNow();
         finaliseStream(requestId, result);
         const pending = pendingInferenceRef.current.get(requestId);
-        if (pending) {
-          pendingInferenceRef.current.delete(requestId);
-          const finalText = result.content || "";
-          if (finalText) {
-            if (pending.needsTopics) {
-              void inferTopics(
-                pending.chatId,
-                pending.userText,
-                pending.model,
-                onTopicsInferred,
-              );
-            }
-            if (pending.isFreshChat) {
-              void inferTitle(
-                pending.chatId,
-                pending.userText,
-                pending.model,
-                onTitleInferred,
-                finalText,
-              );
-            }
-          }
+        if (!pending) return;
+        pendingInferenceRef.current.delete(requestId);
+        if (!result.content) return;
+        if (pending.needsTopics) {
+          void inferTopics(
+            pending.chatId,
+            pending.userText,
+            pending.model,
+            onTopicsInferred,
+          );
+        }
+
+        if (pending.isFreshChat) {
+          void inferTitle(
+            pending.chatId,
+            pending.userText,
+            pending.model,
+            onTitleInferred,
+            result.content,
+          );
         }
       },
       onOwnError: (requestId, error) => {
@@ -229,42 +244,29 @@ export function useChat(args: UseChatArgs) {
         finaliseError(requestId, error);
         pendingInferenceRef.current.delete(requestId);
       },
-      // Another client is streaming into the chat we have open. Live deltas
-      // keep the ChatGPT-style smoothness; the server's 1s progress pulse
-      // persists the row meanwhile, and a pull on done/error/error-path is
-      // the healing snap (streamer output is append-only, so a snapshot can
-      // only move the view forward — no duplication, no regressions).
       onForeignChunk: (requestId, thinkingDelta, contentDelta) => {
         setMessages((prev) =>
           applyChunk(prev, requestId, thinkingDelta, contentDelta),
         );
       },
       onForeignToolActivity: (requestId, index, activity) => {
+        // A receipt can land after this client let go of its stream (stop).
+        settleSteer(activity);
+
         setMessages((prev) =>
           applyToolActivity(prev, requestId, index, activity),
         );
       },
       onForeignDone: (requestId, result) => {
+        result.toolCalls.forEach(settleSteer);
         setMessages((prev) => applyDone(prev, requestId, result));
       },
-      onForeignError: () => {
-        // The server persisted the error into the message; pull it in.
-        refreshMessages();
-      },
+      // The server already persisted the error into the row.
+      onForeignError: refreshMessages,
     },
     activeChatId,
   );
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  // A remounted chat view lost its component-local streaming state; the
-  // daemon may still be streaming into this chat. Re-adopt the live stream
-  // (button back to "stop"), or clear a stale registry claim.
   useStreamAdoption(activeChatId, {
     adopt: (requestId) => {
       if (activeChatId === null) return;
@@ -280,7 +282,6 @@ export function useChat(args: UseChatArgs) {
     },
   });
 
-  // Pending cadence timer must not fire into a dead component.
   useEffect(() => {
     const collector = collectorRef.current;
     const toolCollector = toolCollectorRef.current;
@@ -305,6 +306,7 @@ export function useChat(args: UseChatArgs) {
           ? { toolCalls: JSON.stringify(result.toolCalls) }
           : {}),
       });
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -322,17 +324,16 @@ export function useChat(args: UseChatArgs) {
             : m,
         ),
       );
+
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
       // Resolve the finishing chat from the claim before releasing it — a
       // background chat's done must clear its own entry, not the open chat's.
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
       releaseLiveStream(assistantId);
-      if (doneChatId !== null) {
-        finishStreamEntry(doneChatId);
-        clearStreamActivity(doneChatId);
-      }
-      return { finalContent, result };
+      if (doneChatId === null) return;
+      finishStreamEntry(doneChatId);
+      clearStreamActivity(doneChatId);
     },
     [activeChatId, chatModel.name, setMessages, updateMessage],
   );
@@ -349,6 +350,7 @@ export function useChat(args: UseChatArgs) {
           ? { toolCalls: JSON.stringify(tools) }
           : {}),
       });
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -360,14 +362,14 @@ export function useChat(args: UseChatArgs) {
             : m,
         ),
       );
+
       streamBuffersRef.current.delete(assistantId);
       toolBuffersRef.current.delete(assistantId);
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
       releaseLiveStream(assistantId);
-      if (doneChatId !== null) {
-        finishStreamEntry(doneChatId);
-        clearStreamActivity(doneChatId);
-      }
+      if (doneChatId === null) return;
+      finishStreamEntry(doneChatId);
+      clearStreamActivity(doneChatId);
     },
     [activeChatId, setMessages, updateMessage],
   );
@@ -381,9 +383,8 @@ export function useChat(args: UseChatArgs) {
       if (!text.trim() && images.length === 0)
         return { needsSettings: false as const };
 
-      // Presence, not value: the key never leaves the daemon (write-only RPC).
-      // Checked before enqueue so queued messages can never be lost to a
-      // missing key at drain time.
+      // Checked before enqueue so a queued message is never lost to a missing
+      // key at drain time.
       if (!apiKeyPresent && chatModel.source !== "local") {
         return { needsSettings: true as const };
       }
@@ -393,15 +394,10 @@ export function useChat(args: UseChatArgs) {
       let content = text;
       const slash = parseSlashCommand(text);
       if (slash) {
-        const rpc = getRpc();
         try {
           const detail = await rpc.skills.get({ name: slash.name });
           if (detail) {
             content = SkillMessage.build(slash.name, slash.args, detail.body);
-          } else if (slash.args === "") {
-            // Unknown bare /command: leave as typed; the model sees it and
-            // can say the skill does not exist.
-            content = text;
           }
         } catch {
           content = text;
@@ -415,8 +411,8 @@ export function useChat(args: UseChatArgs) {
         enqueue(content, images);
         return { needsSettings: false as const };
       }
-      // Claimed before the first await: the drain effect must not re-fire
-      // while this send awaits its RPCs. -1 = busy before the assistant row.
+      // Claimed before the RPCs below are awaited, so the drain effect cannot
+      // re-fire while they run.
       if (activeChatId !== null) startStreamEntry(activeChatId, -1);
 
       let currentChatId = activeChatId;
@@ -425,6 +421,7 @@ export function useChat(args: UseChatArgs) {
           title: "New chat",
           model: chatModel,
         });
+
         currentChatId = Number(newId);
         onChatCreated?.(currentChatId);
       }
@@ -448,7 +445,6 @@ export function useChat(args: UseChatArgs) {
 
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
-      // Own RPC writes echo back as broadcasts until finalise — see echoGuard.
       declareStreamActivity(currentChatId);
 
       const isFreshChat = chatTitle === "New chat" && !opts?.skipTitleInference;
@@ -480,6 +476,7 @@ export function useChat(args: UseChatArgs) {
             model: chatModel.name,
           },
         ]);
+
         startStreamEntry(currentChatId, newAssistantId);
         claimLiveStream(newAssistantId, currentChatId);
 
@@ -542,24 +539,33 @@ export function useChat(args: UseChatArgs) {
     ],
   );
 
-  // Drain the queue: one message per idle transition, FIFO.
+  // Queue read from the store, send via a latest ref (React Native may lack
+  // useEffectEvent): either as a dep would let the drain's emit cancel the send.
+  const sendRef = useRef(send);
+
+  useEffect(() => {
+    sendRef.current = send;
+  });
+
   useEffect(() => {
     if (activeChatId === null) return;
     if (isChatBusy(activeChatId) || isStreaming(activeChatId)) return;
-    if (queuedMessages.length === 0) return;
-    const [next, ...rest] = queuedMessages;
+    const [next, ...rest] = getQueued(activeChatId);
+    if (!next) return;
     drain(next, rest);
-    // setState inside an effect trips react-hooks/set-state-in-effect; defer
-    // past the synchronous effect body. cancelled guards chat-switch unmounts.
+    // Deferred past the effect body (react-hooks/set-state-in-effect);
+    // cancelled guards a chat switch in between.
     let cancelled = false;
     void Promise.resolve().then(() => {
-      if (!cancelled)
-        void send(next.text, next.images, { skipTitleInference: true });
+      if (cancelled) return;
+      void sendRef.current(next.text, next.images, {
+        skipTitleInference: true,
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, [activeChatId, busy, streamingId, queuedMessages, send, drain]);
+  }, [activeChatId, busy, streamingId, drain]);
 
   const abort = useCallback(() => {
     if (streamingId === null || activeChatId === null) return;
@@ -569,56 +575,19 @@ export function useChat(args: UseChatArgs) {
     finishStreamEntry(activeChatId);
   }, [activeChatId, streamingId, abortStream]);
 
-  // Steering: inject a queued message into the running turn at the next
-  // tool-round boundary. Persistence-first — the row is written before the
-  // append is sent, so even if the turn ends before consuming it, the text
-  // is already in history and reaches the model next turn. No double-send:
-  // the queue entry is removed here, and the drain effect never sees it.
   const steer = useCallback(
-    async (queuedId: number) => {
-      if (activeChatId === null) return;
-      // No live turn (streamingId is null while idle, -1 while the assistant
-      // row is still pending): leave it queued — the idle drain sends it.
-      if (streamingId === null) return;
+    (queuedId: number) => {
+      if (activeChatId === null || streamingId === null) return;
       const item = queuedMessages.find((q) => q.id === queuedId);
-      if (!item) return;
-      const userMessageId = await insertMessage(
-        activeChatId,
-        "user",
-        item.text,
-        item.images && item.images.length > 0 ? item.images : undefined,
-      );
-      if (userMessageId === null) return;
-      // Echo guard suppresses refetches while the turn streams, so the
-      // bubble is added to local state directly; other viewers get it via
-      // the messages:changed broadcast.
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: userMessageId,
-          role: "user",
-          content: item.text,
-          images:
-            item.images && item.images.length > 0 ? item.images : undefined,
-        },
-      ]);
-      // Images are persisted with the row but not injected live — the
-      // append frame carries text only; the model sees them next turn.
-      appendStream(streamingId, item.text);
-      dequeue(queuedId);
+      if (!item || steerStateOf(item, streamingId) !== "ready") return;
+      // Hand-built: React Native (Hermes) has no crypto.randomUUID.
+      const key = `${streamingId}.${queuedId}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      if (!appendStream(streamingId, item.text, key)) return;
+      markSteering(activeChatId, queuedId, { requestId: streamingId, key });
     },
-    [
-      activeChatId,
-      streamingId,
-      queuedMessages,
-      insertMessage,
-      setMessages,
-      appendStream,
-      dequeue,
-    ],
+    [activeChatId, streamingId, queuedMessages, appendStream],
   );
 
-  // A manual compact and the pre-send auto-compact must not race summary RPCs.
   const compactNow = useCallback(async (): Promise<
     "compacted" | "nothing" | "error"
   > => {
@@ -626,8 +595,9 @@ export function useChat(args: UseChatArgs) {
     setIsCompacting(true);
     try {
       const res = await rpc.chats.compact({ id: activeChatId, force: true });
-      if ("summary" in res) onSummaryChanged?.();
-      return "summary" in res ? "compacted" : "nothing";
+      if (!("summary" in res)) return "nothing";
+      onSummaryChanged?.();
+      return "compacted";
     } catch {
       return "error";
     } finally {
@@ -656,15 +626,14 @@ export function useChat(args: UseChatArgs) {
             : m,
         ),
       );
-      // Wipe the DB row before replaying. A failed turn's persisted
-      // error-marker text would otherwise be rebuilt as history on the
-      // next request and shown to the model as its own prior reply — and a
-      // second failure would stack another error onto it. Old tool results
-      // must go too: their replay budget could crowd out the fresh turn.
+
+      // Wipe the row first: a persisted error marker would replay to the model
+      // as its own reply, and old tool results would crowd out the fresh turn.
       await rpc.messages.resetForRetry({ id: assistantId });
       startStreamEntry(activeChatId, assistantId);
       claimLiveStream(assistantId, activeChatId);
       declareStreamActivity(activeChatId);
+
       stream(
         assistantId,
         chatModel,
@@ -696,16 +665,13 @@ export function useChat(args: UseChatArgs) {
       if (!apiKeyPresent && chatModel.source !== "local") return;
       const idx = messages.findIndex((m) => m.id === userMessageId);
       if (idx === -1 || messages[idx].role !== "user") return;
-      const trimmed = messages.slice(0, idx + 1);
-      await updateMessage(userMessageId, {
-        content: newText,
-      });
+      await updateMessage(userMessageId, { content: newText });
       const updatedUser: Message = {
         ...messages[idx],
         content: newText,
         images: newImages && newImages.length > 0 ? newImages : undefined,
       };
-      const updatedMessages = [...trimmed.slice(0, idx), updatedUser];
+      const updatedMessages = [...messages.slice(0, idx), updatedUser];
       setMessages(updatedMessages);
       const newAssistantId = await insertMessage(activeChatId, "assistant", "");
       if (newAssistantId === null) return;
@@ -719,9 +685,11 @@ export function useChat(args: UseChatArgs) {
           model: chatModel.name,
         },
       ]);
+
       startStreamEntry(activeChatId, newAssistantId);
       claimLiveStream(newAssistantId, activeChatId);
       declareStreamActivity(activeChatId);
+
       stream(
         newAssistantId,
         chatModel,

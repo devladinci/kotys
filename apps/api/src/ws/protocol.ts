@@ -5,6 +5,7 @@ import type {
   InputRequest,
   PomodoroPhase,
   PomodoroSessionRecord,
+  SteerAppend,
   StreamRequest,
   ToolEvent,
 } from "@kotys/contracts";
@@ -12,14 +13,9 @@ import type {
 export type ClientMessage =
   | { type: "chat:stream"; payload: StreamRequest }
   | { type: "chat:abort"; payload: { requestId: number } }
-  /**
-   * Inject a user message into a running turn at the next tool-round
-   * boundary (steering). Ignored when the requestId is not live.
-   */
-  | { type: "chat:append"; payload: { requestId: number; content: string } }
-  /** Sent after reconnecting: replay everything past lastSeq. */
+  // Delivered at the next round boundary; the turn's steer `chat:tool` is the receipt.
+  | { type: "chat:append"; payload: { requestId: number } & SteerAppend }
   | { type: "chat:resume"; payload: { requestId: number; lastSeq: number } }
-  /** Heartbeat from clients probing a possibly half-dead socket. */
   | { type: "ping" }
   | { type: "approval:response"; payload: { id: number; approved: boolean } }
   | {
@@ -42,7 +38,6 @@ export type ServerMessage =
   | {
       type: "chat:chunk";
       seq: number;
-      /** Chat the streamed assistant message belongs to, when known. */
       chatId?: number;
       payload: {
         requestId: number;

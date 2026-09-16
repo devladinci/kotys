@@ -81,8 +81,7 @@ vi.mock("@kotys/db", () => ({
   getChatLoadedTools: () => [],
   rememberChatLoadedTools: () => {},
 }));
-// Real definitions (so tools are advertised) with a scripted dispatcher, so
-// loop tests can control result sizes without touching the filesystem.
+// Real definitions keep tools advertised; runTool is scripted by its args.
 vi.mock("../../tools/index.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../tools/index.js")>();
   return {
@@ -167,40 +166,113 @@ const cbs = (): StreamCallbacks & { activity: ToolActivity[] } => {
 };
 
 describe("streamChat steering", () => {
-  it("injects an append as a user message at the next round boundary", async () => {
+  const sees = (round: { messages: unknown[] }, content: string) =>
+    round.messages.some(
+      (m) =>
+        (m as { role: string }).role === "user" &&
+        (m as { content: string }).content === content,
+    );
+
+  it("injects a steer at the next round boundary and traces it in place", async () => {
     state.scripts.push([toolCallPart("list", { path: "." })]);
     state.scripts.push([doneText("Followed the steer.")]);
-    // Nothing queued before round 0; the text arrives while round 0's
-    // tools are running, so round 1 is the first round that sees it.
+    // Queued while round 0's tools run, so round 1 is the first to see it.
     const pendingAppends = vi
       .fn()
       .mockReturnValueOnce([])
-      .mockReturnValueOnce(["stop, do X instead"])
+      .mockReturnValueOnce([{ content: "stop, do X instead", id: "k1" }])
       .mockReturnValue([]);
+    const callbacks = { ...cbs(), pendingAppends };
 
-    await streamChat(
+    const result = await streamChat(
       baseReq(),
-      { ...cbs(), pendingAppends } as never,
+      callbacks,
       new AbortController().signal,
     );
 
-    // Round 0 was built without it; round 1 carries the injected user turn.
-    expect(
-      state.roundBodies[0].messages.some(
-        (m) =>
-          (m as { role: string }).role === "user" &&
-          (m as { content: string }).content === "stop, do X instead",
-      ),
-    ).toBe(false);
-    expect(
-      state.roundBodies[1].messages.some(
-        (m) =>
-          (m as { role: string }).role === "user" &&
-          (m as { content: string }).content === "stop, do X instead",
-      ),
-    ).toBe(true);
-    // The drain is queried before every round, including the final one.
+    expect(sees(state.roundBodies[0], "stop, do X instead")).toBe(false);
+    expect(sees(state.roundBodies[1], "stop, do X instead")).toBe(true);
+    expect(result.toolCalls.map((t) => t.tool)).toEqual(["list", "steer"]);
+    const steer = result.toolCalls[1];
+    expect(steer).toMatchObject({
+      status: "done",
+      textOffset: 0,
+      widget: { kind: "steer", text: "stop, do X instead", id: "k1" },
+    });
+    expect(callbacks.activity).toContainEqual(steer);
+    expect(result.content).toBe("Followed the steer.");
+  });
+
+  it("gives a steer sent during a text-only answer a round of its own", async () => {
+    state.scripts.push([doneText("First answer.")]);
+    state.scripts.push([doneText("Answer to the steer.")]);
+    // Arrives while round 0 streams its (tool-free) answer.
+    const pendingAppends = vi
+      .fn()
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([{ content: "also cover Y", id: "k2" }])
+      .mockReturnValue([]);
+
+    const result = await streamChat(
+      baseReq(),
+      { ...cbs(), pendingAppends },
+      new AbortController().signal,
+    );
+
+    expect(state.roundBodies).toHaveLength(2);
+    const second = state.roundBodies[1].messages as {
+      role: string;
+      content: string;
+    }[];
+    expect(second.slice(-2)).toEqual([
+      expect.objectContaining({ role: "assistant", content: "First answer." }),
+      expect.objectContaining({ role: "user", content: "also cover Y" }),
+    ]);
+    expect(result.content).toBe("First answer.\n\nAnswer to the steer.");
+    const steer = result.toolCalls.find((t) => t.widget?.kind === "steer");
+    expect(steer?.textOffset).toBe("First answer.\n\n".length);
+  });
+
+  it("ends a text-only turn when nothing was steered", async () => {
+    state.scripts.push([doneText("Just the answer.")]);
+    const pendingAppends = vi.fn().mockReturnValue([]);
+
+    const result = await streamChat(
+      baseReq(),
+      { ...cbs(), pendingAppends },
+      new AbortController().signal,
+    );
+
+    expect(state.roundBodies).toHaveLength(1);
+    expect(result.toolCalls).toEqual([]);
+    // Before the round, and once more before letting the turn end.
     expect(pendingAppends).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands a steer to the forced final answer when the budget stops the loop", async () => {
+    state.scripts.push([
+      { message: { content: "round 0" } },
+      toolCallPart("list", { path: "." }),
+    ]);
+    state.scripts.push([doneText("Wrapped up with the steer.")]);
+    // Round 0 fills the 32K window: the loop stops before the top-of-round drain.
+    state.promptTokens = [26_000];
+    const pendingAppends = vi
+      .fn()
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([{ content: "just summarize", id: "k3" }])
+      .mockReturnValue([]);
+
+    const result = await streamChat(
+      { ...baseReq(), model: smallWindowModel },
+      { ...cbs(), pendingAppends },
+      new AbortController().signal,
+    );
+
+    const finalRound = state.roundBodies.at(-1)!;
+    expect(finalRound.tools).toBeUndefined();
+    expect(sees(finalRound, "just summarize")).toBe(true);
+    expect(result.toolCalls.map((t) => t.tool)).toEqual(["list", "steer"]);
   });
 });
 
@@ -221,7 +293,6 @@ describe("streamChat loop persistence", () => {
       new AbortController().signal,
     );
 
-    // 30 tool rounds + the final text round; no budget-forced wrap-up after it.
     expect(state.roundBodies).toHaveLength(rounds + 1);
     expect(result.content).toContain("All steps complete.");
     expect(result.toolCalls).toHaveLength(rounds);
@@ -239,12 +310,10 @@ describe("streamChat loop persistence", () => {
       new AbortController().signal,
     );
 
-    // 100 tool rounds + 1 forced final-answer round.
     expect(state.roundBodies).toHaveLength(MAX_TOOL_ROUNDS + 1);
     expect(result.toolCalls).toHaveLength(MAX_TOOL_ROUNDS);
     expect(result.content).toContain("remain");
 
-    // The last tool round's messages end with the assistant wrap-up prefill.
     const lastToolRound = state.roundBodies[MAX_TOOL_ROUNDS - 1];
     const lastMsg = lastToolRound.messages.at(-1) as {
       role: string;
@@ -253,8 +322,6 @@ describe("streamChat loop persistence", () => {
     expect(lastMsg.role).toBe("assistant");
     expect(lastMsg.content).toContain("final tool round");
 
-    // The forced wrap-up round offers no tools and carries the max-steps
-    // instruction, so the turn ends as a summary with remaining work.
     const finalRound = state.roundBodies[MAX_TOOL_ROUNDS];
     expect(finalRound.tools).toBeUndefined();
     const texts = finalRound.messages
@@ -265,9 +332,7 @@ describe("streamChat loop persistence", () => {
   });
 
   it("stops on the byte budget with the same wrap-up, not a silent cut-off", async () => {
-    // ~52 KB per round: after 4 rounds toolResultBytes crosses 200 KB, so the
-    // loop breaks before a 5th round. Distinct paths avoid the read_file
-    // dedupe stubbing the repeats.
+    // 4 × 52 KB crosses 200 KB; distinct paths dodge the read_file dedupe.
     for (let i = 0; i < 4; i++) {
       state.scripts.push([
         toolCallPart("read_file", { path: `f${i}.txt`, bytes: 52_000 }),
@@ -281,7 +346,6 @@ describe("streamChat loop persistence", () => {
       new AbortController().signal,
     );
 
-    // 4 rounds fit under 200 KB; the 5th call never runs.
     expect(result.toolCalls).toHaveLength(4);
     expect(result.toolCalls[4]).toBeUndefined();
     expect(result.content).toContain("remain");
@@ -290,8 +354,6 @@ describe("streamChat loop persistence", () => {
   });
 
   it("drops tool images from the wire once seen — later rounds re-send only the text result", async () => {
-    // Request 2 carries the capture (the round where the model reacts to it);
-    // request 3 must not.
     state.scripts.push([toolCallPart("list", { withImage: true })]);
     state.scripts.push([toolCallPart("list", { withImage: false })]);
     state.scripts.push([doneText("done")]);
@@ -307,9 +369,6 @@ describe("streamChat loop persistence", () => {
   });
 
   it("stops on the token observer before the server's context window rejects the round", async () => {
-    // A 32K window (oMLX's Qwen3.8): rounds report a growing server prompt;
-    // once it reaches 32_768 - 8_000 the loop must stop instead of walking
-    // into oMLX's "Prompt too long" 400.
     for (let i = 0; i < 6; i++) {
       state.scripts.push([
         { message: { content: `round ${i}` } },
@@ -319,7 +378,7 @@ describe("streamChat loop persistence", () => {
     state.scripts.push([
       doneText("Wrapped before the window; 2 steps remain."),
     ]);
-    // Prompt sizes per completed round: 0, 10k, 18k, 26k (crosses), ...
+    // Round 2 reports 26k, and 26k + 8k headroom reaches the 32,768 window.
     state.promptTokens = [10_000, 18_000, 26_000, 30_000, 30_000, 30_000];
 
     const result = await streamChat(
@@ -328,10 +387,7 @@ describe("streamChat loop persistence", () => {
       new AbortController().signal,
     );
 
-    // Round 3's done reports 26_000 prompt tokens; 26_000 + 8_000 >= 32_768
-    // stops the loop before round 4, which would have carried ~30k tokens.
     expect(result.toolCalls).toHaveLength(3);
-    // The forced wrap-up round (tools dropped) still runs and produces prose.
     const finalRound = state.roundBodies.at(-1) as {
       tools?: unknown[];
       messages: { content: string }[];

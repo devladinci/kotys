@@ -5,10 +5,12 @@ import type {
   StreamRequest,
   ChatStreamResult,
   PermissionMode,
+  SteerAppend,
 } from "@kotys/contracts";
 import {
   DEFAULT_CONTEXT,
   estimateTokensFromChars,
+  isSteerActivity,
   OLLAMA_CLOUD_HOST,
 } from "@kotys/contracts";
 import {
@@ -30,11 +32,8 @@ import {
 import { requestApproval } from "../approval.js";
 import { requestUserInput } from "../input.js";
 import { events } from "../events.js";
-import {
-  resolveConnector,
-  resolveOllamaConnector,
-  type ConnectorChatMessage,
-} from "../llm/registry.js";
+import { resolveConnector, resolveOllamaConnector } from "../llm/registry.js";
+import type { ConnectorChatMessage } from "../llm/registry.js";
 import {
   budgetLoadedMcpDefs,
   getLoadedMcpToolNames,
@@ -54,30 +53,18 @@ import {
   finalizeTurn,
   LAST_ROUND_PREFILL,
   MAX_TOOL_ROUNDS,
-  type BudgetStop,
 } from "./turnWrapUp.js";
+import type { BudgetStop } from "./turnWrapUp.js";
 
 export interface StreamCallbacks {
   onChunk: (chunk: { thinkingDelta: string; contentDelta: string }) => void;
   onToolActivity: (activity: ToolActivity, index: number) => void;
-  /**
-   * Steering texts queued while the turn was running, taken at the next
-   * round boundary. Called before every round; may return several.
-   */
-  pendingAppends?: () => string[];
+  /** Drains (returns and clears) the steering messages queued so far. */
+  pendingAppends?: () => SteerAppend[];
 }
 
 const LAST_ROUND_INDEX = MAX_TOOL_ROUNDS - 1;
 
-/**
- * Streaming chat with an agentic tool loop. Deltas go to `onChunk`, tool
- * activity to `onToolActivity`. Abort stops the stream and retracts any
- * pending approval dialog.
- *
- * This is the orchestrator: turn setup, the round loop, and the return value.
- * Streaming lives in turnStream.ts, single-call execution in
- * toolCallExecutor.ts, and end-of-turn repair in turnWrapUp.ts.
- */
 export async function streamChat(
   req: StreamRequest,
   callbacks: StreamCallbacks,
@@ -114,11 +101,8 @@ export async function streamChat(
   const enabledMap = getEnabledTools();
   const toolEnabled = (name: string) => enabledMap[name] !== false;
   const streamChatId = getChatIdForMessage(requestId);
-  /**
-   * One authority for the turn — compact trigger, MCP tier and budget watch
-   * must not disagree. The stored row leads: the client's listing was captured
-   * when the model was picked, while the window moves provider-side.
-   */
+  // The stored row wins: the client's listing dates from when the model was
+  // picked, and the window can change provider-side after that.
   const contextLength =
     (streamChatId !== null
       ? getChatById(streamChatId)?.model_context_length
@@ -186,13 +170,14 @@ export async function streamChat(
     updateMessage(requestId, {
       content: streamer.content,
       thinking: streamer.thinking,
-      // First round, not the peak: the peak carries tool traffic later turns
-      // never replay. It stays in memory for the loop guard.
+      // First round, not the peak: the peak includes tool traffic that later
+      // turns never replay.
       promptTokens: streamer.usage.basePromptTokens || undefined,
       evalTokens: streamer.usage.evalTokens || undefined,
       tokensMeasured: streamer.usage.basePromptTokens > 0 || undefined,
       ...(trace.length > 0 ? { toolCalls: JSON.stringify(trace) } : {}),
     });
+
     events.emitEvent("messages:progress", {
       chatId: streamChatId,
       messageId: requestId,
@@ -261,6 +246,28 @@ export async function streamChat(
   let stop: BudgetStop | null = null;
   let lastRoundPrefillSent = false;
   let callIndex = 0;
+
+  // The steer trace entry doubles as the delivery receipt clients wait for.
+  const takeSteers = () => callbacks.pendingAppends?.() ?? [];
+  const injectSteers = (appends: SteerAppend[]) => {
+    for (const { content, id } of appends) {
+      chatMessages.push({ role: "user", content });
+      const now = Date.now();
+      const entry: ToolActivity = {
+        tool: "steer",
+        status: "done",
+        startedAt: now,
+        endedAt: now,
+        turnStartedAt: startedAt,
+        textOffset: streamer.content.length,
+        roundAnchor: roundAnchor++,
+        widget: { kind: "steer", text: content, ...(id ? { id } : {}) },
+      };
+      trace.push(entry);
+      callbacks.onToolActivity(entry, callIndex++);
+    }
+  };
+
   try {
     for (;;) {
       stop = budgetStop(
@@ -270,25 +277,33 @@ export async function streamChat(
         contextLength,
       );
       if (stop) break;
-      // Steering: user texts queued while tools were running enter the turn
-      // here, before the next round sees the conversation.
-      if (callbacks.pendingAppends) {
-        for (const content of callbacks.pendingAppends()) {
-          chatMessages.push({ role: "user", content });
-        }
-      }
+      injectSteers(takeSteers());
       if (rounds === LAST_ROUND_INDEX && !lastRoundPrefillSent) {
         lastRoundPrefillSent = true;
         chatMessages.push({ role: "assistant", content: LAST_ROUND_PREFILL });
       }
 
       const toolCalls = await streamer.round();
-      // The capture was in the request that just went out; later rounds only
-      // need the text result.
+      // Images were sent with this request; later rounds need only the text.
       for (const m of chatMessages) {
         if (m.role === "tool" && m.images?.length) delete m.images;
       }
-      if (aborted || toolCalls.length === 0) break;
+      if (aborted) break;
+      if (toolCalls.length === 0) {
+        // Late steers get a round of their own, or the finished stream drops them.
+        const late = takeSteers();
+        if (late.length === 0) break;
+        if (streamer.lastRoundContent) {
+          chatMessages.push({
+            role: "assistant",
+            content: streamer.lastRoundContent,
+          });
+        }
+        rounds++;
+        streamer.separator();
+        injectSteers(late);
+        continue;
+      }
       chatMessages.push({
         role: "assistant",
         content: streamer.lastRoundContent,
@@ -306,6 +321,7 @@ export async function streamChat(
         if (outcome.isTodoTool) events.emitEvent("todos:changed");
         toolResultBytes += outcome.content.length;
         persist.push({ callIndex: index, content: outcome.content });
+
         chatMessages.push({
           role: "tool",
           toolName: outcome.toolName,
@@ -319,6 +335,8 @@ export async function streamChat(
       streamer.separator();
     }
     if (!aborted && (stop || !streamer.content.trim())) {
+      // A budget stop skips the top-of-round drain.
+      injectSteers(takeSteers());
       try {
         await finalizeTurn(
           {
@@ -332,7 +350,11 @@ export async function streamChat(
         if (!aborted && !isAbortError(err)) throw err;
       }
       if (!aborted && !streamer.content.trim()) {
-        const used = [...new Set(trace.map((t) => t.tool))].join(", ");
+        const used = [
+          ...new Set(
+            trace.filter((t) => !isSteerActivity(t)).map((t) => t.tool),
+          ),
+        ].join(", ");
         emitChunk(
           "",
           `_The model stopped without writing an answer${used ? ` after using ${used}` : ""}. Ask again, or narrow the question._`,
@@ -344,9 +366,6 @@ export async function streamChat(
     stopTick();
   }
   const usage = streamer.usage;
-  // The provider's first-round count is the only trustworthy number; the
-  // chars/4 fallback is an estimate and is flagged so nothing downstream
-  // (compact trigger, client meter) ever anchors on it as a measurement.
   const turnUsage = recordTurnUsage({
     promptTokens: usage.basePromptTokens,
     evalTokens: usage.evalTokens,
@@ -367,8 +386,7 @@ export async function streamChat(
   maybeNotify(startedAt, streamer.content, (title, body) =>
     events.emitEvent("notify", { title, body }),
   );
-  // owner's finalise write covers its own client, the server persistResult
-  // covers a vanished owner.
+
   tick();
   return {
     content: streamer.content,

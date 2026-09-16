@@ -18,7 +18,6 @@ import {
   projectContextTokens,
   usableTokens,
 } from "@kotys/contracts";
-import type { ToolActivity } from "@kotys/contracts";
 import { compactChat } from "./compact.js";
 import {
   recordCompactFailure,
@@ -26,6 +25,7 @@ import {
 } from "./context-budget.js";
 import type { ConnectorChatMessage } from "../llm/registry.js";
 import type { ToolResultRow, TurnRow } from "@kotys/db";
+import { parseTrace, splitReplyAtSteers } from "./steers.js";
 
 export type TurnPayload = {
   /** Absent on the pending client turn, which is always the newest. */
@@ -37,21 +37,49 @@ export type TurnPayload = {
     id?: string;
     function: { name: string; arguments: Record<string, unknown> };
   }[];
-  /** Replayed tool outcome for an assistant turn, keyed to that turn. */
   toolResults?: { toolName: string; content: string }[];
 };
 
 const REPLAY_TOOL_BUDGET_TOKENS = 6_000;
 
-const resultsOf = (tool_calls: string | null): ToolActivity[] => {
-  if (!tool_calls) return [];
-  try {
-    const parsed = JSON.parse(tool_calls) as unknown;
-    return Array.isArray(parsed) ? (parsed as ToolActivity[]) : [];
-  } catch {
-    return [];
-  }
-};
+// Results match the trace by call_index: steer entries take trace slots but
+// never have a result.
+function replayAssistant(
+  turn: TurnPayload,
+  row: TurnRow,
+  results: ToolResultRow[],
+): TurnPayload[] {
+  const trace = parseTrace(row.tool_calls);
+  const withCalls = (t: TurnPayload, calls: ToolResultRow[]): TurnPayload => {
+    if (calls.length === 0) return t;
+    const named = calls.map((r) => ({
+      id: `replay_${row.id}_${r.call_index}`,
+      name: trace[r.call_index]?.tool ?? `tool_${r.call_index}`,
+      content: r.content,
+    }));
+    return {
+      ...t,
+      toolCalls: named.map((n) => ({
+        id: n.id,
+        function: { name: n.name, arguments: {} },
+      })),
+      toolResults: named.map((n) => ({ toolName: n.name, content: n.content })),
+    };
+  };
+  const parts = splitReplyAtSteers(turn.content, trace);
+  if (parts.length === 1) return [withCalls(turn, results)];
+  return parts.flatMap((part): TurnPayload[] => {
+    if (part.kind === "steer") {
+      return [{ id: turn.id, role: "user", content: part.text }];
+    }
+    const content = part.text.trim();
+    const calls = results.filter(
+      (r) => r.call_index > part.afterCall && r.call_index < part.beforeCall,
+    );
+    if (!content && calls.length === 0) return [];
+    return [withCalls({ id: turn.id, role: turn.role, content }, calls)];
+  });
+}
 
 function withToolResults(turns: TurnPayload[], rows: TurnRow[]): TurnPayload[] {
   const results = getToolResultsForMessages(
@@ -71,27 +99,12 @@ function withToolResults(turns: TurnPayload[], rows: TurnRow[]): TurnPayload[] {
     spent += cost;
     budgeted.add(messageId);
   }
-  return turns.map((t, i) => {
+  return turns.flatMap((t, i) => {
     const row = rows[i];
-    if (row?.role !== "assistant" || !budgeted.has(row.id)) return t;
-    const trace = resultsOf(row.tool_calls);
-    const results = byMessage.get(row.id) ?? [];
-    const named = results.map((r, callIndex) => ({
-      name: trace[callIndex]?.tool ?? `tool_${callIndex}`,
-      content: r.content,
-    }));
-    return {
-      ...t,
-      ...(named.length
-        ? {
-            toolCalls: named.map((n, callIndex) => ({
-              id: `replay_${row.id}_${callIndex}`,
-              function: { name: n.name, arguments: {} },
-            })),
-          }
-        : {}),
-      toolResults: named.map((n) => ({ toolName: n.name, content: n.content })),
-    };
+    if (row?.role !== "assistant") return [t];
+    // Over-budget turns replay without tool traffic, but keep their steers.
+    const results = budgeted.has(row.id) ? (byMessage.get(row.id) ?? []) : [];
+    return replayAssistant(t, row, results);
   });
 }
 
@@ -171,11 +184,6 @@ const turnTokens = (t: TurnPayload): number =>
   (t.images?.length ?? 0) * IMAGE_TOKENS +
   (t.toolResults ?? []).reduce((n, r) => n + estimateTokens(r.content), 0);
 
-/**
- * How big the request about to be sent is. The provider weighed everything up
- * to the last assistant turn; that turn's own reply and what followed are
- * estimated, since the measurement predates the reply.
- */
 function projectedContextTokens(
   chatId: number,
   chat: { summary?: string | null; summary_upto?: number | null },
@@ -183,7 +191,7 @@ function projectedContextTokens(
 ): number {
   const measured = getMeasuredPrompt(chatId, chat.summary_upto ?? 0);
   const since = turns.filter(
-    // `>=` keeps the measured turn's own reply in. The pending turn has no id.
+    // `>=`: the measurement predates the measured turn's own reply.
     (t) => measured === null || t.id === undefined || t.id >= measured.id,
   );
   return projectContextTokens({
@@ -209,7 +217,7 @@ export async function buildDaemonMessages(
   if (!chat) return null;
 
   if (req.historyUpto !== undefined) deleteTurnsAfter(chatId, req.historyUpto);
-  const collect = (summaryUpto: number | null | undefined): TurnPayload[] => {
+  const collect = (summaryUpto: number | null): TurnPayload[] => {
     const turns = historyTurns(
       chatId,
       summaryUpto ?? 0,
@@ -218,11 +226,11 @@ export async function buildDaemonMessages(
     const clientTurns = req.messages.filter((m) => m.role === "user");
     if (req.historyUpto !== undefined) {
       turns.push(...clientTurns.slice(-1));
-    } else {
-      const images = clientTurns[clientTurns.length - 1]?.images;
-      const last = turns[turns.length - 1];
-      if (last?.role === "user" && images?.length) last.images = images;
+      return turns;
     }
+    const images = clientTurns[clientTurns.length - 1]?.images;
+    const last = turns[turns.length - 1];
+    if (last?.role === "user" && images?.length) last.images = images;
     return turns;
   };
 
@@ -242,8 +250,8 @@ export async function buildDaemonMessages(
         err instanceof Error ? err.message : String(err),
       );
     }
-    const compacted = getChatById(chatId);
     // Re-read, or this request carries the summary *and* what it replaced.
+    const compacted = getChatById(chatId);
     if (compacted) {
       chat = compacted;
       turns = collect(chat.summary_upto);

@@ -28,10 +28,17 @@ const IMAGE_WIDGET_SCHEMA = z.object({
   images: z.array(z.string()),
 });
 
+const STEER_WIDGET_SCHEMA = z.object({
+  kind: z.literal("steer"),
+  text: z.string(),
+  id: z.string().optional(),
+});
+
 const WIDGET_SCHEMA = z.union([
   TODO_WIDGET_SCHEMA,
   INPUT_WIDGET_SCHEMA,
   IMAGE_WIDGET_SCHEMA,
+  STEER_WIDGET_SCHEMA,
 ]);
 
 export const TOOL_ACTIVITY_SCHEMA = z.object({
@@ -58,8 +65,7 @@ export const MODEL_LISTING_SCHEMA = z.object({
   contextLength: z.number().nullable(),
   capabilities: z.array(z.string()),
   source: z.enum(["cloud", "local"]),
-  // Zod strips undeclared keys: omitting provider here silently downgraded
-  // every persisted non-ollama model to the ollama connector.
+  // Zod strips undeclared keys; without this, persisted models fall back to ollama.
   provider: z.string().optional(),
   host: z.string().optional(),
 });

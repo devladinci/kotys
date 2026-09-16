@@ -1,115 +1,198 @@
 import { memo, useCallback, useState } from "react";
-import {
-  ActionSheetIOS,
-  Image,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { ActionSheetIOS, Image, Pressable, Text, View } from "react-native";
 import { setStringAsync } from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
+import type { ASTNode, RenderRules } from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
-import { asDataUriImage, isErrorTurn } from "@kotys/contracts";
+import { asDataUriImage, isErrorTurn, isSteerActivity } from "@kotys/contracts";
 import {
   SKILL_FENCE_PREFIX,
   SkillMessage,
   splitContentByWidgets,
 } from "@kotys/core";
-import type { Message } from "@kotys/core";
+import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
+import type { ThemeMode } from "../../lib/theme";
 import { InputCard, ToolTimeline } from "../kit";
-import { s } from "./styles";
+import { markdownStyles, s, themedStyles } from "./styles";
 
 interface IProps {
   message: Message;
-  streaming: boolean;
-  highlighted: boolean;
-  busy: boolean;
+  isStreaming: boolean;
+  isHighlighted: boolean;
+  isBusy: boolean;
   onRegenerate: (id: number) => void;
   onEdit: (m: Message) => void;
 }
 
-const segmentGap = { marginTop: 4, marginBottom: 4 };
-const imageRow = {
-  flexDirection: "row" as const,
-  flexWrap: "wrap" as const,
-  gap: 6,
+interface IFenceNode extends ASTNode {
+  sourceInfo?: string;
+}
+
+const EDIT_RESEND = "Edit & resend";
+const RETRY = "Retry";
+const REGENERATE = "Regenerate";
+const COPY = "Copy";
+const CANCEL = "Cancel";
+const USER_ACTIONS = [EDIT_RESEND, COPY, CANCEL];
+const REPLY_ACTIONS = [REGENERATE, COPY, CANCEL];
+const FAILED_REPLY_ACTIONS = [RETRY, ...REPLY_ACTIONS];
+
+const longPressActions = (isUser: boolean, content: string) => {
+  if (isUser) return USER_ACTIONS;
+  return isErrorTurn(content) ? FAILED_REPLY_ACTIONS : REPLY_ACTIONS;
+};
+
+const displayText = (content: string) =>
+  SkillMessage.fromContent(content)?.displayContent ?? content;
+
+const imageSources = (images: string[]) =>
+  images.map((image) => ({ uri: asDataUriImage(image) }));
+
+const createMarkdownRules = (mode: ThemeMode): RenderRules => {
+  const t = theme(mode);
+  const ts = themedStyles[mode];
+  const md = markdownStyles[mode];
+  return {
+    fence: (node: IFenceNode) => {
+      const language = node.sourceInfo ?? "";
+      if (language.startsWith(SKILL_FENCE_PREFIX)) {
+        return (
+          <View key={node.key} style={[s.skillPill, ts.skillPill]}>
+            <Ionicons name="flash" size={12} color={t.accent} />
+            <Text style={[s.skillPillName, ts.text]}>
+              {language.slice(SKILL_FENCE_PREFIX.length)}
+            </Text>
+          </View>
+        );
+      }
+      return (
+        <Text key={node.key} style={md.fence}>
+          {(node.content ?? "").replace(/\n$/, "")}
+        </Text>
+      );
+    },
+  };
+};
+
+const markdownRules = {
+  light: createMarkdownRules("light"),
+  dark: createMarkdownRules("dark"),
 };
 
 function BubbleBase({
   message,
-  streaming,
-  highlighted,
-  busy,
+  isStreaming,
+  isHighlighted,
+  isBusy,
   onRegenerate,
   onEdit,
 }: IProps) {
   const mode = useThemeMode();
   const t = theme(mode);
+  const ts = themedStyles[mode];
+  const md = markdownStyles[mode];
+  const rules = markdownRules[mode];
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
 
-  const handleEdit = () => onEdit(message);
-  const handleCopy = () => void setStringAsync(message.content);
+  const toolCalls = (message.toolCalls ?? []).filter(
+    (tc) => !isSteerActivity(tc),
+  );
 
-  const longPress = useCallback(() => {
-    if (streaming || busy) return;
-    if (isUser) {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Edit & resend", "Copy", "Cancel"], cancelButtonIndex: 2 },
-        (idx) => {
-          if (idx === 0) handleEdit();
-          if (idx === 1) handleCopy();
-        },
-      );
-    } else {
-      const failed = isErrorTurn(message.content);
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: failed
-            ? ["Retry", "Regenerate", "Copy", "Cancel"]
-            : ["Regenerate", "Copy", "Cancel"],
-          cancelButtonIndex: failed ? 3 : 2,
-        },
-        (idx) => {
-          if (failed) {
-            if (idx === 0 || idx === 1) onRegenerate(message.id);
-          } else if (idx === 0) {
-            onRegenerate(message.id);
-          }
-          if (idx === (failed ? 2 : 1)) handleCopy();
-        },
+  const handleLongPress = useCallback(() => {
+    if (isStreaming || isBusy) return;
+    const options = longPressActions(isUser, message.content);
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options, cancelButtonIndex: options.length - 1 },
+      (idx) => {
+        const action = options[idx];
+        if (action === EDIT_RESEND) onEdit(message);
+        if (action === COPY) void setStringAsync(message.content);
+        if (action === RETRY || action === REGENERATE) onRegenerate(message.id);
+      },
+    );
+  }, [message, isUser, isStreaming, isBusy, onEdit, onRegenerate]);
+
+  const handleToggleThinking = () => setThinkOpen((open) => !open);
+
+  const renderSegment = (segment: ContentSegment) => {
+    if (segment.kind === "text") {
+      return (
+        <Markdown key={segment.id} style={md} rules={rules}>
+          {segment.text || (isStreaming ? "…" : "")}
+        </Markdown>
       );
     }
-    // handleEdit/handleCopy are stable per-render closures over props below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message, isUser, streaming, busy, onEdit, onRegenerate]);
+    const { widget } = segment;
+    if (widget.kind === "input") {
+      return (
+        <View key={segment.id} style={s.segmentGap}>
+          <InputCard widget={widget} />
+        </View>
+      );
+    }
+    if (widget.kind === "image") {
+      return (
+        <View key={segment.id} style={s.widgetImages}>
+          {imageSources(widget.images).map((source) => (
+            <Image
+              key={source.uri}
+              source={source}
+              style={s.bubbleImage}
+              resizeMode="cover"
+            />
+          ))}
+        </View>
+      );
+    }
+    if (widget.kind === "steer") {
+      return (
+        <View
+          key={segment.id}
+          style={[s.bubbleUser, s.segmentGap, ts.userBubble]}
+        >
+          <View style={s.steerLabel}>
+            <Ionicons
+              name="return-down-forward"
+              size={10}
+              color={t.textMuted}
+            />
+            <Text style={[s.steerLabelText, ts.mutedText]}>Sent mid-reply</Text>
+          </View>
+          <Markdown style={md} rules={rules}>
+            {displayText(widget.text)}
+          </Markdown>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
-    <Pressable onLongPress={longPress} delayLongPress={350}>
+    <Pressable onLongPress={handleLongPress} delayLongPress={350}>
       <View
         style={[
           isUser ? s.bubbleUser : s.bubbleAssistant,
-          isUser ? { backgroundColor: t.surfaceUser } : null,
-          highlighted ? { borderWidth: 1, borderColor: t.accent } : null,
+          isUser ? ts.userBubble : null,
+          isHighlighted ? ts.highlighted : null,
         ]}
       >
         {message.model && !isUser ? (
-          <Text style={{ color: t.textMuted, fontSize: 11, marginBottom: 4 }}>
+          <Text style={[s.modelLabel, ts.mutedText]}>
             {message.model}
-            {streaming ? " · streaming…" : ""}
+            {isStreaming ? " · streaming…" : ""}
           </Text>
         ) : null}
         {!isUser && message.thinking ? (
           <Pressable
-            onPress={() => setThinkOpen((v) => !v)}
-            style={[s.thinkToggle, { borderColor: t.border }]}
+            onPress={handleToggleThinking}
+            style={[s.thinkToggle, ts.thinkToggle]}
             hitSlop={4}
           >
             <Ionicons name="sparkles" size={12} color={t.accent} />
-            <Text style={{ color: t.textMuted, fontSize: 12 }}>
-              {streaming && !message.content ? "Thinking…" : "Thinking"}
+            <Text style={[s.thinkText, ts.mutedText]}>
+              {isStreaming && !message.content ? "Thinking…" : "Thinking"}
             </Text>
             <Ionicons
               name={thinkOpen ? "chevron-up" : "chevron-down"}
@@ -119,64 +202,37 @@ function BubbleBase({
           </Pressable>
         ) : null}
         {thinkOpen && message.thinking ? (
-          <View style={[s.thinkBox, { borderLeftColor: t.border }]}>
-            <Text style={{ color: t.textMuted, fontSize: 12 }}>
-              {message.thinking}
-            </Text>
+          <View style={[s.thinkBox, ts.thinkBox]}>
+            <Text style={[s.thinkText, ts.mutedText]}>{message.thinking}</Text>
           </View>
         ) : null}
-        {message.toolCalls && message.toolCalls.length > 0 && !isUser ? (
-          <View style={{ marginBottom: 6 }}>
-            <ToolTimeline calls={message.toolCalls} streaming={streaming} />
+        {toolCalls.length > 0 && !isUser ? (
+          <View style={s.toolTimeline}>
+            <ToolTimeline calls={toolCalls} streaming={isStreaming} />
           </View>
         ) : null}
         {isUser ? (
           <>
             {message.images && message.images.length > 0 ? (
               <View style={s.bubbleImages}>
-                {message.images.map((src) => (
+                {imageSources(message.images).map((source) => (
                   <Image
-                    key={asDataUriImage(src)}
-                    source={{ uri: asDataUriImage(src) }}
+                    key={source.uri}
+                    source={source}
                     style={s.bubbleImage}
                   />
                 ))}
               </View>
             ) : null}
             {message.content ? (
-              <Markdown style={markdownStyles(t)} rules={markdownRules(t)}>
-                {SkillMessage.fromContent(message.content)?.displayContent ??
-                  message.content}
+              <Markdown style={md} rules={rules}>
+                {displayText(message.content)}
               </Markdown>
             ) : null}
           </>
         ) : (
           splitContentByWidgets(message.content, message.toolCalls ?? []).map(
-            (segment) =>
-              segment.kind === "text" ? (
-                <Markdown
-                  key={segment.id}
-                  style={markdownStyles(t)}
-                  rules={markdownRules(t)}
-                >
-                  {segment.text || (streaming ? "…" : "")}
-                </Markdown>
-              ) : segment.widget.kind === "input" ? (
-                <View key={segment.id} style={segmentGap}>
-                  <InputCard widget={segment.widget} />
-                </View>
-              ) : segment.widget.kind === "image" ? (
-                <View key={segment.id} style={imageRow}>
-                  {segment.widget.images.map((img) => (
-                    <Image
-                      key={asDataUriImage(img)}
-                      source={{ uri: asDataUriImage(img) }}
-                      style={s.bubbleImage}
-                      resizeMode="cover"
-                    />
-                  ))}
-                </View>
-              ) : null,
+            renderSegment,
           )
         )}
       </View>
@@ -184,72 +240,4 @@ function BubbleBase({
   );
 }
 
-const Bubble = memo(BubbleBase);
-
-const keyExtractor = (m: Message) => String(m.id);
-
-const skillPillStyles = (t: ReturnType<typeof theme>) => ({
-  row: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    alignSelf: "flex-start" as const,
-    gap: 6,
-    backgroundColor: `${t.accent}1f`,
-    borderColor: `${t.accent}66`,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginVertical: 2,
-  },
-  name: {
-    color: t.text,
-    fontSize: 12,
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
-    fontWeight: "600" as const,
-  },
-});
-
-const markdownStyles = (t: ReturnType<typeof theme>) => ({
-  body: { color: t.text, fontSize: 15 },
-  strong: { color: t.text, fontWeight: "700" as const },
-  em: { color: t.text },
-  code_inline: {
-    backgroundColor: t.surface2,
-    color: t.text,
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
-  },
-  fence: {
-    backgroundColor: t.surface2,
-    color: t.text,
-    borderRadius: t.radius.md,
-  },
-  heading1: { color: t.text, fontWeight: "700" as const },
-  heading2: { color: t.text, fontWeight: "700" as const },
-  heading3: { color: t.text, fontWeight: "600" as const },
-  link: { color: t.accent },
-  bullet_list_icon: { color: t.textMuted },
-});
-
-const markdownRules = (t: ReturnType<typeof theme>) => ({
-  fence: (node: { key?: string; sourceInfo?: string; content?: string }) => {
-    const language = node.sourceInfo ?? "";
-    if (language.startsWith(SKILL_FENCE_PREFIX)) {
-      return (
-        <View key={node.key} style={skillPillStyles(t).row}>
-          <Ionicons name="flash" size={12} color={t.accent} />
-          <Text style={skillPillStyles(t).name}>
-            {language.slice(SKILL_FENCE_PREFIX.length)}
-          </Text>
-        </View>
-      );
-    }
-    return (
-      <Text key={node.key} style={markdownStyles(t).fence}>
-        {(node.content ?? "").replace(/\n$/, "")}
-      </Text>
-    );
-  },
-});
-
-export { Bubble, keyExtractor };
+export const Bubble = memo(BubbleBase);

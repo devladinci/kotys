@@ -23,6 +23,14 @@ export type ImageWidget = {
   images: string[];
 };
 
+/** A user message injected mid-turn, traced where the model received it. */
+export type SteerWidget = {
+  kind: "steer";
+  text: string;
+  /** The sender's key, echoed back as the delivery receipt. */
+  id?: string;
+};
+
 export type ToolActivity = {
   tool: string;
   server?: string;
@@ -42,9 +50,14 @@ export type ToolActivity = {
   results?: { title: string; url: string }[];
   /** Base64 preview images (e.g. screenshot thumbnails) shown in the timeline. */
   images?: string[];
-  widget?: TodoWidget | InputWidget | ImageWidget;
+  widget?: TodoWidget | InputWidget | ImageWidget | SteerWidget;
   error?: string;
 };
+
+export const isSteerActivity = (
+  activity: ToolActivity | null | undefined,
+): activity is ToolActivity & { widget: SteerWidget } =>
+  activity?.widget?.kind === "steer";
 
 export type ToolCategory =
   | "read"

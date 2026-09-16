@@ -24,9 +24,9 @@ const renderComposer = () => {
   render(
     <KotysProviderForTest>
       <Composer
-        needsApiKey={false}
+        isApiKeyMissing={false}
         modelName="test-model"
-        visionCapable={false}
+        isVisionCapable={false}
         hasMessages={false}
         isLoading={false}
         streamingId={null}

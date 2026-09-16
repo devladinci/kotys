@@ -20,6 +20,11 @@ export type StreamRequest = {
   mode?: PermissionMode;
 };
 
+export type SteerAppend = {
+  content: string;
+  id?: string;
+};
+
 export type StreamChunk = {
   requestId: number;
   /** Monotonic per request. Used to resume after a dropped socket. */
