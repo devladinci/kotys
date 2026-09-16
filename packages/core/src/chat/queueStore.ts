@@ -1,14 +1,12 @@
-/**
- * Module-level per-chat send queue. Messages typed while a chat's stream is
- * running park here and drain FIFO once that chat goes idle. Keyed by chatId
- * so a queued message survives switching to another chat, and survives view
- * unmounts (the settings route). Reactive via useSyncExternalStore.
- */
+// Module-level and keyed by chatId, so a queued message outlives chat
+// switches and view unmounts.
 
 export interface QueuedMessage {
   id: number;
   text: string;
   images: string[];
+  /** Queued until the receipt; if the turn ends first, the drain sends it. */
+  steer?: { requestId: number; key: string };
 }
 
 const EMPTY: QueuedMessage[] = [];
@@ -40,6 +38,27 @@ export function dequeueQueued(chatId: number, id: number): void {
   emit();
 }
 
+export function markSteering(
+  chatId: number,
+  id: number,
+  steer: NonNullable<QueuedMessage["steer"]>,
+): void {
+  const queue = queues.get(chatId);
+  if (!queue?.some((q) => q.id === id)) return;
+  const next = queue.map((q) => (q.id === id ? { ...q, steer } : q));
+  queues.set(chatId, next);
+  emit();
+}
+
+export function confirmSteer(key: string): void {
+  for (const [chatId, queue] of queues) {
+    const hit = queue.find((q) => q.steer?.key === key);
+    if (!hit) continue;
+    dequeueQueued(chatId, hit.id);
+    return;
+  }
+}
+
 // The head check guards a dequeue that raced the drain.
 export function drainQueued(
   chatId: number,
@@ -64,7 +83,7 @@ export function subscribeQueued(listener: () => void): () => void {
   };
 }
 
-/** Reset to pristine — for tests only. */
+/** Tests only. */
 export function resetQueued(): void {
   queues.clear();
   emit();

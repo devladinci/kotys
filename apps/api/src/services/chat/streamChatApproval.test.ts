@@ -8,7 +8,6 @@ import { streamChat, type StreamCallbacks } from "./streamChat.js";
 
 const HOME = "/tmp/kotys-streamchat-test-home";
 
-/** One queued round: the chunk sequence the fake Ollama yields for a chat(). */
 type Part = {
   message?: {
     content?: string;
@@ -175,8 +174,6 @@ describe("streamChat approval flow", () => {
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls[0].status).toBe("error");
     await expect(fs.access(path.join(HOME, "denied.txt"))).rejects.toThrow();
-    // Round 2 happened (the model reacted to the denial), so the loop
-    // continued after the declined call instead of stalling.
     expect(state.roundBodies).toHaveLength(2);
   });
 
@@ -201,13 +198,11 @@ describe("streamChat approval flow", () => {
     controller.abort();
 
     const result = await pending;
-    // The dialog was retracted and nothing was written.
     expect(cancels).toEqual(requests);
     expect(result.content).toContain("Working on it.");
     expect(result.toolCalls[0].status).toBe("error");
     await expect(fs.access(path.join(HOME, "attack.txt"))).rejects.toThrow();
     expect(state.abortedRounds).toBeGreaterThan(0);
-    // The second, queued round must never be requested after the stop.
     expect(state.roundBodies).toHaveLength(1);
   });
 
@@ -254,7 +249,6 @@ describe("streamChat widget interleaving", () => {
 
     const call = result.toolCalls[0];
     expect(call.textOffset).toBe("Yes I will test it.\n\n".length);
-    // The text after the offset is exactly what the second round streamed.
     expect(result.content.slice(call.textOffset ?? 0).trim()).toBe(
       "Here is the review.",
     );
@@ -414,11 +408,9 @@ describe("streamChat request shaping", () => {
     const names = (body.tools ?? []).map((d) => d.function.name);
     expect(names).not.toContain("bash");
     expect(names).not.toContain("write_file");
-    // Enabled always-loaded tools are offered with full schemas.
     expect(names).toContain("list");
     const system = body.messages.find((m) => m.role === "system");
-    // Enabled lazy tools are still advertised as signatures; disabled tools
-    // are not advertised at all.
+    // apply_patch is lazy: the prompt advertises its signature instead.
     expect(system?.content).toContain("apply_patch(");
     expect(system?.content).not.toContain("bash(");
   });
@@ -432,7 +424,6 @@ describe("streamChat request shaping", () => {
     state.toolsEnabled = allDisabled;
     state.scripts.push([doneText("Only prose.")]);
     await streamChat(baseReq(), cbs(), new AbortController().signal);
-    // No tools → the request must not advertise an empty tools array.
     expect(state.roundBodies[0] && "tools" in state.roundBodies[0]).toBe(false);
   });
 
@@ -483,5 +474,102 @@ describe("streamChat request shaping", () => {
     );
     expect(result.promptTokens).toBeGreaterThan(0);
     expect(result.evalTokens).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("streamChat stop", () => {
+  // An aborted request fails the pending read with the signal's reason, as
+  // undici does.
+  const sse =
+    (deltas: object[], end: "done" | "open" | Error) =>
+    (signal: AbortSignal | null | undefined) => {
+      const frames = deltas.map(
+        (delta) => `data: ${JSON.stringify({ choices: [{ delta }] })}\n\n`,
+      );
+      if (end === "done") frames.push("data: [DONE]\n\n");
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener(
+            "abort",
+            () => controller.error(signal.reason),
+            { once: true },
+          );
+        },
+        pull(controller) {
+          const frame = frames.shift();
+          if (frame) controller.enqueue(new TextEncoder().encode(frame));
+          else if (end === "done") controller.close();
+          else if (end instanceof Error) controller.error(end);
+        },
+      });
+    };
+
+  const stubOmlx = (replies: ReturnType<typeof sse>[]) => {
+    const fetchMock = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const reply = replies.shift();
+      if (!reply) throw new Error("unexpected request");
+      return new Response(reply(init?.signal), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  const omlxReq = (): StreamRequest => ({ ...baseReq(), provider: "omlx" });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("a stop mid-reply ends the turn with what streamed, not an error", async () => {
+    await fs.mkdir(HOME, { recursive: true });
+    const fetchMock = stubOmlx([
+      sse(
+        [
+          { content: "Checking." },
+          {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call_1",
+                function: { name: "list", arguments: '{"path":"."}' },
+              },
+            ],
+          },
+        ],
+        "done",
+      ),
+      sse([{ content: "Partial ans" }], "open"),
+    ]);
+    const streamed: string[] = [];
+    const controller = new AbortController();
+    const pending = streamChat(
+      omlxReq(),
+      {
+        onChunk: (c) => streamed.push(c.contentDelta),
+        onToolActivity: () => undefined,
+      },
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(streamed.join("")).toContain("Partial ans"));
+    controller.abort();
+
+    const result = await pending;
+    expect(result.content).toBe("Checking.\n\nPartial ans");
+    expect(result.toolCalls.map((t) => [t.tool, t.status])).toEqual([
+      ["list", "done"],
+    ]);
+    // No retry and no forced wrap-up round after a stop.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a provider failure mid-reply still fails the turn", async () => {
+    stubOmlx([sse([{ content: "Partial ans" }], new TypeError("terminated"))]);
+    await expect(
+      streamChat(omlxReq(), cbs(), new AbortController().signal),
+    ).rejects.toThrow("terminated");
   });
 });

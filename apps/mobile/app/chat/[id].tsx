@@ -10,14 +10,22 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Bubble, keyExtractor } from "../../components/chat/Bubble";
-import { s } from "../../components/chat/styles";
+import type {
+  ListRenderItemInfo,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from "react-native";
+import { Bubble } from "../../components/chat/Bubble";
+import { QueuedMessageRow } from "../../components/chat/QueuedMessageRow";
+import { ON_ACCENT, s, themedStyles } from "../../components/chat/styles";
+import { TurnSeparator } from "../../components/chat/TurnSeparator";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DEFAULT_MODEL,
   parseSlashQuery,
+  queueCaption,
   useAppStore,
   useChat,
   useChatList,
@@ -27,8 +35,8 @@ import {
   useUserInputStore,
   useVoiceInput,
 } from "@kotys/core";
-import type { Message } from "@kotys/core";
-import type { SkillListing } from "@kotys/contracts";
+import type { Message, VoiceStatus } from "@kotys/core";
+import type { ModelListing, SkillListing } from "@kotys/contracts";
 import { registerScrollHandler } from "../../lib/platform";
 import { useChatScreen } from "../../lib/useChatScreen";
 import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
@@ -42,8 +50,63 @@ import {
   TokenBadge,
 } from "../../components/kit";
 
+type ChatRouteParams = { id: string };
+
+const RENAME_CHAT = "Rename chat";
+const PHOTO_LIBRARY = "Photo library";
+const TAKE_PHOTO = "Take photo";
+const CANCEL = "Cancel";
+const CHAT_ACTIONS = [RENAME_CHAT, CANCEL];
+const ATTACH_ACTIONS = [PHOTO_LIBRARY, TAKE_PHOTO, CANCEL];
+const KEYBOARD_GAP = 8;
+const AT_BOTTOM_THRESHOLD = 64;
+
+const keyExtractor = (m: Message) => String(m.id);
+
+const bottomInset = (
+  kbHeight: number,
+  safeBottom: number,
+  minBottom: number,
+) => ({
+  paddingBottom:
+    kbHeight > 0 ? kbHeight + KEYBOARD_GAP : Math.max(safeBottom, minBottom),
+});
+
+const reportSend = (pending: Promise<{ needsSettings: boolean }>) => {
+  pending
+    .then((res) => {
+      if (!res.needsSettings) return;
+      Alert.alert(
+        "API key required",
+        "The selected model runs in the cloud and needs an API key. Set it in Settings → API key.",
+      );
+    })
+    .catch((err: unknown) => {
+      Alert.alert(
+        "Could not send",
+        err instanceof Error ? err.message : String(err),
+      );
+    });
+};
+
+const composerPlaceholder = (status: VoiceStatus, seconds: number) => {
+  if (status === "recording") {
+    return `Listening… ${seconds}s — release to transcribe`;
+  }
+  if (status === "transcribing") return "Transcribing…";
+  return "Message — runs on your Mac";
+};
+
+const micLabel = (status: VoiceStatus, seconds: number) => {
+  if (status === "recording") {
+    return `Listening — ${seconds} seconds. Release to transcribe`;
+  }
+  if (status === "transcribing") return "Transcribing";
+  return "Hold to dictate";
+};
+
 function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<ChatRouteParams>();
   const chatId = id ? Number(id) : null;
   const navigation = useNavigation();
   const router = useRouter();
@@ -51,22 +114,30 @@ function ChatScreen() {
 
   const mode = useThemeMode();
   const t = theme(mode);
+  const ts = themedStyles[mode];
+
   const {
     chats,
     loaded: chatsLoaded,
     selectModelForActiveChat,
     renameChat,
   } = useChatList();
+
   const chat = useMemo(
     () => chats.find((c) => c.id === chatId) ?? null,
     [chats, chatId],
   );
+  const chatTitle = chat?.title ?? "";
+  const chatSummary = chat?.summary ?? null;
+  const chatSummaryUpto = chat?.summary_upto ?? null;
+  const isCompacted = Boolean(chatSummary);
+
   const { setActiveChatId, bumpChatsVersion } = useAppStore();
-  const thinkingEffort = useAppStore((s) => s.thinkingEffort);
-  const permissionMode = useAppStore((s) => s.permissionMode);
+  const thinkingEffort = useAppStore((state) => state.thinkingEffort);
+  const permissionMode = useAppStore((state) => state.permissionMode);
 
   const listRef = useRef<FlatList<Message>>(null);
-  const screen = useChatScreen();
+
   const {
     draft,
     setDraft,
@@ -87,32 +158,43 @@ function ChatScreen() {
     addPendingImages,
     removePendingImage,
     clearDraft,
-  } = screen;
+  } = useChatScreen();
+
+  const composerInset = bottomInset(kbHeight, insets.bottom, 8);
+  const panelInset = bottomInset(kbHeight, insets.bottom, 12);
 
   useEffect(() => {
     if (chatId !== null) setActiveChatId(chatId);
   }, [chatId, setActiveChatId]);
 
-  // The chat under this screen vanished (deleted here or from another
-  // client) — leave instead of rendering a dead chat against a stale id.
   useEffect(() => {
-    if (chatId !== null && chatsLoaded && !chats.some((c) => c.id === chatId)) {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
-      } else {
-        router.replace("/");
-      }
+    if (chatId === null || !chatsLoaded) return;
+    if (chats.some((c) => c.id === chatId)) return;
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
     }
+    router.replace("/");
   }, [chatId, chatsLoaded, chats, navigation, router]);
 
   const chatModel = chat?.llmModel ?? DEFAULT_MODEL;
-  const inputPending = useUserInputStore((s) => s.pending);
+  const inputPending = useUserInputStore((state) => state.pending);
   const supportsThinking = chatModel.capabilities.includes("thinking");
   const visionCapable = chatModel.capabilities.includes("vision");
   const platform = usePlatform();
   const { skills } = useSkills();
   const slashQuery = useMemo(() => parseSlashQuery(draft), [draft]);
   const [slashDismissed, setSlashDismissed] = useState(false);
+  const hasText = draft.trim() !== "";
+  const canSubmit = hasText || pendingImages.length > 0;
+
+  const handleChatCreated = useCallback(
+    (newId: number) => {
+      setActiveChatId(newId);
+      bumpChatsVersion();
+    },
+    [setActiveChatId, bumpChatsVersion],
+  );
 
   const {
     messages,
@@ -131,97 +213,71 @@ function ChatScreen() {
     steer,
   } = useChat({
     activeChatId: chatId,
-    chatSummary: chat?.summary ?? null,
-    chatSummaryUpto: chat?.summary_upto ?? null,
+    chatSummary,
+    chatSummaryUpto,
     chatModel,
-    chatTitle: chat?.title ?? "",
+    chatTitle,
     chatTopics: chat?.topics ?? [],
-    onChatCreated: (newId) => {
-      setActiveChatId(newId);
-      bumpChatsVersion();
-    },
-    onTitleInferred: () => bumpChatsVersion(),
-    onTopicsInferred: () => bumpChatsVersion(),
+    onChatCreated: handleChatCreated,
+    onTitleInferred: bumpChatsVersion,
+    onTopicsInferred: bumpChatsVersion,
   });
 
   const promptRename = useCallback(() => {
-    const prompt = (
-      Alert as unknown as {
-        prompt?: (
-          title: string,
-          message: string | undefined,
-          cb: (text: string) => void,
-          type: string,
-          defaultValue: string,
-        ) => void;
-      }
-    ).prompt;
-    if (!prompt) return;
-    prompt(
-      "Rename chat",
+    Alert.prompt(
+      RENAME_CHAT,
       undefined,
       (text) => {
         const title = (text ?? "").trim();
-        if (title && chatId !== null) {
-          void renameChat(chatId, title);
-          bumpChatsVersion();
-        }
+        if (!title || chatId === null) return;
+        void renameChat(chatId, title);
+        bumpChatsVersion();
       },
       "plain-text",
-      chat?.title ?? "",
+      chatTitle,
     );
-  }, [chatId, chat?.title, renameChat, bumpChatsVersion]);
+  }, [chatId, chatTitle, renameChat, bumpChatsVersion]);
 
-  const openChatActions = useCallback(() => {
-    if (Platform.OS === "ios") {
-      // The per-chat controls (model / thinking / permission) live as tappable
-      // chips in the composer toolbar below the input — one tap each. The
-      // header "…" only carries the rarely-used rename action.
-      void ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Rename chat", "Cancel"], cancelButtonIndex: 1 },
-        (idx) => {
-          if (idx === 0) promptRename();
-        },
-      );
-    }
+  const handleOpenChatActions = useCallback(() => {
+    if (Platform.OS !== "ios") return;
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: CHAT_ACTIONS, cancelButtonIndex: CHAT_ACTIONS.length - 1 },
+      (idx) => {
+        if (CHAT_ACTIONS[idx] === RENAME_CHAT) promptRename();
+      },
+    );
   }, [promptRename]);
 
-  // nav bar title + actions; keyed on the rounded context percent so
-  // streaming chunks don't re-dispatch setOptions (which re-renders the
-  // screen — an unkeyed effect here was an infinite loop).
+  const handleCompact = useCallback(() => {
+    void compactNow();
+  }, [compactNow]);
+
   const headerBadge = useTokenEstimator(messages, chatModel.contextLength, {
-    summary: chat?.summary ?? null,
-    summaryUpto: chat?.summary_upto ?? null,
+    summary: chatSummary,
+    summaryUpto: chatSummaryUpto,
   });
   const headerPct = contextUsed > 0 ? headerBadge.pct : 0;
-  const headerSignature = `${chat?.title ?? ""}|${headerPct}|${headerBadge.ctx}|${chatModel.name}|${!!chat?.summary}|${isCompacting}|${mode}`;
+  // setOptions re-renders the screen; without this signature gate it loops.
+  const headerSignature = `${chatTitle}|${headerPct}|${headerBadge.ctx}|${chatModel.name}|${isCompacted}|${isCompacting}|${mode}`;
   const prevHeaderSignature = useRef<string | null>(null);
+
   useEffect(() => {
     if (prevHeaderSignature.current === headerSignature) return;
     prevHeaderSignature.current = headerSignature;
     navigation.setOptions({
-      title: chat?.title || "Chat",
+      title: chatTitle || "Chat",
       headerRight: () => (
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 14,
-            alignItems: "center",
-            // 44pt-class touch band, vertically centered in the header.
-            paddingVertical: 10,
-            paddingRight: 4,
-          }}
-        >
+        <View style={s.headerActions}>
           <TokenBadge
             used={contextUsed}
             pct={headerBadge.pct}
             ctx={headerBadge.ctx}
-            compacted={!!chat?.summary}
+            compacted={isCompacted}
             isCompacting={isCompacting}
-            onCompact={() => void compactNow()}
+            onCompact={handleCompact}
           />
           <Pressable
-            onPress={openChatActions}
+            onPress={handleOpenChatActions}
             hitSlop={12}
             accessibilityLabel="Chat options"
           >
@@ -233,101 +289,91 @@ function ChatScreen() {
   }, [
     headerSignature,
     navigation,
-    chat,
-    chatModel,
+    chatTitle,
     contextUsed,
     headerBadge.pct,
     headerBadge.ctx,
+    isCompacted,
     isCompacting,
-    compactNow,
-    openChatActions,
+    handleCompact,
+    handleOpenChatActions,
     t.text,
-    thinkingEffort,
-    permissionMode,
   ]);
 
-  // Platform seam: registration happens once per mount; messages are read
-  // through a ref so the handler never goes stale.
   const messagesRef = useRef<Message[]>(messages);
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
   useEffect(() => {
     registerScrollHandler((messageId) => {
       const index = messagesRef.current.findIndex((m) => m.id === messageId);
-      if (index >= 0)
-        listRef.current?.scrollToIndex({ index, viewPosition: 0.5 });
+      if (index < 0) return;
+      listRef.current?.scrollToIndex({ index, viewPosition: 0.5 });
     });
     return () => registerScrollHandler(null);
   }, []);
 
   const lastMessageId =
     messages.length > 0 ? messages[messages.length - 1].id : 0;
+
   useEffect(() => {
-    if (atBottom && lastMessageId) {
-      listRef.current?.scrollToEnd({ animated: true });
-    }
+    if (!atBottom || !lastMessageId) return;
+    listRef.current?.scrollToEnd({ animated: true });
   }, [lastMessageId, atBottom]);
 
   const handleAttach = useCallback(
-    (mode: "library" | "camera") => {
+    (source: "library" | "camera") => {
       const remaining = MAX_IMAGES - pendingImages.length;
       if (remaining <= 0) return;
-      const run = mode === "camera" ? takePhoto() : pickImages(remaining);
+      const run = source === "camera" ? takePhoto() : pickImages(remaining);
       run.then(addPendingImages).catch(() => undefined);
     },
     [pendingImages.length, addPendingImages],
   );
 
-  const submit = useCallback(() => {
+  const handleAttachPress = useCallback(() => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ATTACH_ACTIONS,
+        cancelButtonIndex: ATTACH_ACTIONS.length - 1,
+      },
+      (idx) => {
+        if (ATTACH_ACTIONS[idx] === PHOTO_LIBRARY) handleAttach("library");
+        if (ATTACH_ACTIONS[idx] === TAKE_PHOTO) handleAttach("camera");
+      },
+    );
+  }, [handleAttach]);
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
     const text = draft.trim();
-    if (!text && pendingImages.length === 0) return;
-    // Same guard as the web Composer: a non-vision model silently ignores
-    // attachments instead of erroring at the daemon.
     const images = visionCapable ? pendingImages : [];
     setSlashDismissed(false);
     clearDraft();
-    // A send is an explicit "show me the latest" signal — re-pin even if the
-    // user had scrolled up (ChatGPT/iMessage behavior).
     pinBottom();
-    // Keep the keyboard open — closing it after every message is the
-    // classic chat-app annoyance (iMessage/WhatsApp/ChatGPT all keep it).
-    send(text, images)
-      .then((res) => {
-        if (res.needsSettings) {
-          Alert.alert(
-            "API key required",
-            "The selected model runs in the cloud and needs an API key. Set it in Settings → API key.",
-          );
-        }
-      })
-      .catch((err: unknown) => {
-        Alert.alert(
-          "Could not send",
-          err instanceof Error ? err.message : String(err),
-        );
-      });
+    reportSend(send(text, images));
     requestAnimationFrame(() =>
       listRef.current?.scrollToEnd({ animated: true }),
     );
   }, [
+    canSubmit,
     draft,
     pendingImages,
     visionCapable,
     send,
     clearDraft,
     pinBottom,
-    setSlashDismissed,
   ]);
 
   const handlePick = useCallback(
     (skill: SkillListing) => {
-      const parsed = parseSlashQuery(draft);
-      const tail = parsed && parsed.args ? ` ${parsed.args}` : "";
+      const tail = slashQuery?.args ? ` ${slashQuery.args}` : "";
       setDraft(`/${skill.name}${tail} `);
       setSlashDismissed(true);
     },
-    [draft, setDraft],
+    [slashQuery, setDraft],
   );
 
   const handleDismiss = useCallback(() => {
@@ -335,56 +381,54 @@ function ChatScreen() {
     setDraft("");
   }, [setDraft]);
 
-  const sendVoiceTranscript = useCallback(
+  const handleTranscript = useCallback(
     (text: string) => {
-      // Auto-send path: same needsSettings / error handling as submit, so a
-      // voice message never vanishes silently. Re-pin like submit does.
       pinBottom();
-      send(text, [])
-        .then((res) => {
-          if (res.needsSettings) {
-            Alert.alert(
-              "API key required",
-              "The selected model runs in the cloud and needs an API key. Set it in Settings → API key.",
-            );
-          }
-        })
-        .catch((err: unknown) => {
-          Alert.alert(
-            "Could not send",
-            err instanceof Error ? err.message : String(err),
-          );
-        });
+      reportSend(send(text, []));
     },
     [send, pinBottom],
   );
 
-  const voice = useVoiceInput(platform, sendVoiceTranscript);
-
-  // Elapsed seconds while recording — mirrors the web MicButton's counter so
-  // a held press visibly shows it's live even before any text appears.
-  const recording = voice.status === "recording";
+  const {
+    status: voiceStatus,
+    error: voiceError,
+    start: startVoice,
+    stop: stopVoice,
+    cancel: cancelVoice,
+  } = useVoiceInput(platform, handleTranscript);
+  const isRecording = voiceStatus === "recording";
+  const isTranscribing = voiceStatus === "transcribing";
   const [voiceSeconds, setVoiceSeconds] = useState(0);
+
   useEffect(() => {
-    if (!recording) return;
+    if (!isRecording) return;
     const started = Date.now();
     const timer = setInterval(
       () => setVoiceSeconds(Math.floor((Date.now() - started) / 1000)),
       500,
     );
     return () => clearInterval(timer);
-  }, [recording]);
+  }, [isRecording]);
 
-  // Voice failures (denied mic, transcription error) reach the user the
-  // same way a failed send does.
-  const voiceStatus = voice.status;
-  const voiceErrorText = voice.error;
   useEffect(() => {
-    if (voiceStatus !== "error" || !voiceErrorText) return;
-    Alert.alert("Voice input failed", voiceErrorText);
-  }, [voiceStatus, voiceErrorText]);
+    if (voiceStatus !== "error" || !voiceError) return;
+    Alert.alert("Voice input failed", voiceError);
+  }, [voiceStatus, voiceError]);
 
-  const commitEdit = useCallback(() => {
+  const handleMicPressIn = useCallback(() => {
+    setVoiceSeconds(0);
+    void startVoice();
+  }, [startVoice]);
+
+  const handleMicPressOut = useCallback(() => {
+    if (isRecording) {
+      stopVoice();
+      return;
+    }
+    cancelVoice();
+  }, [isRecording, stopVoice, cancelVoice]);
+
+  const handleCommitEdit = useCallback(() => {
     if (!editing) return;
     const text = editing.text.trim();
     const target = editing.id;
@@ -393,125 +437,147 @@ function ChatScreen() {
     void editAndResend(target, text).catch(() => undefined);
   }, [editing, editAndResend, setEditing]);
 
+  const handleCancelEdit = useCallback(() => {
+    setEditing(null);
+  }, [setEditing]);
+
+  const handleEditTextChange = useCallback(
+    (text: string) => {
+      if (!editing) return;
+      setEditing({ id: editing.id, text });
+    },
+    [editing, setEditing],
+  );
+
   const handleScroll = useCallback(
-    (e: {
-      nativeEvent: {
-        layoutMeasurement: { height: number };
-        contentOffset: { y: number };
-        contentSize: { height: number };
-      };
-    }) => {
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
       const bottom = layoutMeasurement.height + contentOffset.y;
       const paddingToEnd = contentSize.height - bottom;
-      atBottomRef.current = paddingToEnd < 64;
+      atBottomRef.current = paddingToEnd < AT_BOTTOM_THRESHOLD;
       setAtBottom(atBottomRef.current);
     },
     [atBottomRef, setAtBottom],
   );
 
-  // `regenerate` changes identity on every streamed flush (it reads
-  // `messages`, so it's rebuilt per chunk). Funneling it through a ref keeps
-  // handleRegenerate stable so the memoized Bubble only re-renders for its own
-  // message changes — otherwise renderBubble churns and every visible bubble
-  // re-parses markdown at flush cadence, which starves the JS thread and makes
-  // typing in the composer lag.
+  // `regenerate` is rebuilt on every streamed flush; the ref keeps
+  // handleRegenerate stable so memoized Bubbles skip re-rendering.
   const regenerateRef = useRef(regenerate);
+
   useEffect(() => {
     regenerateRef.current = regenerate;
   }, [regenerate]);
+
   const handleRegenerate = useCallback((mid: number) => {
     void regenerateRef.current(mid).catch(() => undefined);
   }, []);
+
   const handleEdit = useCallback(
     (m: Message) => setEditing({ id: m.id, text: m.content }),
     [setEditing],
   );
 
-  // Stable so ChatScreen's per-keystroke renders bail out of the
-  // VirtualizedList pass (it shallow-compares props) instead of re-laying
-  // out the virtualized tree on every keypress.
-  // scrollToEnd must be deferred: called synchronously inside
-  // onContentSizeChange it races the not-yet-committed layout and silently
-  // no-ops, leaving the stream's tail below the fold.
+  // Deferred: called synchronously it races the uncommitted layout and no-ops.
   const handleContentSizeChange = useCallback(() => {
-    if (atBottomRef.current)
-      requestAnimationFrame(() =>
-        listRef.current?.scrollToEnd({ animated: false }),
-      );
+    if (!atBottomRef.current) return;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToEnd({ animated: false }),
+    );
   }, [atBottomRef]);
+
+  const handleJumpToLatest = useCallback(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const handleOpenModelSheet = useCallback(() => {
+    setModelSheet(true);
+  }, [setModelSheet]);
+
+  const handleCloseModelSheet = useCallback(() => {
+    setModelSheet(false);
+  }, [setModelSheet]);
+
+  const handleOpenThinkSheet = useCallback(() => {
+    setThinkSheet(true);
+  }, [setThinkSheet]);
+
+  const handleCloseThinkSheet = useCallback(() => {
+    setThinkSheet(false);
+  }, [setThinkSheet]);
+
+  const handleOpenModeSheet = useCallback(() => {
+    setModeSheet(true);
+  }, [setModeSheet]);
+
+  const handleCloseModeSheet = useCallback(() => {
+    setModeSheet(false);
+  }, [setModeSheet]);
+
+  const handleSelectModel = useCallback(
+    async (m: ModelListing) => {
+      if (chatId === null) return;
+      await selectModelForActiveChat(m);
+    },
+    [chatId, selectModelForActiveChat],
+  );
+
+  const pendingThumbs = useMemo(() => {
+    const copies = new Map<string, number>();
+    return pendingImages.map((uri) => {
+      const tail = uri.slice(-16);
+      const copy = copies.get(tail) ?? 0;
+      copies.set(tail, copy + 1);
+      return { key: `${tail}-${copy}`, source: { uri } };
+    });
+  }, [pendingImages]);
+
   const emptyComponent = useMemo(
     () => (
       <View style={s.empty}>
         <Ionicons name="sparkles-outline" size={36} color={t.textMuted} />
-        <Text
-          style={{ color: t.textMuted, textAlign: "center", marginTop: 10 }}
-        >
+        <Text style={[s.emptyText, ts.mutedText]}>
           Ask anything — the model runs on your Mac{"\n"}and can use its tools.
         </Text>
       </View>
     ),
-    [t.textMuted],
+    [t.textMuted, ts.mutedText],
   );
-  const listContentStyle = useMemo(
-    () =>
-      ({
-        padding: 12,
-        // Spacing between messages comes from the role-aware separator, not a
-        // uniform gap: tight within a turn, wider before a new user message.
-        flexGrow: 1,
-        justifyContent: "flex-end",
-      }) as const,
-    [],
-  );
-  // Turn rhythm (the ChatGPT/iMessage pattern): consecutive messages inside a
-  // turn sit tight; a new user message opens a visibly larger gap. Runs as a
-  // separator so the memoized Bubble never re-renders for spacing changes.
-  const turnSeparator = useCallback(
-    ({ trailingItem }: { leadingItem?: Message; trailingItem?: Message }) => (
-      <View style={{ height: trailingItem?.role === "user" ? 16 : 4 }} />
+
+  const renderBubble = useCallback(
+    ({ item }: ListRenderItemInfo<Message>) => (
+      <Bubble
+        message={item}
+        isStreaming={streamingId === item.id}
+        isHighlighted={highlightId === item.id}
+        isBusy={isLoading}
+        onRegenerate={handleRegenerate}
+        onEdit={handleEdit}
+      />
     ),
-    [],
-  );
-  const renderBubble = useMemo(
-    () =>
-      ({ item }: { item: Message }) => (
-        <Bubble
-          message={item}
-          streaming={streamingId === item.id}
-          highlighted={highlightId === item.id}
-          busy={isLoading}
-          onRegenerate={handleRegenerate}
-          onEdit={handleEdit}
-        />
-      ),
     [streamingId, highlightId, isLoading, handleRegenerate, handleEdit],
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg }}>
+    <View style={[s.screen, ts.screen]}>
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={keyExtractor}
         renderItem={renderBubble}
-        ItemSeparatorComponent={turnSeparator}
+        ItemSeparatorComponent={TurnSeparator}
         onScroll={handleScroll}
         scrollEventThrottle={100}
         onContentSizeChange={handleContentSizeChange}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         ListEmptyComponent={emptyComponent}
-        contentContainerStyle={listContentStyle}
+        contentContainerStyle={s.listContent}
       />
 
       {!atBottom ? (
         <Pressable
-          onPress={() => listRef.current?.scrollToEnd({ animated: true })}
-          style={[
-            s.jump,
-            { backgroundColor: t.surface, borderColor: t.border },
-          ]}
+          onPress={handleJumpToLatest}
+          style={[s.jump, ts.jump]}
           accessibilityLabel="Jump to latest"
         >
           <Ionicons name="arrow-down" size={16} color={t.text} />
@@ -519,129 +585,62 @@ function ChatScreen() {
       ) : null}
 
       {editing ? (
-        <View
-          style={[
-            s.editBar,
-            {
-              backgroundColor: t.surface,
-              borderTopColor: t.border,
-              // Same bottom rule as the composer: keyboard frame (+ daylight),
-              // else home inset.
-              paddingBottom:
-                kbHeight > 0 ? kbHeight + 8 : Math.max(insets.bottom, 12),
-            },
-          ]}
-        >
-          <Text style={{ color: t.textMuted, fontSize: 12 }}>
+        <View style={[s.editBar, ts.editBar, panelInset]}>
+          <Text style={[s.editHint, ts.mutedText]}>
             Editing your message — history after it will be resent
           </Text>
           <TextInput
             value={editing.text}
-            onChangeText={(text) => setEditing({ id: editing.id, text })}
+            onChangeText={handleEditTextChange}
             multiline
-            // User-triggered transient bar: focusing it is the point, not
-            // page-load focus-stealing (which jsx-a11y/no-autofocus targets).
-            // eslint-disable-next-line jsx-a11y/no-autofocus
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- user-opened edit bar; focusing it is the point
             autoFocus
-            keyboardAppearance={mode === "dark" ? "dark" : "light"}
-            style={{
-              color: t.text,
-              fontSize: 15,
-              maxHeight: 90,
-              paddingVertical: 6,
-            }}
+            keyboardAppearance={mode}
+            style={[s.editInput, ts.text]}
           />
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={s.editActions}>
             <Pressable
-              onPress={() => setEditing(null)}
-              style={[s.editBtn, { borderColor: t.border }]}
+              onPress={handleCancelEdit}
+              style={[s.editBtn, ts.editCancel]}
             >
-              <Text style={{ color: t.text, fontSize: 13 }}>Cancel</Text>
+              <Text style={[s.editBtnText, ts.text]}>Cancel</Text>
             </Pressable>
             <Pressable
-              onPress={commitEdit}
-              style={[
-                s.editBtn,
-                { borderColor: t.accent, backgroundColor: t.accent },
-              ]}
+              onPress={handleCommitEdit}
+              style={[s.editBtn, ts.editResend]}
             >
-              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>
-                Resend
-              </Text>
+              <Text style={s.resendText}>Resend</Text>
             </Pressable>
           </View>
         </View>
       ) : (
-        <View
-          style={[
-            s.composerWrap,
-            {
-              // Keyboard height + a little daylight above it; closed = home inset.
-              paddingBottom:
-                kbHeight > 0 ? kbHeight + 8 : Math.max(insets.bottom, 8),
-            },
-          ]}
-        >
+        <View style={[s.composerWrap, composerInset]}>
           {queuedMessages.length > 0 ? (
-            <View
-              style={{ paddingHorizontal: 10, gap: 4 }}
-              accessibilityLiveRegion="polite"
-            >
-              <Text style={{ color: t.textMuted, fontSize: 11 }}>
-                {streamingId !== null
-                  ? "Queued — inject now to steer this reply, or wait for it to finish"
-                  : `${queuedMessages.length} queued — sends when the reply finishes`}
+            <View style={s.queue} accessibilityLiveRegion="polite">
+              <Text style={[s.queueCaption, ts.mutedText]}>
+                {queueCaption(streamingId !== null, queuedMessages.length)}
               </Text>
-              {queuedMessages.map((q) => (
-                <View
-                  key={q.id}
-                  style={[
-                    s.queueRow,
-                    { backgroundColor: t.surface2, borderColor: t.border },
-                  ]}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={{ color: t.textMuted, fontSize: 12, flex: 1 }}
-                  >
-                    {q.text || "(images)"}
-                  </Text>
-                  {streamingId !== null && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Inject into the running reply"
-                      onPress={() => void steer(q.id)}
-                      hitSlop={8}
-                    >
-                      <Ionicons
-                        name="return-down-forward"
-                        size={14}
-                        color={t.textMuted}
-                      />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Remove queued message"
-                    onPress={() => dequeue(q.id)}
-                    hitSlop={8}
-                  >
-                    <Ionicons name="close" size={14} color={t.textMuted} />
-                  </Pressable>
-                </View>
+              {queuedMessages.map((queued) => (
+                <QueuedMessageRow
+                  key={queued.id}
+                  message={queued}
+                  streamingId={streamingId}
+                  onDequeue={dequeue}
+                  onSteer={steer}
+                />
               ))}
             </View>
           ) : null}
-          {pendingImages.length > 0 ? (
+          {pendingThumbs.length > 0 ? (
             <View style={s.pendingRow} accessibilityLiveRegion="polite">
-              {pendingImages.map((uri, i) => (
-                <View key={`${i}-${uri.slice(-16)}`} style={s.pendingThumbWrap}>
-                  <Image source={{ uri }} style={s.pendingThumb} />
+              {pendingThumbs.map((thumb, index) => (
+                <View key={thumb.key} style={s.pendingThumbWrap}>
+                  <Image source={thumb.source} style={s.pendingThumb} />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Remove image"
-                    onPress={() => removePendingImage(i)}
-                    style={[s.pendingRemove, { backgroundColor: t.surface }]}
+                    onPress={() => removePendingImage(index)}
+                    style={[s.pendingRemove, ts.pendingRemove]}
                     hitSlop={4}
                   >
                     <Ionicons name="close" size={10} color={t.text} />
@@ -658,60 +657,31 @@ function ChatScreen() {
               onDismiss={handleDismiss}
             />
           ) : null}
-          <View
-            style={[
-              s.composer,
-              { backgroundColor: t.surface, borderColor: t.border },
-            ]}
-          >
+          <View style={[s.composer, ts.composer]}>
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder={
-                voice.status === "recording"
-                  ? `Listening… ${voiceSeconds}s — release to transcribe`
-                  : voice.status === "transcribing"
-                    ? "Transcribing…"
-                    : "Message — runs on your Mac"
-              }
-              placeholderTextColor={
-                voice.status === "recording" ? t.danger : t.textMuted
-              }
-              pointerEvents={voice.status === "recording" ? "none" : "auto"}
+              placeholder={composerPlaceholder(voiceStatus, voiceSeconds)}
+              placeholderTextColor={isRecording ? t.danger : t.textMuted}
+              pointerEvents={isRecording ? "none" : "auto"}
               multiline
-              keyboardAppearance={mode === "dark" ? "dark" : "light"}
-              style={{
-                flex: 1,
-                color: t.text,
-                maxHeight: 120,
-                fontSize: 15,
-                paddingTop: 8,
-                paddingBottom: 8,
-                paddingLeft: 4,
-              }}
+              keyboardAppearance={mode}
+              style={[s.composerInput, ts.text]}
             />
             {isLoading ? (
               <>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Queue message"
-                  onPress={submit}
-                  disabled={!draft.trim() && pendingImages.length === 0}
+                  onPress={handleSubmit}
+                  disabled={!canSubmit}
                   hitSlop={6}
-                  style={[
-                    s.send,
-                    {
-                      backgroundColor:
-                        draft.trim() || pendingImages.length > 0
-                          ? t.surface2
-                          : "transparent",
-                    },
-                  ]}
+                  style={[s.send, canSubmit ? ts.sendRaised : s.sendIdle]}
                 >
                   <Ionicons
                     name="add-circle-outline"
                     size={18}
-                    color={draft.trim() ? t.text : t.textMuted}
+                    color={hasText ? t.text : t.textMuted}
                   />
                 </Pressable>
                 <Pressable
@@ -719,46 +689,28 @@ function ChatScreen() {
                   accessibilityLabel="Stop generating"
                   onPress={abort}
                   hitSlop={6}
-                  style={[s.send, { backgroundColor: t.surface2 }]}
+                  style={[s.send, ts.sendRaised]}
                 >
                   <Ionicons name="stop" size={18} color={t.danger} />
                 </Pressable>
               </>
             ) : inputPending ? (
-              <View
-                style={[
-                  s.inputWrap,
-                  {
-                    // Same bottom rule as the composer: keyboard frame (+ daylight),
-                    // else home inset.
-                    paddingBottom:
-                      kbHeight > 0 ? kbHeight + 8 : Math.max(insets.bottom, 12),
-                  },
-                ]}
-              >
+              <View style={[s.inputWrap, panelInset]}>
                 <UserInputInline />
               </View>
             ) : (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Send message"
-                onPress={submit}
-                disabled={!draft.trim() && pendingImages.length === 0}
+                onPress={handleSubmit}
+                disabled={!canSubmit}
                 hitSlop={6}
-                style={[
-                  s.send,
-                  {
-                    backgroundColor:
-                      draft.trim() || pendingImages.length > 0
-                        ? t.accent
-                        : t.surface2,
-                  },
-                ]}
+                style={[s.send, canSubmit ? ts.sendActive : ts.sendRaised]}
               >
                 <Ionicons
                   name="arrow-up"
                   size={18}
-                  color={draft.trim() ? "#fff" : t.textMuted}
+                  color={hasText ? ON_ACCENT : t.textMuted}
                 />
               </Pressable>
             )}
@@ -769,18 +721,7 @@ function ChatScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Attach images"
-                  onPress={() =>
-                    ActionSheetIOS.showActionSheetWithOptions(
-                      {
-                        options: ["Photo library", "Take photo", "Cancel"],
-                        cancelButtonIndex: 2,
-                      },
-                      (idx) => {
-                        if (idx === 0) handleAttach("library");
-                        if (idx === 1) handleAttach("camera");
-                      },
-                    )
-                  }
+                  onPress={handleAttachPress}
                   hitSlop={6}
                   style={s.toolBtn}
                 >
@@ -793,53 +734,28 @@ function ChatScreen() {
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={
-                  voice.status === "recording"
-                    ? `Listening — ${voiceSeconds} seconds. Release to transcribe`
-                    : voice.status === "transcribing"
-                      ? "Transcribing"
-                      : "Hold to dictate"
-                }
-                disabled={voice.status === "transcribing"}
-                onPressIn={() => {
-                  setVoiceSeconds(0);
-                  void voice.start();
-                }}
-                onPressOut={() =>
-                  voice.status === "recording" ? voice.stop() : voice.cancel()
-                }
+                accessibilityLabel={micLabel(voiceStatus, voiceSeconds)}
+                disabled={isTranscribing}
+                onPressIn={handleMicPressIn}
+                onPressOut={handleMicPressOut}
                 hitSlop={6}
                 style={s.toolBtn}
               >
                 <Ionicons
-                  name={
-                    voice.status === "transcribing"
-                      ? "hourglass-outline"
-                      : "mic-outline"
-                  }
+                  name={isTranscribing ? "hourglass-outline" : "mic-outline"}
                   size={19}
-                  color={
-                    recording || voice.status === "transcribing"
-                      ? t.accent
-                      : t.textMuted
-                  }
+                  color={isRecording || isTranscribing ? t.accent : t.textMuted}
                 />
               </Pressable>
-              <View style={{ flex: 1 }} />
+              <View style={s.spacer} />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Model ${chatModel.name}. Change model`}
-                onPress={() => setModelSheet(true)}
+                onPress={handleOpenModelSheet}
                 hitSlop={6}
-                style={[
-                  s.toolChip,
-                  { backgroundColor: t.surface2, borderColor: t.border },
-                ]}
+                style={[s.toolChip, ts.toolChip]}
               >
-                <Text
-                  numberOfLines={1}
-                  style={{ color: t.textMuted, fontSize: 12, maxWidth: 110 }}
-                >
+                <Text numberOfLines={1} style={[s.modelChipText, ts.mutedText]}>
                   {chatModel.name}
                 </Text>
               </Pressable>
@@ -847,19 +763,16 @@ function ChatScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Thinking effort ${thinkingEffort}. Change`}
-                  onPress={() => setThinkSheet(true)}
+                  onPress={handleOpenThinkSheet}
                   hitSlop={6}
-                  style={[
-                    s.toolChip,
-                    { backgroundColor: t.surface2, borderColor: t.border },
-                  ]}
+                  style={[s.toolChip, ts.toolChip]}
                 >
                   <Ionicons
                     name="sparkles-outline"
                     size={12}
                     color={t.textMuted}
                   />
-                  <Text style={{ color: t.textMuted, fontSize: 12 }}>
+                  <Text style={[s.chipText, ts.mutedText]}>
                     {thinkingEffort}
                   </Text>
                 </Pressable>
@@ -867,12 +780,9 @@ function ChatScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Permission mode ${permissionMode}. Change`}
-                onPress={() => setModeSheet(true)}
+                onPress={handleOpenModeSheet}
                 hitSlop={6}
-                style={[
-                  s.toolChip,
-                  { backgroundColor: t.surface2, borderColor: t.border },
-                ]}
+                style={[s.toolChip, ts.toolChip]}
               >
                 <Ionicons
                   name={
@@ -883,9 +793,7 @@ function ChatScreen() {
                   size={12}
                   color={t.textMuted}
                 />
-                <Text style={{ color: t.textMuted, fontSize: 12 }}>
-                  {permissionMode}
-                </Text>
+                <Text style={[s.chipText, ts.mutedText]}>{permissionMode}</Text>
               </Pressable>
             </View>
           )}
@@ -894,18 +802,16 @@ function ChatScreen() {
 
       <ModelPickers
         visible={modelSheet}
-        onClose={() => setModelSheet(false)}
+        onClose={handleCloseModelSheet}
         chatModel={chatModel}
-        onSelectModel={async (m) => {
-          if (chatId !== null) await selectModelForActiveChat(m);
-        }}
+        onSelectModel={handleSelectModel}
       />
       <ThinkingPicker
         visible={thinkSheet}
-        onClose={() => setThinkSheet(false)}
+        onClose={handleCloseThinkSheet}
         model={chatModel}
       />
-      <ModePicker visible={modeSheet} onClose={() => setModeSheet(false)} />
+      <ModePicker visible={modeSheet} onClose={handleCloseModeSheet} />
     </View>
   );
 }

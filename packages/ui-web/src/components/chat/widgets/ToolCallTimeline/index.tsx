@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ToolActivity } from "@kotys/contracts";
 import { WidgetFor } from "../registry";
-import { buildPages, VISIBLE_TOOL_CALLS, type Segment } from "./model";
+import { buildPages, VISIBLE_TOOL_CALLS } from "./model";
+import type { Segment } from "./model";
 import { useRunningTicker } from "./useRunningTicker";
 import { useScrollFollow } from "./useScrollFollow";
 import { useTrackWidth } from "./useTrackWidth";
@@ -17,39 +18,68 @@ interface IProps {
   isStreaming?: boolean;
 }
 
+interface IPreview {
+  segment: Segment;
+  rect: DOMRect;
+}
+
+function widgetKey(
+  tc: ToolActivity,
+  widget: NonNullable<ToolActivity["widget"]>,
+): string {
+  switch (widget.kind) {
+    case "todo":
+      return `todo-${widget.id}`;
+    case "image":
+      return `image-${tc.tool}-${tc.startedAt ?? ""}`;
+    case "steer":
+      return `steer-${tc.startedAt ?? ""}`;
+    case "input":
+      return `input-${widget.title}`;
+  }
+}
+
 export default function ToolCallTimeline({
   calls: raw,
   isStreaming = false,
 }: IProps) {
   const calls = raw.filter(Boolean);
   const [expanded, setExpanded] = useState(true);
-  const [preview, setPreview] = useState<{
-    segment: Segment;
-    rect: DOMRect;
-  } | null>(null);
+  const [preview, setPreview] = useState<IPreview | null>(null);
   const now = useRunningTicker(calls, isStreaming);
   const [trackRef, trackWidth] = useTrackWidth();
   const overflowCount = Math.max(calls.length - VISIBLE_TOOL_CALLS, 0);
-  const resetFollow = useScrollFollow(trackRef, overflowCount > 0);
-
-  const pages = buildPages(calls, now, isStreaming);
-  const toolTime = calls.reduce((sum, tc) => sum + (tc?.durationMs ?? 0), 0);
-  const totalTime = pages.reduce((sum, p) => sum + p.total, 0);
+  const hasOverflow = overflowCount > 0;
+  const resetFollow = useScrollFollow(trackRef, hasOverflow);
 
   if (calls.length === 0) return null;
 
-  const live = isStreaming || calls.some((tc) => tc?.status === "running");
-  const hasOverflow = overflowCount > 0;
+  const pages = buildPages(calls, now, isStreaming);
+  const toolTime = calls.reduce((sum, tc) => sum + (tc.durationMs ?? 0), 0);
+  const totalTime = pages.reduce((sum, p) => sum + p.total, 0);
+  const live = isStreaming || calls.some((tc) => tc.status === "running");
   const widgets = calls.map((tc) => {
-    if (!tc?.widget || tc.textOffset !== undefined) return null;
-    const widgetKey =
-      tc.widget.kind === "todo"
-        ? `todo-${tc.widget.id}`
-        : tc.widget.kind === "image"
-          ? `image-${tc.tool}-${tc.startedAt ?? ""}`
-          : `input-${tc.widget.title}`;
-    return <WidgetFor key={widgetKey} widget={tc.widget} />;
+    if (!tc.widget || tc.textOffset !== undefined) return null;
+    return <WidgetFor key={widgetKey(tc, tc.widget)} widget={tc.widget} />;
   });
+
+  const handleExpand = () => setExpanded(true);
+
+  const handleCollapse = () => {
+    resetFollow();
+    setExpanded(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY === 0 || !hasOverflow || !e.currentTarget.scrollBy) return;
+    e.currentTarget.scrollBy({ left: e.deltaY });
+    e.preventDefault();
+  };
+
+  const handleSegmentHover = (segment: Segment, rect: DOMRect) =>
+    setPreview({ segment, rect });
+
+  const handleSegmentLeave = () => setPreview(null);
 
   if (!expanded && !live) {
     return (
@@ -58,7 +88,7 @@ export default function ToolCallTimeline({
           count={calls.length}
           totalMs={totalTime}
           overflowCount={overflowCount}
-          onExpand={() => setExpanded(true)}
+          onExpand={handleExpand}
         />
         {widgets}
       </div>
@@ -71,20 +101,12 @@ export default function ToolCallTimeline({
         <CollapseToggle
           count={calls.length}
           totalMs={totalTime}
-          onCollapse={() => {
-            resetFollow();
-            setExpanded(false);
-          }}
+          onCollapse={handleCollapse}
         />
       )}
       <div
         ref={trackRef}
-        onWheel={(e) => {
-          if (e.deltaY !== 0 && hasOverflow && e.currentTarget.scrollBy) {
-            e.currentTarget.scrollBy({ left: e.deltaY });
-            e.preventDefault();
-          }
-        }}
+        onWheel={handleWheel}
         className="flex h-4 overflow-x-auto overflow-y-hidden scrollbar-none rounded-full bg-surface-2/70"
       >
         {pages.map((page) => (
@@ -102,8 +124,8 @@ export default function ToolCallTimeline({
                     : null
                 }
                 active={preview?.segment.key === s.key}
-                onHover={(rect) => setPreview({ segment: s, rect })}
-                onLeave={() => setPreview(null)}
+                onHover={(rect) => handleSegmentHover(s, rect)}
+                onLeave={handleSegmentLeave}
               />
             ))}
           </div>

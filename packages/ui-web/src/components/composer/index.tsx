@@ -4,23 +4,19 @@ import type {
   ChangeEvent as ReactChangeEvent,
 } from "react";
 import { EditorContent } from "@tiptap/react";
+import { ImagePlus, ListPlus, Send, Square, X } from "lucide-react";
 import {
-  CornerDownRight,
-  ImagePlus,
-  ListPlus,
-  Send,
-  Square,
-  X,
-} from "lucide-react";
-import {
+  queueCaption,
   usePlatform,
   useSkills,
   useVoiceInput,
-  type QueuedMessage,
 } from "@kotys/core";
+import type { QueuedMessage } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
+import { QueuedMessageRow } from "./QueuedMessageRow";
+import { StatusNote } from "./StatusNote";
 import { useComposerEditor } from "./useComposerEditor";
 import { useSlashMenu, applySlashPick } from "./slashExtension";
 
@@ -56,9 +52,9 @@ const prepareImage = async (file: File): Promise<string> => {
 };
 
 interface IProps {
-  needsApiKey: boolean;
+  isApiKeyMissing: boolean;
   modelName: string;
-  visionCapable: boolean;
+  isVisionCapable: boolean;
   hasMessages: boolean;
   isLoading: boolean;
   streamingId: number | null;
@@ -69,10 +65,15 @@ interface IProps {
   onSteer?: (id: number) => void;
 }
 
+interface IPendingImage {
+  id: number;
+  src: string;
+}
+
 function ComposerBase({
-  needsApiKey,
+  isApiKeyMissing,
   modelName,
-  visionCapable,
+  isVisionCapable,
   hasMessages,
   isLoading,
   streamingId,
@@ -82,13 +83,14 @@ function ComposerBase({
   onDequeue,
   onSteer,
 }: IProps) {
-  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [pendingImages, setPendingImages] = useState<IPendingImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [rejectedCount, setRejectedCount] = useState(0);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const { skills } = useSkills();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const nextImageId = useRef(0);
 
   const addImages = useCallback(async (files: Iterable<File>) => {
     const all = [...files];
@@ -101,17 +103,15 @@ function ComposerBase({
       clearTimeout(noteTimer.current ?? undefined);
       noteTimer.current = setTimeout(() => setRejectedCount(0), 2500);
     }
-    const prepared: string[] = [];
+    const prepared: IPendingImage[] = [];
     for (const file of imageFiles.slice(0, MAX_IMAGES)) {
-      try {
-        prepared.push(await prepareImage(file));
-      } catch {
-        /* skip unreadable image files */
-      }
+      const src = await prepareImage(file).catch(() => null);
+      if (src === null) continue;
+      nextImageId.current += 1;
+      prepared.push({ id: nextImageId.current, src });
     }
-    if (prepared.length > 0) {
-      setPendingImages((prev) => [...prev, ...prepared].slice(0, MAX_IMAGES));
-    }
+    if (prepared.length === 0) return;
+    setPendingImages((prev) => [...prev, ...prepared].slice(0, MAX_IMAGES));
   }, []);
 
   const clearPending = useCallback(() => {
@@ -120,7 +120,7 @@ function ComposerBase({
     setVoiceError(null);
   }, []);
 
-  const sendWithImages = useCallback(
+  const handleSend = useCallback(
     (text: string, images: string[]) => {
       onSend(text, images);
       clearPending();
@@ -128,11 +128,14 @@ function ComposerBase({
     [onSend, clearPending],
   );
 
-  const effectiveImages = visionCapable ? pendingImages : [];
+  const isStreaming = streamingId !== null;
+  const effectiveImages = isVisionCapable
+    ? pendingImages.map((image) => image.src)
+    : [];
 
   const handleDragOver = (e: ReactDragEvent) => {
     e.preventDefault();
-    if (visionCapable && !dragOver) setDragOver(true);
+    if (isVisionCapable && !dragOver) setDragOver(true);
   };
 
   const handleDragLeave = (e: ReactDragEvent) => {
@@ -142,7 +145,7 @@ function ComposerBase({
   const handleDrop = (e: ReactDragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    if (visionCapable && e.dataTransfer.files.length > 0)
+    if (isVisionCapable && e.dataTransfer.files.length > 0)
       void addImages(e.dataTransfer.files);
   };
 
@@ -151,25 +154,35 @@ function ComposerBase({
     e.target.value = "";
   };
 
-  const handleRemoveImage = (removeIndex: number) => {
-    setPendingImages((prev) => prev.filter((_, j) => j !== removeIndex));
+  const handleRemoveImage = (id: number) => {
+    setPendingImages((prev) => prev.filter((image) => image.id !== id));
   };
+
+  const handleAttachClick = () => fileInputRef.current?.click();
 
   const { editor, send, isEmpty } = useComposerEditor({
     skills,
-    placeholder: needsApiKey
+    placeholder: isApiKeyMissing
       ? "Set API key in settings..."
       : hasMessages
         ? "Reply to continue the conversation..."
         : "Ask anything to start a new conversation...",
-    onSend: sendWithImages,
+    onSend: handleSend,
     getImages: () => effectiveImages,
   });
 
-  const voice = useVoiceInput(usePlatform(), (text) => {
-    sendWithImages(text, effectiveImages);
+  const platform = usePlatform();
+
+  const handleTranscript = (text: string) => {
+    handleSend(text, effectiveImages);
     editor?.commands.clearContent(true);
-  });
+  };
+
+  const voice = useVoiceInput(platform, handleTranscript);
+
+  const handleVoiceStart = () => {
+    void voice.start();
+  };
 
   useEffect(() => {
     if (voice.status !== "error") return;
@@ -181,7 +194,7 @@ function ComposerBase({
 
   const menu = useSlashMenu();
 
-  const pickSkill = useCallback(
+  const handleSkillPick = useCallback(
     (skill: SkillListing) => {
       if (editor) applySlashPick(editor, skill);
     },
@@ -193,7 +206,11 @@ function ComposerBase({
   return (
     <div className="komposer relative">
       {menu.isOpen && (
-        <SlashMenu items={menu.items} index={menu.index} onPick={pickSkill} />
+        <SlashMenu
+          items={menu.items}
+          index={menu.index}
+          onPick={handleSkillPick}
+        />
       )}
       <div
         className={`bg-surface rounded-xl border p-1.5 transition ${
@@ -205,52 +222,36 @@ function ComposerBase({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {dragOver && visionCapable && (
+        {dragOver && isVisionCapable && (
           <div className="mb-2 text-xs text-accent font-medium text-center py-1">
             Drop images to attach
           </div>
         )}
         {rejectedCount > 0 && (
-          <div
-            className="mb-2 text-xs text-amber-400 text-center py-1"
-            role="status"
-            aria-live="polite"
-          >
+          <StatusNote>
             {rejectedCount} file{rejectedCount > 1 ? "s" : ""} ignored
             {rejectedCount > MAX_IMAGES ? ` — max ${MAX_IMAGES} images` : ""}
-          </div>
+          </StatusNote>
         )}
-        {voiceError && (
-          <div
-            className="mb-2 text-xs text-amber-400 text-center py-1"
-            role="status"
-            aria-live="polite"
-          >
-            {voiceError}
-          </div>
-        )}
-        {!visionCapable && pendingImages.length > 0 && (
-          <div
-            className="mb-2 text-xs text-amber-400 text-center py-1"
-            role="status"
-            aria-live="polite"
-          >
+        {voiceError && <StatusNote>{voiceError}</StatusNote>}
+        {!isVisionCapable && pendingImages.length > 0 && (
+          <StatusNote>
             Attachments held back — this model does not support images
-          </div>
+          </StatusNote>
         )}
         {pendingImages.length > 0 && (
           <div
-            className={`flex flex-wrap gap-2 mb-2 ${visionCapable ? "" : "opacity-40"}`}
+            className={`flex flex-wrap gap-2 mb-2 ${isVisionCapable ? "" : "opacity-40"}`}
           >
-            {pendingImages.map((src, i) => (
-              <div key={src.slice(-24) + i} className="relative">
+            {pendingImages.map((image) => (
+              <div key={image.id} className="relative">
                 <img
-                  src={src}
+                  src={image.src}
                   alt="Pending attachment"
                   className="h-14 w-14 object-cover rounded-lg border border-border"
                 />
                 <button
-                  onClick={() => handleRemoveImage(i)}
+                  onClick={() => handleRemoveImage(image.id)}
                   aria-label="Remove attachment"
                   className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-surface-2 border border-border flex items-center justify-center hover:bg-red-500 hover:text-white transition"
                 >
@@ -264,37 +265,17 @@ function ComposerBase({
           <div className="mb-2" role="status" aria-live="polite">
             <div className="flex items-center gap-1.5 mb-1 text-[11px] text-text-muted">
               <ListPlus size={11} />
-              {streamingId !== null
-                ? "Queued — inject now to steer this reply, or wait for it to finish"
-                : `${queuedMessages.length} queued — sends when the reply finishes`}
+              {queueCaption(isStreaming, queuedMessages.length)}
             </div>
             <div className="flex flex-col gap-1">
-              {queuedMessages.map((q) => (
-                <div
-                  key={q.id}
-                  className="group flex items-center gap-2 px-2 py-1 rounded-lg bg-surface-2 border border-border text-xs"
-                >
-                  <span className="flex-1 min-w-0 truncate text-text-muted">
-                    {q.text || "(images)"}
-                  </span>
-                  {streamingId !== null && onSteer && (
-                    <button
-                      onClick={() => onSteer(q.id)}
-                      aria-label="Inject into the running reply"
-                      title="Inject at the next tool round"
-                      className="shrink-0 p-0.5 rounded text-text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-text transition"
-                    >
-                      <CornerDownRight size={12} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => onDequeue(q.id)}
-                    aria-label="Remove queued message"
-                    className="shrink-0 p-0.5 rounded text-text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-red-400 transition"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
+              {queuedMessages.map((queued) => (
+                <QueuedMessageRow
+                  key={queued.id}
+                  message={queued}
+                  streamingId={streamingId}
+                  onDequeue={onDequeue}
+                  onSteer={onSteer}
+                />
               ))}
             </div>
           </div>
@@ -310,16 +291,16 @@ function ComposerBase({
           />
           <MicButton
             status={voice.status}
-            onStart={() => void voice.start()}
+            onStart={handleVoiceStart}
             onStop={voice.stop}
             onCancel={voice.cancel}
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!visionCapable}
+            onClick={handleAttachClick}
+            disabled={!isVisionCapable}
             aria-label="Attach images"
             title={
-              visionCapable
+              isVisionCapable
                 ? "Attach images"
                 : `${modelName} does not support images`
             }
@@ -328,7 +309,7 @@ function ComposerBase({
             <ImagePlus size={16} />
           </button>
           <EditorContent editor={editor} className="flex-1 min-w-0" />
-          {streamingId !== null ? (
+          {isStreaming ? (
             <>
               <button
                 onClick={send}

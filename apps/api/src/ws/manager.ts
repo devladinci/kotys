@@ -35,7 +35,7 @@ function send(client: Client, msg: ServerMessage): void {
   try {
     client.ws.send(JSON.stringify(msg));
   } catch {
-    // Socket died between the check and the write; the close handler cleans up.
+    // A dead socket throws here; onClose removes the client.
   }
 }
 
@@ -43,7 +43,6 @@ function broadcast(msg: ServerMessage): void {
   for (const client of clients.values()) send(client, msg);
 }
 
-/** Stream frames go to every client watching the chat, not just the owner. */
 function broadcastFrame(requestId: number, frame: ServerMessage): void {
   let chatId = chatIdOf(requestId);
   if (chatId === undefined) {
@@ -52,46 +51,60 @@ function broadcastFrame(requestId: number, frame: ServerMessage): void {
   broadcast({ ...frame, ...(chatId !== undefined ? { chatId } : {}) });
 }
 
-/** Wire the event bus to every connected socket. Call once at startup. */
+// Call once at startup; each call adds another set of listeners.
 export function bindEvents(): void {
   events.onEvent("chats:changed", (p) =>
     broadcast({ type: "chats:changed", payload: p }),
   );
+
   events.onEvent("messages:changed", (p) =>
     broadcast({ type: "messages:changed", payload: p }),
   );
+
   events.onEvent("messages:progress", (p) =>
     broadcast({ type: "messages:progress", payload: p }),
   );
+
   events.onEvent("approval:request", (p) =>
     broadcast({ type: "approval:request", payload: p }),
   );
+
   events.onEvent("approval:cancel", (p) =>
     broadcast({ type: "approval:cancel", payload: p }),
   );
+
   events.onEvent("input:request", (p) =>
     broadcast({ type: "input:request", payload: p }),
   );
+
   events.onEvent("input:cancel", (p) =>
     broadcast({ type: "input:cancel", payload: p }),
   );
+
   events.onEvent("pomodoro:tick", (p) =>
     broadcast({ type: "pomodoro:tick", payload: p }),
   );
+
   events.onEvent("pomodoro:started", (p) =>
     broadcast({ type: "pomodoro:started", payload: p }),
   );
+
   events.onEvent("pomodoro:done", (p) =>
     broadcast({ type: "pomodoro:done", payload: p }),
   );
+
   events.onEvent("todos:changed", () => broadcast({ type: "todos:changed" }));
+
   events.onEvent("todos:open", (p) =>
     broadcast({ type: "todos:open", payload: p }),
   );
+
   events.onEvent("skills:changed", () => broadcast({ type: "skills:changed" }));
+
   events.onEvent("open-url", (p) =>
     broadcast({ type: "open-url", payload: p }),
   );
+
   events.onEvent("notify", (p) => broadcast({ type: "notify", payload: p }));
 }
 
@@ -106,12 +119,6 @@ export function onClose(clientId: string): void {
   clients.delete(clientId);
 }
 
-/**
- * Save the finished stream to SQLite and let every client know, so a reply
- * survives even when the sending client vanished mid-generation. When the
- * owning client later writes the same content, the identical update just
- * re-broadcasts.
- */
 function persistResult(
   requestId: number,
   result: ChatStreamResult | null,
@@ -153,16 +160,10 @@ function persistResult(
       events.emitEvent("messages:changed", { chatId, messageId: requestId });
     }
   } catch {
-    // The owning client is the primary writer; a persistence failure here is
-    // not worth tearing down the socket over.
+    // Best effort: the owning client is the primary writer.
   }
 }
 
-/**
- * Terminal frame for a `chat:resume` whose replay buffer no longer exists.
- * Rebuilds `chat:done` from the persisted message when the server saved it;
- * without a row the client would spin forever, so synthesize an error.
- */
 function resumeFallback(requestId: number): ServerMessage | null {
   try {
     const row = getMessage(requestId);
@@ -238,8 +239,7 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
           type: "chat:done",
           payload: { requestId, result },
         });
-        // The owning client usually persists the reply itself, but it may be
-        // gone (phone asleep, screen closed) — the server saves it too.
+        // The owner client may be gone (phone asleep), so the server saves too.
         persistResult(requestId, result);
         if (done) broadcastFrame(requestId, done);
       } catch (err) {
@@ -248,8 +248,6 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
           type: "chat:error",
           payload: { requestId, error },
         });
-        // Keep whatever the model produced before failing, so the tail of the
-        // conversation is not just an empty bubble.
         persistResult(requestId, null, error);
         if (frame) broadcastFrame(requestId, frame);
       } finally {
@@ -262,9 +260,15 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
       abortStream(msg.payload.requestId);
       return;
 
-    case "chat:append":
-      queueAppend(msg.payload.requestId, msg.payload.content);
+    case "chat:append": {
+      const { requestId, content, id } = msg.payload;
+      if (typeof content !== "string" || !content.trim()) return;
+      queueAppend(requestId, {
+        content,
+        ...(typeof id === "string" && id ? { id } : {}),
+      });
       return;
+    }
 
     case "chat:resume": {
       const { requestId, lastSeq } = msg.payload;
@@ -273,10 +277,8 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
         for (const frame of frames) send(client, frame);
         return;
       }
-      // Buffer gone (expired or daemon restarted): synthesize a terminal
-      // frame from the database so the client stops its spinner. A still-live
-      // stream with nothing past lastSeq must stay open — a synthesized done
-      // would end it mid-generation.
+      // A live stream with nothing past lastSeq must stay open: a synthesized
+      // done would end it mid-generation.
       if (isLive(requestId)) return;
       const fallback = resumeFallback(requestId);
       if (fallback) send(client, fallback);

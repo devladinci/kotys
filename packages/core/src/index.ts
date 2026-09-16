@@ -21,6 +21,7 @@ export * from "./chat/echoGuard.js";
 export * from "./chat/streamFrames.js";
 export * from "./chat/streamState.js";
 export * from "./chat/queueStore.js";
+export * from "./chat/queuedSteer.js";
 export * from "./chat/generating.js";
 export * from "./chat/useChatActions.js";
 export * from "./chat/useChatList.js";

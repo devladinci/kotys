@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { selectSummaryHead } from "./compact.js";
+import { selectSummaryHead, withSteerLines } from "./compact.js";
 
 const h = vi.hoisted(() => ({
   toolResults: [] as {
@@ -18,7 +18,7 @@ beforeEach(() => {
   h.toolResults.length = 0;
 });
 
-// estimateTokens is chars/4; "x".repeat(400) = 100 tokens.
+// estimateTokens is chars/4.
 const msg = (id: number, chars: number) => ({
   id,
   role: id % 2 === 1 ? ("user" as const) : ("assistant" as const),
@@ -33,7 +33,7 @@ describe("selectSummaryHead", () => {
   });
 
   it("keeps the recent window verbatim when it fits the budget", () => {
-    // Each message is 100 tokens; budget 250 keeps the last two (200 <= 250).
+    // 400 + 100 + 100 tokens: only the last two fit in 250.
     const candidates = [msg(1, 1600), msg(2, 400), msg(3, 400)];
     const head = selectSummaryHead(candidates, 250);
     expect(head.map((m) => m.id)).toEqual([1]);
@@ -46,7 +46,7 @@ describe("selectSummaryHead", () => {
   });
 
   it("summarizes the previous exchange and keeps the pending question", () => {
-    // A 4,096 window keeps 1,024 tokens, so a 1,193-token reply cannot stay.
+    // A 4,096 window keeps 1,024 tokens, so a 1,194-token reply cannot stay.
     const candidates = [msg(1, 132), msg(2, 4774), msg(3, 40)];
     const head = selectSummaryHead(candidates, 1024);
     expect(head.map((m) => m.id)).toEqual([1, 2]);
@@ -59,5 +59,43 @@ describe("selectSummaryHead", () => {
 
   it("returns an empty head for no candidates", () => {
     expect(selectSummaryHead([], 100)).toEqual([]);
+  });
+});
+
+describe("withSteerLines", () => {
+  const reply = (content: string, trace: unknown[] | null) => ({
+    id: 2,
+    role: "assistant",
+    content,
+    images: null,
+    tool_calls: trace ? JSON.stringify(trace) : null,
+  });
+  const steer = (text: string, textOffset: number) => ({
+    tool: "steer",
+    status: "done",
+    textOffset,
+    widget: { kind: "steer", text },
+  });
+
+  it("leaves a reply without steers untouched", () => {
+    const r = reply("Plain answer.\n", [{ tool: "list", status: "done" }]);
+    expect(withSteerLines(r)).toBe("Plain answer.\n");
+    expect(withSteerLines(reply("No trace.", null))).toBe("No trace.");
+  });
+
+  it("puts each steer where the model received it", () => {
+    const r = reply("Part one.\n\nPart two.", [
+      { tool: "list", status: "done" },
+      steer("and Z", "Part one.\n\n".length),
+    ]);
+    expect(withSteerLines(r)).toBe(
+      "Part one.\n\n[User]: and Z\n\n[Assistant]: Part two.",
+    );
+  });
+
+  it("keeps the caller's label on an empty opening before the first steer", () => {
+    const r = reply("Done.", [steer("use Y", 0)]);
+    // The caller prefixes "[Assistant]: " to this.
+    expect(withSteerLines(r)).toBe("\n\n[User]: use Y\n\n[Assistant]: Done.");
   });
 });

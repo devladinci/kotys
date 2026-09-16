@@ -41,6 +41,7 @@ const TOOL_USAGE_SQL = `
     COALESCE(SUM(je.value ->> 'durationMs'), 0) AS total_ms
   FROM messages m, json_each(m.tool_calls) je
   WHERE m.tool_calls IS NOT NULL AND m.tool_calls != '[]'
+    AND COALESCE(je.value ->> '$.widget.kind', '') <> 'steer'
   GROUP BY tool, server`;
 
 function normalizeToolRows(
@@ -65,15 +66,15 @@ function normalizeToolRows(
       existing.calls += r.calls;
       existing.errors += r.errors;
       existing.total_ms += r.total_ms;
-    } else {
-      merged.set(key, {
-        tool: r.tool,
-        server,
-        calls: r.calls,
-        errors: r.errors,
-        total_ms: r.total_ms,
-      });
+      continue;
     }
+    merged.set(key, {
+      tool: r.tool,
+      server,
+      calls: r.calls,
+      errors: r.errors,
+      total_ms: r.total_ms,
+    });
   }
   return [...merged.values()].sort((a, b) => b.calls - a.calls);
 }

@@ -157,7 +157,7 @@ function RowComponent({
     <div style={style}>
       <MessageBubble
         message={message}
-        startsTurn={row.startsTurn}
+        isTurnStart={row.startsTurn}
         isStreamingThis={message.id === streamingId}
         isHighlighted={highlightId === message.id}
         onImageClick={onImageClick}
@@ -240,7 +240,7 @@ export default function MessageList({
           <MessageBubble
             key={row.message.id}
             message={row.message}
-            startsTurn={row.startsTurn}
+            isTurnStart={row.startsTurn}
             isStreamingThis={row.message.id === streamingId}
             isHighlighted={highlightId === row.message.id}
             onImageClick={onImageClick}
