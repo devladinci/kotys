@@ -83,6 +83,29 @@ describe("messages", () => {
   });
 });
 
+describe("deleteTurnsAfter", () => {
+  it("drops the old fork but keeps the reply row being streamed", () => {
+    const chatId = Number(
+      db.createChat("Fork test", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    const ids = ["first", "first reply", "edited", "old reply"].map((text, i) =>
+      db.insertMessage(chatId, i % 2 === 0 ? "user" : "assistant", text),
+    );
+    const newReply = db.insertMessage(chatId, "assistant", "");
+    if (newReply === null) throw new Error("insert failed");
+
+    db.deleteTurnsAfter(chatId, ids[2] as number, newReply);
+
+    const rows = db.getMessages(chatId) as { id: number }[];
+    expect(rows.map((r) => r.id)).toEqual([ids[0], ids[1], ids[2], newReply]);
+  });
+});
+
 describe("resetAssistantMessage", () => {
   it("wipes content, thinking, tool trace and tool results, keeping the row", () => {
     const chatId = Number(

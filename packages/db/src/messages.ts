@@ -3,7 +3,7 @@ import { chatExists, escapeLike, makeSnippet } from "./internal.js";
 
 // Secondary sort on id keeps user+assistant rows inserted in the same second
 // (created_at has unixepoch granularity) in insertion order after a refetch.
-export function getMessages(chatId: number) {
+export function getMessages(chatId: number): unknown[] {
   return getDb()
     .prepare(
       `SELECT m.*, mo.name AS model_name
@@ -13,7 +13,7 @@ export function getMessages(chatId: number) {
     .all(chatId);
 }
 
-export function getMessage(id: number) {
+export function getMessage(id: number): MessageRow | undefined {
   return getDb()
     .prepare(
       `SELECT m.*, mo.name AS model_name
@@ -36,6 +36,31 @@ export type MessageRow = {
   eval_tokens: number | null;
   tokens_measured: number | null;
   tool_calls: string | null;
+  created_at: number;
+};
+
+export type MessageUpdate = {
+  content?: string;
+  thinking?: string;
+  promptTokens?: number;
+  evalTokens?: number;
+  tokensMeasured?: boolean;
+  toolCalls?: string;
+};
+
+export type MessageSearchHit = {
+  id: number;
+  chat_id: number;
+  role: string;
+  title: string;
+  snippet: string;
+  created_at: number;
+};
+
+export type MessageSummaryRow = {
+  id: number;
+  role: string;
+  content: string;
   created_at: number;
 };
 
@@ -82,17 +107,7 @@ export function insertMessage(
  * untouched columns keep their value — an undefined must never become SQL
  * NULL (that would erase streamed text mid-turn).
  */
-export function updateMessage(
-  id: number,
-  fields: {
-    content?: string;
-    thinking?: string;
-    promptTokens?: number;
-    evalTokens?: number;
-    tokensMeasured?: boolean;
-    toolCalls?: string;
-  },
-) {
+export function updateMessage(id: number, fields: MessageUpdate): void {
   const sets: string[] = [];
   const values: (string | number)[] = [];
   if (fields.content !== undefined) {
@@ -124,7 +139,8 @@ export function updateMessage(
     .prepare(`UPDATE messages SET ${sets.join(", ")} WHERE id = ?`)
     .run(...values, id);
 }
-export function searchMessages(query: string) {
+
+export function searchMessages(query: string): MessageSearchHit[] {
   const q = query.trim().toLowerCase();
   if (q.length < 2) return [];
   const tokens = q.split(/\s+/).filter(Boolean).slice(0, 5);
@@ -140,14 +156,10 @@ export function searchMessages(query: string) {
        ORDER BY m.created_at DESC
        LIMIT 30`,
     )
-    .all(...tokens.map(escapeLike)) as {
-    id: number;
+    .all(...tokens.map(escapeLike)) as (MessageSummaryRow & {
     chat_id: number;
-    role: string;
-    content: string;
     title: string;
-    created_at: number;
-  }[];
+  })[];
   return rows.map((r) => ({
     id: r.id,
     chat_id: r.chat_id,
@@ -157,11 +169,12 @@ export function searchMessages(query: string) {
     created_at: r.created_at,
   }));
 }
+
 export function getMessageRowsForChat(
   chatId: number,
   limit: number,
   offset = 0,
-) {
+): MessageSummaryRow[] {
   return getDb()
     .prepare(
       `SELECT id, role, content, created_at FROM messages
@@ -169,23 +182,24 @@ export function getMessageRowsForChat(
        ORDER BY created_at DESC
        LIMIT ? OFFSET ?`,
     )
-    .all(chatId, limit, offset) as {
-    id: number;
-    role: string;
-    content: string;
-    created_at: number;
-  }[];
+    .all(chatId, limit, offset) as MessageSummaryRow[];
 }
+
 export function getChatIdForMessage(messageId: number): number | null {
   const row = getDb()
     .prepare("SELECT chat_id FROM messages WHERE id = ?")
     .get(messageId) as { chat_id: number } | undefined;
   return row?.chat_id ?? null;
 }
-export function deleteTurnsAfter(chatId: number, afterId: number) {
+
+export function deleteTurnsAfter(
+  chatId: number,
+  afterId: number,
+  keepId: number,
+): void {
   getDb()
-    .prepare("DELETE FROM messages WHERE chat_id = ? AND id > ?")
-    .run(chatId, afterId);
+    .prepare("DELETE FROM messages WHERE chat_id = ? AND id > ? AND id <> ?")
+    .run(chatId, afterId, keepId);
 }
 
 /**

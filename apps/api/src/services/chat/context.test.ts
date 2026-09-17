@@ -32,6 +32,7 @@ const h = vi.hoisted(() => ({
     }[],
     compactCalls: [] as number[],
     compactTo: null as number | null,
+    deletes: [] as number[][],
   },
   reset() {
     h.state.scripts.length = 0;
@@ -42,6 +43,7 @@ const h = vi.hoisted(() => ({
     h.state.toolResults.length = 0;
     h.state.compactCalls.length = 0;
     h.state.compactTo = null;
+    h.state.deletes.length = 0;
   },
 }));
 
@@ -90,7 +92,9 @@ vi.mock("@kotys/db", () => ({
       );
     return anchor ? { id: anchor.id, tokens: anchor.prompt_tokens ?? 0 } : null;
   },
-  deleteTurnsAfter: () => {},
+  deleteTurnsAfter: (...args: number[]) => {
+    h.state.deletes.push(args);
+  },
   getToolResultsForMessages: () => h.state.toolResults ?? [],
   getChatLoadedTools: () => [],
   imagesOf: (row: { images: string | null }) =>
@@ -268,6 +272,7 @@ describe("daemon context assembly", () => {
     expect(joined).toContain("edited resend");
     expect(joined).not.toContain("discarded fork");
     expect(joined).not.toContain("discarded reply");
+    expect(state.deletes).toEqual([[7, 13, 900]]);
     expect(sent.map((m) => m.content)).toEqual([
       expect.any(String),
       "kept",
