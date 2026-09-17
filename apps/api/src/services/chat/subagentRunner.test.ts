@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ToolDefinition } from "@kotys/contracts";
 import type { ToolContext } from "../../tools/types.js";
+import { events } from "../events.js";
+import { resolveApproval } from "../approval.js";
 
 const h = vi.hoisted(() => ({
   state: {
@@ -128,6 +130,44 @@ describe("runSubagent", () => {
     expect(toolNames).toContain("read_file");
     expect(toolNames).not.toContain("bash");
     expect(toolNames).not.toContain("spawn_agent");
+  });
+
+  it("hides tools that settings disabled", async () => {
+    h.state.scripts.push([textPart("done")]);
+    await runSubagent({
+      agent: "explore",
+      prompt: "go",
+      parentChatId: 42,
+      model,
+      signal: new AbortController().signal,
+      toolContext: { ...baseCtx(), toolEnabled: (name) => name !== "grep" },
+    });
+    const toolNames = (h.state.rounds[0].tools as ToolDefinition[]).map(
+      (d) => d.function.name,
+    );
+    expect(toolNames).toContain("read_file");
+    expect(toolNames).not.toContain("grep");
+  });
+
+  it("asks before each read in ask mode", async () => {
+    const asked: string[] = [];
+    events.onEvent("approval:request", (req) => {
+      asked.push(req.tool);
+      resolveApproval(req.id, false);
+    });
+    h.state.scripts.push([toolCallPart("read_file", { path: "a.ts" })]);
+    h.state.scripts.push([textPart("skipped")]);
+    const run = await runSubagent({
+      agent: "explore",
+      prompt: "read a.ts",
+      parentChatId: 42,
+      model,
+      signal: new AbortController().signal,
+      toolContext: { ...baseCtx(), gateRead: true },
+    });
+    events.removeAllListeners("approval:request");
+    expect(asked).toEqual(["read_file"]);
+    expect(run.toolCalls[0].error).toBe("declined");
   });
 
   it("runs a tool round and feeds the result back", async () => {

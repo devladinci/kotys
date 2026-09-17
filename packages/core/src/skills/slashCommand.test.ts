@@ -190,53 +190,83 @@ describe("substituteSkillArgs", () => {
 });
 
 describe("SkillMessage", () => {
-  it("round-trips through build and fromContent", () => {
-    const msg = SkillMessage.build(
-      "release-notes",
-      "v0.1.0 v0.2.0",
-      "Compare $ARGUMENTS; from $1.",
+  const build = (text: string, body: string) =>
+    SkillMessage.build(text, findSlashCommands(text)[0], body);
+
+  it("round-trips a leading command", () => {
+    const out = SkillMessage.fromContent(
+      build("/release-notes v0.1.0 v0.2.0", "Compare $ARGUMENTS; from $1."),
     );
-    const out = SkillMessage.fromContent(msg);
     expect(out?.name).toBe("release-notes");
     expect(out?.args).toBe("v0.1.0 v0.2.0");
+    expect(out?.text).toBe("/release-notes v0.1.0 v0.2.0");
     expect(out?.body).toBe("Compare v0.1.0 v0.2.0; from v0.1.0.");
   });
 
   it("round-trips without args", () => {
-    const msg = SkillMessage.build("pdf", "", "Do the thing.");
-    const out = SkillMessage.fromContent(msg);
+    const out = SkillMessage.fromContent(build("/pdf", "Do the thing."));
     expect(out?.name).toBe("pdf");
+    expect(out?.args).toBe("");
+    expect(out?.text).toBe("/pdf");
     expect(out?.body).toBe("Do the thing.");
   });
 
-  it("round-trips args that span several lines", () => {
-    const msg = SkillMessage.build(
-      "notes",
-      "first line\n\nsecond paragraph /notes",
-      "Do the thing.",
+  it("keeps a skill typed after other words exactly as typed", () => {
+    const out = SkillMessage.fromContent(
+      build("  please /notes the call\n\nand the demo  ", "Take notes."),
     );
-    const out = SkillMessage.fromContent(msg);
     expect(out?.name).toBe("notes");
-    expect(out?.args).toBe("first line\n\nsecond paragraph /notes");
+    expect(out?.args).toBe("please /notes the call\n\nand the demo");
+    expect(out?.text).toBe("please /notes the call\n\nand the demo");
   });
 
-  it("displayContent drops the raw header and keeps args plus the fence", () => {
-    const msg = SkillMessage.build("pdf", "quarterly report", "Do the thing.");
-    const display = SkillMessage.fromContent(msg)!.displayContent;
-    expect(display).not.toContain("/pdf");
-    expect(display.startsWith("quarterly report")).toBe(true);
-    expect(display).toContain("```kotys-skill:pdf");
-    expect(display).toContain("Do the thing.");
+  it("uses the whole text as args when it starts with another command", () => {
+    const text = "/tmp is full, /notes that";
+    const out = SkillMessage.fromContent(
+      SkillMessage.build(text, findSlashCommands(text)[1], "Take notes."),
+    );
+    expect(out?.name).toBe("notes");
+    expect(out?.args).toBe(text);
+  });
+
+  it("reads messages stored before the typed text was kept", () => {
+    const out = SkillMessage.fromContent(
+      "/pdf quarterly report\n\n```kotys-skill:pdf\nDo the thing.\n```",
+    );
+    expect(out?.args).toBe("quarterly report");
+    expect(out?.text).toBe("/pdf quarterly report");
+  });
+
+  it("displayContent drops the command and keeps args plus the fence", () => {
+    const display = SkillMessage.fromContent(
+      build("/pdf quarterly report", "Do the thing."),
+    )!.displayContent;
+    expect(display).toBe(
+      "quarterly report\n\n```kotys-skill:pdf\nDo the thing.\n```",
+    );
   });
 
   it("displayContent without args is just the fence", () => {
-    const msg = SkillMessage.build("pdf", "", "Do the thing.");
-    const display = SkillMessage.fromContent(msg)!.displayContent;
+    const display = SkillMessage.fromContent(
+      build("/pdf", "Do the thing."),
+    )!.displayContent;
     expect(display).toBe("```kotys-skill:pdf\nDo the thing.\n```");
   });
 
   it("returns null for ordinary messages", () => {
     expect(SkillMessage.fromContent("just a normal message")).toBeNull();
     expect(SkillMessage.fromContent("/not-a-skill no fence")).toBeNull();
+    expect(
+      SkillMessage.fromContent("```kotys-skill:\nno name\n```"),
+    ).toBeNull();
+  });
+
+  it("typedText gives back what the user typed", () => {
+    expect(
+      SkillMessage.typedText(build("fix it /pdf now", "Do the thing.")),
+    ).toBe("fix it /pdf now");
+    expect(SkillMessage.typedText("just a normal message")).toBe(
+      "just a normal message",
+    );
   });
 });

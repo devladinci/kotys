@@ -78,6 +78,7 @@ export async function streamChat(
       ? async () => true
       : (req2: Parameters<typeof requestApproval>[0]) => {
           if (
+            permissionMode === "copilot" &&
             req2.tool === "bash" &&
             typeof req2.command === "string" &&
             isReadOnlyBash(req2.command)
@@ -213,6 +214,8 @@ export async function streamChat(
     signal,
     requestApproval: consent,
     requestUserInput: (req) => requestUserInput(req, signal),
+    toolEnabled,
+    gateRead,
     parentModel: {
       name: model.name,
       ...(req.provider ? { provider: req.provider } : {}),

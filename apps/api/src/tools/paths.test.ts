@@ -72,6 +72,13 @@ describe("realResolvedPath", () => {
     );
   });
 
+  it("gives up on a symlink loop without hanging", async () => {
+    await fs.symlink(path.join(root, "loop-b"), path.join(root, "loop-a"));
+    await fs.symlink(path.join(root, "loop-a"), path.join(root, "loop-b"));
+    const real = await realResolvedPath(path.join(root, "loop-a"));
+    expect(typeof real).toBe("string");
+  });
+
   it("returns the input unchanged when nothing on the path exists", async () => {
     const nowhere = "/definitely/not/here/file.txt";
     expect(await realResolvedPath(nowhere)).toBe(nowhere);
@@ -96,6 +103,43 @@ describe("realResolvedPath", () => {
       // Following the link does, even though home is reached via /tmp and the
       // real target sits under /private/tmp.
       expect(await isSensitiveTarget(lexical, home)).toBe(true);
+    } finally {
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("exposes a file symlink whose own name looks harmless", async () => {
+    const home = await fs.mkdtemp(path.join("/tmp", "home-"));
+    try {
+      await fs.mkdir(path.join(home, ".ssh"));
+      await fs.writeFile(path.join(home, ".ssh", "id_rsa"), "key");
+      await fs.mkdir(path.join(home, "repo"));
+      await fs.symlink("../.ssh/id_rsa", path.join(home, "repo", "notes.txt"));
+      await fs.symlink("../.ssh", path.join(home, "repo", "more"));
+
+      expect(
+        await isSensitiveTarget(resolvePath("repo/notes.txt", home), home),
+      ).toBe(true);
+      expect(
+        await isSensitiveTarget(resolvePath("repo/more", home), home),
+      ).toBe(true);
+    } finally {
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("exposes a dangling symlink into a denied directory", async () => {
+    const home = await fs.mkdtemp(path.join("/tmp", "home-"));
+    try {
+      await fs.mkdir(path.join(home, ".ssh"));
+      await fs.symlink(
+        path.join(home, ".ssh", "authorized_keys"),
+        path.join(home, "keys.txt"),
+      );
+
+      expect(await isSensitiveTarget(resolvePath("keys.txt", home), home)).toBe(
+        true,
+      );
     } finally {
       await fs.rm(home, { recursive: true, force: true });
     }

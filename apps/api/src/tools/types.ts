@@ -6,13 +6,8 @@ import type {
   InputField,
 } from "@kotys/contracts";
 
-/**
- * Context handed to every tool executor.
- *
- * Note what is NOT here any more: the `db` object of 20+ closures. Tools import
- * from `@kotys/db` directly. This is backend-only — it references the live
- * Ollama client — which is why it stays in apps/api rather than contracts.
- */
+// Backend-only (it holds the live Ollama client), so it stays in apps/api
+// rather than contracts.
 export type ToolContext = {
   ollama: Ollama;
   homedir: string;
@@ -36,6 +31,10 @@ export type ToolContext = {
     submitLabel?: string;
     cancelLabel?: string;
   }) => Promise<Record<string, string> | null>;
+  /** Settings toggles; a subagent inherits them. */
+  toolEnabled?: (name: string) => boolean;
+  /** Ask mode: every read waits for approval, in subagents too. */
+  gateRead?: boolean;
   /** True inside a subagent turn — spawn_agent denies nesting on it. */
   isSubagent?: boolean;
   /** The parent turn's model; spawn_agent runs the child on it. */
