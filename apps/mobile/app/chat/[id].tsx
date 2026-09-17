@@ -27,6 +27,7 @@ import {
   DEFAULT_MODEL,
   findSlashQuery,
   insertSlashCommand,
+  isInputForChat,
   queueCaption,
   useAppStore,
   useChat,
@@ -180,7 +181,8 @@ function ChatScreen() {
   }, [chatId, chatsLoaded, chats, navigation, router]);
 
   const chatModel = chat?.llmModel ?? DEFAULT_MODEL;
-  const inputPending = useUserInputStore((state) => state.pending);
+  const inputRequest = useUserInputStore((state) => state.pending);
+  const inputPending = isInputForChat(inputRequest, chatId);
   const supportsThinking = chatModel.capabilities.includes("thinking");
   const visionCapable = chatModel.capabilities.includes("vision");
   const platform = usePlatform();

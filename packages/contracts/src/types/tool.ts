@@ -134,6 +134,8 @@ export type InputField = ChoiceField | TextField;
 
 export type InputRequest = {
   id: number;
+  /** The chat whose turn asked; absent on requests from older daemons. */
+  chatId?: number | null;
   title: string;
   description?: string;
   fields: InputField[];
