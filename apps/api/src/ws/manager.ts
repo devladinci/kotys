@@ -164,7 +164,12 @@ function persistResult(
   }
 }
 
-function resumeFallback(requestId: number): ServerMessage | null {
+type ResumeFallback = Extract<
+  ServerMessage,
+  { type: "chat:done" } | { type: "chat:error" }
+>;
+
+function resumeFallback(requestId: number): ResumeFallback | null {
   try {
     const row = getMessage(requestId);
     if (!row) {
@@ -272,16 +277,34 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
 
     case "chat:resume": {
       const { requestId, lastSeq } = msg.payload;
+      let chatId = chatIdOf(requestId);
+      if (chatId === undefined) {
+        chatId = getChatIdForMessage(requestId) ?? undefined;
+      }
       const frames = framesAfter(requestId, lastSeq);
       if (frames.length > 0) {
-        for (const frame of frames) send(client, frame);
+        // Replay carries the chatId stamp like a live broadcast: the resuming
+        // client classifies frames by it (its own view state depends on it).
+        for (const frame of frames) {
+          if (chatId === undefined || !("seq" in frame)) {
+            send(client, frame);
+            continue;
+          }
+          send(client, { ...frame, chatId });
+        }
         return;
       }
       // A live stream with nothing past lastSeq must stay open: a synthesized
       // done would end it mid-generation.
       if (isLive(requestId)) return;
       const fallback = resumeFallback(requestId);
-      if (fallback) send(client, fallback);
+      if (fallback) {
+        if (chatId === undefined) {
+          send(client, fallback);
+        } else {
+          send(client, { ...fallback, chatId });
+        }
+      }
       return;
     }
 

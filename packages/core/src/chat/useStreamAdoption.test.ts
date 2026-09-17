@@ -34,6 +34,14 @@ const { candidateLiveStream } = await import("./liveStreams.js");
 const { useStreamAdoption } = await import("./useStreamAdoption.js");
 const { renderHook, act, waitFor } = await import("@testing-library/react");
 
+const makeHandlers = () => ({
+  adopt: vi.fn(),
+  onGone: vi.fn(),
+  onForeign: vi.fn(),
+  onForeignGone: vi.fn(),
+  onNone: vi.fn(),
+});
+
 describe("useStreamAdoption", () => {
   beforeEach(() => {
     resetLiveStreams();
@@ -47,50 +55,92 @@ describe("useStreamAdoption", () => {
   it("adopts a stream the daemon reports as still live", async () => {
     claimLiveStream(42, 7);
     liveOnDaemon.set(7, 42);
-    const adopt = vi.fn();
-    const onGone = vi.fn();
-    renderHook(() => useStreamAdoption(7, { adopt, onGone }));
-    await waitFor(() => expect(adopt).toHaveBeenCalledWith(42));
-    expect(onGone).not.toHaveBeenCalled();
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
+    await waitFor(() => expect(handlers.adopt).toHaveBeenCalledWith(42));
+    expect(handlers.onGone).not.toHaveBeenCalled();
+    expect(handlers.onForeign).not.toHaveBeenCalled();
   });
 
   it("clears a stale claim when the daemon has no live stream", async () => {
     claimLiveStream(42, 7);
-    const adopt = vi.fn();
-    const onGone = vi.fn();
-    renderHook(() => useStreamAdoption(7, { adopt, onGone }));
-    await waitFor(() => expect(onGone).toHaveBeenCalledWith(42));
-    expect(adopt).not.toHaveBeenCalled();
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
+    await waitFor(() => expect(handlers.onGone).toHaveBeenCalledWith(42));
+    expect(handlers.adopt).not.toHaveBeenCalled();
+    expect(handlers.onNone).not.toHaveBeenCalled();
     // The stale claim must be gone: a later mount does not re-probe it.
-    renderHook(() => useStreamAdoption(7, { adopt, onGone }));
-    await waitFor(() => expect(adopt).not.toHaveBeenCalled());
-    expect(onGone).toHaveBeenCalledTimes(1);
+    renderHook(() => useStreamAdoption(7, handlers));
+    await waitFor(() => expect(handlers.adopt).not.toHaveBeenCalled());
+    expect(handlers.onGone).toHaveBeenCalledTimes(1);
   });
 
   it("adopts on a live probe and clears when the stream ends in between", async () => {
     vi.useFakeTimers();
     claimLiveStream(42, 7);
     liveOnDaemon.set(7, 42);
-    const adopt = vi.fn();
-    const onGone = vi.fn();
-    renderHook(() => useStreamAdoption(7, { adopt, onGone }));
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
     await act(async () => {}); // flush the initial probe
-    expect(adopt).toHaveBeenCalledWith(42);
+    expect(handlers.adopt).toHaveBeenCalledWith(42);
     liveOnDaemon.delete(7); // stream finished while the view was open
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
-    expect(onGone).toHaveBeenCalledWith(42);
-    expect(adopt).toHaveBeenCalledTimes(1);
+    expect(handlers.onGone).toHaveBeenCalledWith(42);
+    expect(handlers.adopt).toHaveBeenCalledTimes(1);
   });
 
-  it("does nothing for a chat with no registry claim", async () => {
-    const adopt = vi.fn();
-    const onGone = vi.fn();
-    renderHook(() => useStreamAdoption(7, { adopt, onGone }));
+  it("does nothing for a chat with no registry claim and no live stream", async () => {
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
     await act(async () => {});
-    expect(adopt).not.toHaveBeenCalled();
-    expect(onGone).not.toHaveBeenCalled();
+    expect(handlers.adopt).not.toHaveBeenCalled();
+    expect(handlers.onGone).not.toHaveBeenCalled();
+    expect(handlers.onForeign).not.toHaveBeenCalled();
+  });
+
+  it("adopts a foreign stream: daemon live, no local claim", async () => {
+    liveOnDaemon.set(7, 42);
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
+    await waitFor(() => expect(handlers.onForeign).toHaveBeenCalledWith(42));
+    expect(handlers.adopt).not.toHaveBeenCalled();
+  });
+
+  it("clears a foreign-adopted stream when the daemon reports it gone", async () => {
+    vi.useFakeTimers();
+    liveOnDaemon.set(7, 42);
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
+    await act(async () => {});
+    expect(handlers.onForeign).toHaveBeenCalledWith(42);
+    liveOnDaemon.delete(7);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(handlers.onForeignGone).toHaveBeenCalledWith(42);
+    expect(handlers.onNone).not.toHaveBeenCalled();
+  });
+
+  it("reports onNone when the daemon has nothing live for a viewer chat", async () => {
+    const handlers = makeHandlers();
+    renderHook(() => useStreamAdoption(7, handlers));
+    await waitFor(() => expect(handlers.onNone).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not recheck a foreign stream after the view unmounts", async () => {
+    vi.useFakeTimers();
+    liveOnDaemon.set(7, 42);
+    const handlers = makeHandlers();
+    const view = renderHook(() => useStreamAdoption(7, handlers));
+    await act(async () => {});
+    view.unmount();
+    liveOnDaemon.delete(7);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(handlers.onForeignGone).not.toHaveBeenCalled();
   });
 });
 

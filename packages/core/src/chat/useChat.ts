@@ -280,6 +280,26 @@ export function useChat({
       clearStreamActivity(activeChatId);
       refreshMessages();
     },
+    // A stream another client started: adopt as a viewer. No echo guard and
+    // no claim — this client writes nothing, so frames stay "visible" to it.
+    onForeign: (requestId) => {
+      if (activeChatId === null) return;
+      if (getStreamingId(activeChatId) === requestId) return;
+      startStreamEntry(activeChatId, requestId);
+    },
+    onForeignGone: (requestId) => {
+      if (activeChatId === null) return;
+      if (getStreamingId(activeChatId) !== requestId) return;
+      finishStreamEntry(activeChatId);
+      refreshMessages();
+    },
+    onNone: () => {
+      if (activeChatId === null) return;
+      const id = getStreamingId(activeChatId);
+      if (id === null || id === -1) return;
+      finishStreamEntry(activeChatId);
+      refreshMessages();
+    },
   });
 
   useEffect(() => {
