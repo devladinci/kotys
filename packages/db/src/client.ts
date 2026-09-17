@@ -114,6 +114,8 @@ export function initDatabase(dbPath: string = DB_PATH): void {
       source_chat_id INTEGER,
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      use_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at INTEGER,
       FOREIGN KEY (source_chat_id) REFERENCES chats(id) ON DELETE SET NULL
      );
 
@@ -254,6 +256,22 @@ export function initDatabase(dbPath: string = DB_PATH): void {
       "ALTER TABLE chats ADD COLUMN parent_id INTEGER REFERENCES chats(id) ON DELETE CASCADE",
     );
     db.exec("CREATE INDEX IF NOT EXISTS idx_chats_parent ON chats(parent_id)");
+  }
+
+  const memoryCols = new Set(
+    (
+      db.prepare("PRAGMA table_info(memories)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name),
+  );
+  if (!memoryCols.has("use_count")) {
+    db.exec(
+      "ALTER TABLE memories ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+  if (!memoryCols.has("last_used_at")) {
+    db.exec("ALTER TABLE memories ADD COLUMN last_used_at INTEGER");
   }
 
   const messageColsNow = db.prepare("PRAGMA table_info(messages)").all() as {

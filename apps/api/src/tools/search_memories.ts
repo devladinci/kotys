@@ -70,6 +70,11 @@ export async function execute(
         topics: m.topics,
         source_chat_id: m.source_chat_id,
         updated_at: new Date(m.updated_at * 1000).toISOString(),
+        use_count: m.use_count,
+        last_used_at:
+          m.last_used_at !== null
+            ? new Date(m.last_used_at * 1000).toISOString()
+            : null,
       })),
     }),
     activity: {

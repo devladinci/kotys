@@ -1,4 +1,8 @@
 import { describe, expect, it, beforeAll, beforeEach } from "vitest";
+import Database from "better-sqlite3";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
 import type { PomodoroSessionRecord, TodoRecord } from "@kotys/contracts";
 import { asEpochSeconds } from "@kotys/contracts";
 import * as db from "./index.js";
@@ -725,5 +729,122 @@ describe("pomodoro sessions", () => {
     db.createPomodoroSession({ duration_seconds: 600 });
     expect(db.cancelStalePomodoroSessions()).toBe(2);
     expect(db.getActivePomodoroSession()).toBeNull();
+  });
+});
+
+describe("memory usage tracking", () => {
+  it("increments use_count and last_used_at on searchMemories results", () => {
+    const m = db.createMemory({
+      key: "usage-search-target",
+      content: "Tracked via search.",
+      type: "fact",
+      topics: [],
+      sourceChatId: null,
+    });
+    expect(m.use_count).toBe(0);
+    expect(m.last_used_at).toBeNull();
+
+    db.searchMemories({ query: "Tracked via search" });
+    const after = db.getMemoryById(m.id);
+    expect(after?.use_count).toBe(1);
+    expect(after?.last_used_at).not.toBeNull();
+
+    db.searchMemories({ query: "Tracked via search" });
+    expect(db.getMemoryById(m.id)?.use_count).toBe(2);
+  });
+
+  it("increments use_count on memories injected into a chat context", () => {
+    const chatId = Number(
+      db.createChat("Usage ctx chat", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    db.setChatTopics(chatId, ["usage-topic"]);
+    const injected = db.createMemory({
+      key: "usage-injected",
+      content: "Injected into block.",
+      type: "fact",
+      topics: ["usage-topic"],
+      sourceChatId: null,
+    });
+    const untouched = db.createMemory({
+      key: "usage-untouched",
+      content: "Never selected.",
+      type: "fact",
+      topics: [],
+      sourceChatId: null,
+    });
+
+    db.getMemoriesForChat(chatId, 20);
+
+    expect(db.getMemoryById(injected.id)?.use_count).toBe(1);
+    expect(db.getMemoryById(untouched.id)?.use_count).toBe(0);
+  });
+
+  it("ranks a frequently used topic memory above a newer zero-use one", () => {
+    const chatId = Number(
+      db.createChat("Usage rank chat", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+    db.setChatTopics(chatId, ["rank-topic"]);
+    db.createMemory({
+      key: "rank-veteran",
+      content: "Proven useful many times.",
+      type: "fact",
+      topics: ["rank-topic"],
+      sourceChatId: null,
+    });
+    db.createMemory({
+      key: "rank-newcomer",
+      content: "Just created, never used.",
+      type: "fact",
+      topics: ["rank-topic"],
+      sourceChatId: null,
+    });
+
+    for (let i = 0; i < 5; i += 1)
+      db.searchMemories({ query: "Proven useful" });
+
+    const keys = db.getMemoriesForChat(chatId, 20).map((m) => m.key);
+    expect(keys.indexOf("rank-veteran")).toBeLessThan(
+      keys.indexOf("rank-newcomer"),
+    );
+  });
+
+  it("migrates legacy databases missing the new columns", () => {
+    db.closeDatabase();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kotys-legacy-"));
+    const legacyPath = path.join(dir, "legacy.db");
+    const legacy = new Database(legacyPath);
+    legacy.exec(`CREATE TABLE memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE,
+      content TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('user', 'preference', 'project', 'fact')),
+      source_chat_id INTEGER,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`);
+    legacy.close();
+
+    db.initDatabase(legacyPath);
+
+    const cols = (
+      db.getDb().prepare("PRAGMA table_info(memories)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name);
+    expect(cols).toContain("use_count");
+    expect(cols).toContain("last_used_at");
+    db.closeDatabase();
+    fs.rmSync(dir, { recursive: true, force: true });
+    db.initDatabase(":memory:");
   });
 });
