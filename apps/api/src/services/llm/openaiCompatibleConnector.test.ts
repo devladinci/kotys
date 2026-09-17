@@ -231,3 +231,39 @@ describe("openaiCompatibleConnector streamed tool calls", () => {
     ).toEqual(["bash", "list"]);
   });
 });
+
+describe("openaiCompatibleConnector errors", () => {
+  // Its own fetch: the shared stub is a queue, and a stream left running by
+  // an earlier test can take the scripted response.
+  const streamError = async (status: number, body: string) => {
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(body, { status })) as typeof fetch;
+    try {
+      const handle = connector.stream(
+        req as never,
+        () => undefined,
+        new AbortController().signal,
+      );
+      return await handle.done.then(
+        () => null,
+        (err: unknown) => (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  };
+
+  it("keeps the server's explanation, which the retry logic reads", async () => {
+    const message = await streamError(
+      400,
+      JSON.stringify({ error: { message: "think is not supported" } }),
+    );
+    expect(message).toContain("400");
+    expect(message).toContain("think is not supported");
+  });
+
+  it("still reports the status when the server explains nothing", async () => {
+    expect(await streamError(500, "")).toContain("500");
+  });
+});
