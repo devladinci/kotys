@@ -38,9 +38,9 @@ export function useMessageQueue(activeChatId: number | null) {
   );
 
   const drain = useCallback(
-    (next: QueuedMessage, rest: QueuedMessage[]) => {
-      if (activeChatId === null) return;
-      drainQueued(activeChatId, next, rest);
+    (id: number) => {
+      if (activeChatId === null) return false;
+      return drainQueued(activeChatId, id);
     },
     [activeChatId],
   );

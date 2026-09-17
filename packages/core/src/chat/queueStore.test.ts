@@ -34,20 +34,20 @@ describe("queueStore", () => {
   it("drains FIFO from the head only", () => {
     enqueueQueued(1, "a", []);
     enqueueQueued(1, "b", []);
-    const queue = getQueued(1);
-    drainQueued(1, queue[0], queue.slice(1));
+    expect(drainQueued(1, getQueued(1)[0].id)).toBe(true);
     expect(getQueued(1).map((q) => q.text)).toEqual(["b"]);
-    drainQueued(1, getQueued(1)[0], []);
+    expect(drainQueued(1, getQueued(1)[0].id)).toBe(true);
     expect(getQueued(1)).toEqual([]);
   });
 
-  it("drain is a no-op when the head changed (dequeued in between)", () => {
+  it("refuses to drain a message that is no longer the head", () => {
     enqueueQueued(1, "a", []);
     enqueueQueued(1, "b", []);
-    const stale = getQueued(1);
-    dequeueQueued(1, stale[0].id);
-    drainQueued(1, stale[0], stale.slice(1));
-    expect(getQueued(1).map((q) => q.text)).toEqual(["b"]);
+    const [a, b] = getQueued(1);
+    dequeueQueued(1, a.id);
+    expect(drainQueued(1, a.id)).toBe(false);
+    expect(drainQueued(1, b.id)).toBe(true);
+    expect(getQueued(1)).toEqual([]);
   });
 
   it("notifies subscribers on every mutation", () => {
@@ -56,7 +56,7 @@ describe("queueStore", () => {
     expect(listener).not.toHaveBeenCalled();
     enqueueQueued(1, "a", []);
     expect(listener).toHaveBeenCalledTimes(1);
-    drainQueued(1, getQueued(1)[0], []);
+    drainQueued(1, getQueued(1)[0].id);
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
     enqueueQueued(1, "a", []);

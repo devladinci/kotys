@@ -13,7 +13,16 @@ let rpc: RouterClient<AppRouter> | null = null;
 let socket: KotysSocket | null = null;
 let config: KotysConfig | null = null;
 
+const sameConfig = (a: KotysConfig, b: KotysConfig): boolean =>
+  a.baseUrl === b.baseUrl && a.token === b.token;
+
 export function setClients(cfg: KotysConfig): KotysSocket {
+  // Called again for the same daemon (StrictMode renders the provider's
+  // initialiser twice), the existing socket stands: a second one would stay
+  // connected with nothing closing it, and getSocket() would hand out the
+  // newer one while the app held the older.
+  if (socket && config && sameConfig(config, cfg)) return socket;
+  socket?.close();
   config = cfg;
   rpc = createRpcClient(cfg);
   const s = new KotysSocket(cfg, {
