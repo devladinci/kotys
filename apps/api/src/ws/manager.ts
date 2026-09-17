@@ -4,8 +4,8 @@ import type { ChatStreamResult } from "@kotys/contracts";
 import { ERROR_TURN_PREFIX } from "@kotys/contracts";
 import { getMessage, getChatIdForMessage, updateMessage } from "@kotys/db";
 import { events } from "../services/events.js";
-import { resolveApproval } from "../services/approval.js";
-import { resolveUserInput } from "../services/input.js";
+import { pendingApprovals, resolveApproval } from "../services/approval.js";
+import { pendingInputs, resolveUserInput } from "../services/input.js";
 import { streamChat } from "../services/chatStream.js";
 import {
   startPomodoro,
@@ -110,8 +110,17 @@ export function bindEvents(): void {
 
 export function onOpen(ws: WSContext): string {
   const id = randomUUID();
-  clients.set(id, { id, ws });
-  send({ id, ws }, { type: "ready", payload: { clientId: id } });
+  const client = { id, ws };
+  clients.set(id, client);
+  send(client, { type: "ready", payload: { clientId: id } });
+  // A phone that wakes up mid-request never saw the broadcast, and the tool
+  // would wait out its timeout with no dialog anywhere.
+  for (const payload of pendingApprovals()) {
+    send(client, { type: "approval:request", payload });
+  }
+  for (const payload of pendingInputs()) {
+    send(client, { type: "input:request", payload });
+  }
   return id;
 }
 
