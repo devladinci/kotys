@@ -54,7 +54,7 @@ describe("isOriginAllowed", () => {
 
   it("rejects rebinding: the rebound page's own Host echoes its Origin", () => {
     expect(isOriginAllowed("http://attacker.example")).toBe(false);
-    expect(isOriginAllowed("http://100.64.0.1:3017")).toBe(false);
+    expect(isOriginAllowed("http://93.184.216.34:3017")).toBe(false);
   });
 
   it("accepts the dev-server origin sharing the bind host (Expo Go on device)", () => {
@@ -83,6 +83,22 @@ describe("isOriginAllowed", () => {
       isOriginAllowed("https://kotys.example", ["https://kotys.example"]),
     ).toBe(true);
     expect(isOriginAllowed("https://kotys.example")).toBe(false);
+  });
+
+  it("wildcard bind: accepts dev-server origins on private/loopback/tailnet IPs (0.0.0.0 matches every real address)", () => {
+    expect(isOriginAllowed("http://192.168.68.110:8081", [], "0.0.0.0")).toBe(
+      true,
+    );
+    expect(isOriginAllowed("http://10.0.0.5:8081", [], "0.0.0.0")).toBe(true);
+    expect(isOriginAllowed("http://100.77.236.93:8081", [], "0.0.0.0")).toBe(
+      true,
+    );
+    expect(isOriginAllowed("http://127.0.0.1:8081", [], "0.0.0.0")).toBe(true);
+  });
+
+  it("wildcard bind: still rejects public attacker origins", () => {
+    expect(isOriginAllowed("http://evil.example", [], "0.0.0.0")).toBe(false);
+    expect(isOriginAllowed("http://8.8.8.8:8081", [], "0.0.0.0")).toBe(false);
   });
 });
 

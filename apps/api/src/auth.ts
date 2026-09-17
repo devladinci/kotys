@@ -38,7 +38,37 @@ export function isValidToken(candidate: string | undefined | null): boolean {
 /** Origin decision shared by CORS and originGuard. Non-HTTP(S) schemes
  * (exp://, app://) and the literal "null" can't come from a web page, so they
  * imply a native client the bearer token protects anyway. Same-host http(s)
- * covers the Expo dev server sharing the daemon's address. */
+ * covers the Expo dev server sharing the daemon's address. A wildcard bind
+ * (0.0.0.0) matches no literal address, so any loopback/private/tailnet IP
+ * dev-server origin is accepted — the token still guards the RPC surface. */
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "*"]);
+
+function isPrivateishIp(hostname: string): boolean {
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".ts.net")
+  ) {
+    return true;
+  }
+  const ipv4 = hostname.split(".").map(Number);
+  if (
+    ipv4.length !== 4 ||
+    ipv4.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
+  ) {
+    return false;
+  }
+  const [a, b] = ipv4;
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
 export function isOriginAllowed(
   origin: string,
   allowlist: readonly string[] = ALLOWED_ORIGINS,
@@ -49,7 +79,9 @@ export function isOriginAllowed(
   if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return true;
   if (/^https?:\/\//.test(origin)) {
     try {
-      return new URL(origin).hostname === bindHost;
+      const { hostname } = new URL(origin);
+      if (hostname === bindHost) return true;
+      if (WILDCARD_HOSTS.has(bindHost) && isPrivateishIp(hostname)) return true;
     } catch {
       return false;
     }
