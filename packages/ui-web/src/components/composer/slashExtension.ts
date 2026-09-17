@@ -54,7 +54,7 @@ export const getSlashMenuState = (): ISlashMenuState => menuState;
 export const useSlashMenu = (): ISlashMenuState =>
   useSyncExternalStore(subscribeMenu, () => menuState);
 
-export const setSlashIndex = (index: number) => {
+export const setSlashIndex = (index: number): void => {
   if (menuState.index !== index) setMenuState({ ...menuState, index });
 };
 
@@ -64,17 +64,13 @@ export const applySlashPick = (
 ): boolean => {
   const state = slashPluginKey.getState(editor.state);
   if (!state?.active) return false;
-  const args = editor.state.doc
-    .textBetween(state.range.to, editor.state.selection.to, "\n")
-    .trim();
-  const text = args ? `/${skill.name} ${args}` : `/${skill.name}`;
   exitSuggestion(editor.view, slashPluginKey);
   editor
     .chain()
     .focus()
     .insertContentAt(
       state.range,
-      { type: "text", text },
+      { type: "text", text: `/${skill.name}` },
       { updateSelection: true },
     )
     .run();
@@ -96,7 +92,6 @@ export const SlashExtension = Extension.create<ISlashExtensionProps>({
         pluginKey: slashPluginKey,
         editor,
         char: "/",
-        startOfLine: true,
         items: ({ query }) => {
           const q = query.toLowerCase();
           const all = getItems();
@@ -133,8 +128,8 @@ export const SlashExtension = Extension.create<ISlashExtensionProps>({
             return false;
           },
         }),
-        // Escape dismisses only while the exact match is unchanged; a pick
-        // (args inserted) or edit reactivates the menu.
+        // Escape dismisses only while the exact match is unchanged; a pick or
+        // an edit reactivates the menu.
         shouldResetDismissed: ({ match, range: dismissedRange }) =>
           match.range.from !== dismissedRange.from ||
           match.range.to !== dismissedRange.to,

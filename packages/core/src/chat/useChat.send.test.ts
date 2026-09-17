@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
   const sent: unknown[] = [];
-  const inserts: { role: string }[] = [];
+  const inserts: { role: string; content?: string }[] = [];
   const userInsert: { mode: "ok" | "null" | "throw" } = { mode: "ok" };
   const skill: {
     mode: "ok" | "hang";
     resolve: ((value: unknown) => void) | null;
-  } = { mode: "ok", resolve: null };
+    bodies: Record<string, string>;
+  } = { mode: "ok", resolve: null, bodies: {} };
   const listeners = new Set<(msg: unknown) => void>();
   const net = { online: true };
   const socket = {
@@ -45,13 +46,14 @@ vi.mock("../shared/clients.js", () => ({
       liveStream: async () => null,
     },
     skills: {
-      get: async () => {
+      get: async ({ name }: { name: string }) => {
         if (h.skill.mode === "hang") {
           return new Promise((resolve) => {
             h.skill.resolve = resolve;
           });
         }
-        return null;
+        const body = h.skill.bodies[name];
+        return body === undefined ? null : { name, body };
       },
     },
   }),
@@ -128,6 +130,7 @@ describe("useChat: watching a stream another device started", () => {
     h.userInsert.mode = "ok";
     h.skill.mode = "ok";
     h.skill.resolve = null;
+    h.skill.bodies = {};
     resetStreamState();
     resetLiveStreams();
     resetQueued();
@@ -285,7 +288,6 @@ describe("useChat: watching a stream another device started", () => {
       });
     });
 
-    // The steer receipt settles the queued message; nothing drains.
     expect(getQueued(7).some((q) => q.id === queued.id)).toBe(false);
     expect(sentOf("chat:stream")).toHaveLength(0);
   });
@@ -299,6 +301,7 @@ describe("useChat send", () => {
     h.userInsert.mode = "ok";
     h.skill.mode = "ok";
     h.skill.resolve = null;
+    h.skill.bodies = {};
     resetStreamState();
     resetLiveStreams();
     resetQueued();
@@ -333,6 +336,45 @@ describe("useChat send", () => {
     expect(isChatBusy(7)).toBe(false);
   });
 
+  it("expands a skill named mid-message and keeps the whole text as args", async () => {
+    h.skill.bodies = { review: "Review the diff." };
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("see /tmp/x.log then /review it", []);
+    });
+
+    const user = h.inserts.find((row) => row.role === "user");
+    expect(user?.content).toBe(
+      "/review see /tmp/x.log then /review it\n\n```kotys-skill:review\nReview the diff.\n```",
+    );
+  });
+
+  it("skips slash tokens that name no skill", async () => {
+    h.skill.bodies = { review: "Review the diff." };
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("copy to /backup and /review", []);
+    });
+
+    const user = h.inserts.find((row) => row.role === "user");
+    expect(user?.content).toMatch(
+      /^\/review copy to \/backup and \/review\n\n```kotys-skill:review\n/,
+    );
+  });
+
+  it("sends the text unchanged when no token names a skill", async () => {
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("copy to /backup", []);
+    });
+
+    const user = h.inserts.find((row) => row.role === "user");
+    expect(user?.content).toBe("copy to /backup");
+  });
+
   it("claims the chat before the skill lookup so a second send queues", async () => {
     h.skill.mode = "hang";
     const { result } = renderChat(7);
@@ -354,8 +396,6 @@ describe("useChat send", () => {
       if (first) await first;
     });
 
-    // The turn ends (chat:done frame), then the queue drains the held
-    // message into a second turn.
     const firstId = sentOf("chat:stream")[0].payload.requestId as number;
     emitFrame({
       type: "chat:done",
@@ -379,7 +419,6 @@ describe("useChat send", () => {
     const firstTurnId = sentOf("chat:stream")[0].payload.requestId as number;
     expect(getStreamingId(7)).toBe(firstTurnId);
 
-    // A second message queues behind the running turn, then Stop is pressed.
     act(() => {
       void result.current.send("second", []);
     });

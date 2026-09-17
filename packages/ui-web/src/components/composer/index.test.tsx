@@ -123,6 +123,37 @@ describe("Composer slash menu", () => {
     );
   });
 
+  it("opens after other words and keeps them when a skill is picked", async () => {
+    const { onSend } = renderComposer();
+    await type("please /cre");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { selected: true }),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(composer()).toHaveTextContent("please /create-kotys-pr"),
+    );
+    await type(" for this branch");
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend).toHaveBeenCalledWith(
+      "please /create-kotys-pr for this branch",
+      [],
+    );
+  });
+
+  it("stays closed for a slash inside a word or path", async () => {
+    const { onSend } = renderComposer();
+    await type("and/or");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await type(" see /usr/");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await userEvent.keyboard("{Enter}");
+    expect(onSend).toHaveBeenCalledWith("and/or see /usr/", []);
+  });
+
   it("hidden skills never appear in the menu", async () => {
     skillsList.mockResolvedValue([
       listing,

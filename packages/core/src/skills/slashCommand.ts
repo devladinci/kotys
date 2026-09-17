@@ -1,59 +1,73 @@
-/**
- * Parsing and argument substitution for `/skill-name args` composer input.
- * Pure functions, no DOM — unit-testable without React.
- */
 export const SKILL_FENCE_PREFIX = "kotys-skill:";
 
-/** A `/command` at the very start of the composer text. */
 export type ParsedSlashCommand = {
-  /** Name without the leading slash, lowercased, trimmed. */
   name: string;
-  /** Everything after the name, trimmed; "" when absent. */
   args: string;
-  /** Full raw text (for echo-back / edit flows). */
-  raw: string;
 };
 
-/**
- * Recognise a leading `/name` token. `"/pdf v1"` parses; `"/pdf/v1"` does not
- * (slash inside the name), nor does a `/` deeper in the text.
- */
-export function parseSlashCommand(text: string): ParsedSlashCommand | null {
-  const trimmedStart = text.replace(/^\s+/, "");
-  if (!trimmedStart.startsWith("/")) return null;
-  const m = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$/.exec(
-    trimmedStart,
-  );
-  if (!m) return null;
-  return { name: m[1], args: (m[2] ?? "").trim(), raw: text };
-}
-
-/** Composer slash-menu state: the bare `/` and partial names match too. */
 export type SlashQuery = {
-  /** Name typed so far, possibly "" for a bare `/`. */
   query: string;
-  args: string;
-  raw: string;
+  from: number;
+  to: number;
 };
 
-/**
- * Autocomplete counterpart of parseSlashCommand: it must match while the name
- * is still being typed (`/`, `/rel`, `/release-`), so unlike parseSlashCommand
- * it accepts an empty or hyphen-terminated name. Sending still goes through
- * parseSlashCommand, which requires a complete name.
- */
-export function parseSlashQuery(text: string): SlashQuery | null {
-  const trimmedStart = text.replace(/^\s+/, "");
-  if (!trimmedStart.startsWith("/")) return null;
-  const m = /^\/([a-z0-9-]*)(?:\s+([\s\S]*))?$/.exec(trimmedStart);
-  if (!m) return null;
-  return { query: m[1], args: (m[2] ?? "").trim(), raw: text };
+export type SlashInsert = {
+  text: string;
+  cursor: number;
+};
+
+const LEADING_COMMAND = /^\s*\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$/;
+const INLINE_COMMAND =
+  /(?:^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=[.,;:!?)]*(?:\s|$))/g;
+const CODE_SPANS = /```[\s\S]*?(?:```|$)|`[^`\n]*`/g;
+
+export function parseSlashCommand(text: string): ParsedSlashCommand | null {
+  const match = LEADING_COMMAND.exec(text);
+  if (!match) return null;
+  return { name: match[1], args: (match[2] ?? "").trim() };
 }
 
-/**
- * Substitute `$ARGUMENTS` (the whole string) and `$0`–`$9` (positional, split
- * on whitespace) into a skill body. Unknown positions become "".
- */
+export function findSlashCommands(text: string): ParsedSlashCommand[] {
+  const leading = parseSlashCommand(text);
+  const found = leading ? [leading] : [];
+  const args = text.trim();
+  for (const [, name] of text
+    .replace(CODE_SPANS, " ")
+    .matchAll(INLINE_COMMAND)) {
+    if (found.some((command) => command.name === name)) continue;
+    found.push({ name, args });
+  }
+  return found;
+}
+
+export function findSlashQuery(
+  text: string,
+  cursor: number,
+): SlashQuery | null {
+  // Selection events can arrive before the text change they belong to.
+  const at = Math.min(cursor, text.length);
+  const head = /(?:^|\s)\/([a-z0-9-]*)$/.exec(text.slice(0, at));
+  const tail = /^[a-z0-9-]*(?=\s|$)/.exec(text.slice(at));
+  if (!head || !tail) return null;
+  return {
+    query: head[1] + tail[0],
+    from: at - head[1].length - 1,
+    to: at + tail[0].length,
+  };
+}
+
+export function insertSlashCommand(
+  text: string,
+  query: SlashQuery,
+  name: string,
+): SlashInsert {
+  const head = `${text.slice(0, query.from)}/${name} `;
+  return {
+    text: head + text.slice(query.to).replace(/^ +/, ""),
+    cursor: head.length,
+  };
+}
+
 export function substituteSkillArgs(body: string, args: string): string {
   const positional = args.split(/\s+/).filter(Boolean);
   return body
