@@ -368,6 +368,46 @@ describe("streamChat permission modes", () => {
     expect(written).toContain("go");
   });
 
+  it("ask mode prompts before a read-only shell command", async () => {
+    await fs.mkdir(HOME, { recursive: true });
+    const requests: string[] = [];
+    events.onEvent("approval:request", (req) => {
+      requests.push(req.command ?? req.tool);
+      resolveApproval(req.id, false);
+    });
+    state.scripts.push(
+      [toolCallPart("bash", { command: "ls" })],
+      [doneText("skipped")],
+    );
+    const result = await streamChat(
+      { ...baseReq(), mode: "ask" },
+      cbs(),
+      new AbortController().signal,
+    );
+    expect(requests).toEqual(["ls"]);
+    expect(result.toolCalls[0].status).toBe("error");
+  });
+
+  it("copilot mode runs a read-only shell command without a prompt", async () => {
+    await fs.mkdir(HOME, { recursive: true });
+    const prompts = vi.fn();
+    events.onEvent("approval:request", ({ id }) => {
+      prompts();
+      resolveApproval(id, false);
+    });
+    state.scripts.push(
+      [toolCallPart("bash", { command: "ls" })],
+      [doneText("done")],
+    );
+    const result = await streamChat(
+      baseReq(),
+      cbs(),
+      new AbortController().signal,
+    );
+    expect(prompts).not.toHaveBeenCalled();
+    expect(result.toolCalls[0].status).toBe("done");
+  });
+
   it("ask mode prompts before MCP-loading", async () => {
     const requests: string[] = [];
     events.onEvent("approval:request", (req) => {
@@ -413,6 +453,30 @@ describe("streamChat request shaping", () => {
     // apply_patch is lazy: the prompt advertises its signature instead.
     expect(system?.content).toContain("apply_patch(");
     expect(system?.content).not.toContain("bash(");
+  });
+
+  it("refuses a disabled tool the model calls anyway", async () => {
+    await fs.mkdir(HOME, { recursive: true });
+    await fs.rm(path.join(HOME, "off.txt"), { force: true });
+    state.toolsEnabled = { write_file: false };
+    const prompts = vi.fn();
+    events.onEvent("approval:request", ({ id }) => {
+      prompts();
+      resolveApproval(id, true);
+    });
+    state.scripts.push(
+      [toolCallPart("write_file", { path: "off.txt", content: "no" })],
+      [doneText("ok")],
+    );
+    const result = await streamChat(
+      { ...baseReq(), mode: "autopilot" },
+      cbs(),
+      new AbortController().signal,
+    );
+    expect(result.toolCalls[0].status).toBe("error");
+    expect(result.toolCalls[0].error).toBe("disabled");
+    expect(prompts).not.toHaveBeenCalled();
+    await expect(fs.access(path.join(HOME, "off.txt"))).rejects.toThrow();
   });
 
   it("omits the tools field entirely when every tool is disabled", async () => {
