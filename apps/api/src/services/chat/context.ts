@@ -27,7 +27,7 @@ import type { ConnectorChatMessage } from "../llm/registry.js";
 import type { ToolResultRow, TurnRow } from "@kotys/db";
 import { parseTrace, splitReplyAtSteers } from "./steers.js";
 
-export type TurnPayload = {
+type TurnPayload = {
   /** Absent on the pending client turn, which is always the newest. */
   id?: number;
   role: string;
@@ -201,12 +201,15 @@ function projectedContextTokens(
   });
 }
 
+type DaemonRequest = {
+  requestId: number;
+  chatId?: number;
+  historyUpto?: number;
+  messages: TurnPayload[];
+};
+
 export async function buildDaemonMessages(
-  req: {
-    chatId?: number;
-    historyUpto?: number;
-    messages: TurnPayload[];
-  },
+  req: DaemonRequest,
   rosterIndex: string,
   skillsIndex: string,
   contextLength: number,
@@ -216,7 +219,10 @@ export async function buildDaemonMessages(
   let chat = getChatById(chatId);
   if (!chat) return null;
 
-  if (req.historyUpto !== undefined) deleteTurnsAfter(chatId, req.historyUpto);
+  // The client inserts the new reply row before streaming, so it must survive.
+  if (req.historyUpto !== undefined) {
+    deleteTurnsAfter(chatId, req.historyUpto, req.requestId);
+  }
   const collect = (summaryUpto: number | null): TurnPayload[] => {
     const turns = historyTurns(
       chatId,

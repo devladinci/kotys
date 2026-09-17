@@ -76,7 +76,10 @@ export function finishStream(requestId: number): void {
   if (!live) return;
   live.done = true;
   // Long enough for a phone locked mid-stream to wake up and resume the tail.
-  setTimeout(() => streams.delete(requestId), 10 * 60_000);
+  // A retry reuses the id, so only this stream's own entry may go.
+  setTimeout(() => {
+    if (streams.get(requestId) === live) streams.delete(requestId);
+  }, 10 * 60_000);
 }
 
 export function chatIdOf(requestId: number): number | undefined {
