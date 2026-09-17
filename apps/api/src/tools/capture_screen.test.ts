@@ -4,6 +4,8 @@ import {
   pngSize,
   rememberFrame,
   resetFramesForTests,
+  imageToPoints,
+  pointsToImage,
   type WindowInfo,
 } from "./capture_screen.js";
 import type { ToolContext } from "./types.js";
@@ -46,6 +48,52 @@ describe("frame hash memory", () => {
     rememberFrame("chat-64", "h64");
     expect(rememberFrame("chat-0", "h0")).toBe(false);
     expect(rememberFrame("chat-64", "h64")).toBe(true);
+  });
+});
+
+describe("imageToPoints / pointsToImage", () => {
+  const fullScreen = { width: 1280, height: 827, w: 1728, h: 1117 };
+
+  it("round-trips through a fractional scale", () => {
+    const scale = 1728 / 1280;
+    expect(imageToPoints(640, 413, { ...fullScreen, height: 827 })).toEqual({
+      x: Math.round(640 * scale),
+      y: Math.round(413 * scale),
+    });
+    expect(pointsToImage(864, 528, { ...fullScreen, height: 827 })).toEqual({
+      x: Math.round(864 / scale),
+      y: Math.round(528 / scale),
+    });
+  });
+
+  it("scales window-relative clicks with the same factor", () => {
+    const windowShot = { width: 1280, height: 800, w: 800, h: 500 };
+    const p = imageToPoints(640, 400, windowShot);
+    expect(p).toEqual({ x: 400, y: 250 });
+  });
+
+  it("is the identity when image pixels equal points", () => {
+    const one = { width: 800, height: 600, w: 800, h: 600 };
+    expect(imageToPoints(123, 45, one)).toEqual({ x: 123, y: 45 });
+    expect(pointsToImage(123, 45, one)).toEqual({ x: 123, y: 45 });
+  });
+
+  it("handles Retina x2 captures", () => {
+    const retina = { width: 2400, height: 1600, w: 1200, h: 800 };
+    expect(imageToPoints(1200, 800, retina)).toEqual({ x: 600, y: 400 });
+    expect(pointsToImage(600, 400, retina)).toEqual({ x: 1200, y: 800 });
+  });
+
+  it("clamps out-of-range coordinates into the target bounds", () => {
+    const cl = { ...fullScreen, height: 827 };
+    expect(imageToPoints(9999, 9999, cl)).toEqual({
+      x: fullScreen.w,
+      y: fullScreen.h,
+    });
+    expect(pointsToImage(-5, -5, cl)).toEqual({ x: 0, y: 0 });
+    expect(
+      imageToPoints(9999, -3, { width: 100, height: 100, w: 0, h: 50 }),
+    ).toEqual({ x: 0, y: 0 });
   });
 });
 

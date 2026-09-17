@@ -51,6 +51,77 @@ JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject(raw))
   })));
 `;
 
+const SCREEN_INFO_JXA = `
+ObjC.import('CoreGraphics');
+const main = $.CGMainDisplayID();
+const modeRef = $.CGDisplayCopyDisplayMode(main);
+JSON.stringify({
+  w: Number($.CGDisplayModeGetWidth(modeRef)),
+  h: Number($.CGDisplayModeGetHeight(modeRef)),
+});
+`;
+
+export type ScreenInfo = { w: number; h: number };
+
+export type ImageGeom = { width: number; height: number; w: number; h: number };
+
+export function imageToPoints(
+  x: number,
+  y: number,
+  geom: ImageGeom,
+): { x: number; y: number } {
+  if (geom.width <= 0 || geom.w <= 0) return { x: 0, y: 0 };
+  const scale = geom.w / geom.width;
+  return {
+    x: Math.max(0, Math.min(geom.w, Math.round(x * scale))),
+    y: Math.max(
+      0,
+      Math.min(geom.h, Math.round(y * (geom.h / (geom.height || 1)))),
+    ),
+  };
+}
+
+export function pointsToImage(
+  x: number,
+  y: number,
+  geom: ImageGeom,
+): { x: number; y: number } {
+  if (geom.width <= 0 || geom.w <= 0) return { x: 0, y: 0 };
+  return {
+    x: Math.max(0, Math.min(geom.width, Math.round(x * (geom.width / geom.w)))),
+    y: Math.max(
+      0,
+      Math.min(geom.height, Math.round(y * (geom.height / geom.h))),
+    ),
+  };
+}
+
+export async function getScreenInfo(
+  signal: AbortSignal,
+): Promise<ScreenInfo | null> {
+  try {
+    const { stdout } = await exec(
+      "osascript",
+      ["-l", "JavaScript", "-e", SCREEN_INFO_JXA],
+      signal,
+    );
+    const parsed: unknown = JSON.parse(stdout);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("w" in parsed) ||
+      !("h" in parsed)
+    ) {
+      return null;
+    }
+    const { w, h } = parsed as Record<"w" | "h", unknown>;
+    if (typeof w !== "number" || typeof h !== "number") return null;
+    return { w: Math.round(w), h: Math.round(h) };
+  } catch {
+    return null;
+  }
+}
+
 function exec(
   cmd: string,
   args: string[],
@@ -325,13 +396,23 @@ export async function execute(
 
   const thumb = await makeThumbnail(png);
 
+  const screen = await getScreenInfo(ctx.signal);
+  const scale =
+    screen && screen.w > 0 ? Number((screen.w / width).toFixed(4)) : undefined;
+
   return {
     content: JSON.stringify({
       observed: label,
       state: "captured",
       width,
       height,
-      note: "PNG attached to this tool message as an image.",
+      screen: screen ?? undefined,
+      scale,
+      note:
+        "PNG attached to this tool message as an image." +
+        (scale
+          ? ` Coordinates in the image are screen points × ${scale}. control_screen accepts space:"image" to convert for you.`
+          : ""),
     }),
     resultImages: [png.toString("base64")],
     activity: {
