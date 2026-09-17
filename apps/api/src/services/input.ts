@@ -19,6 +19,7 @@ const INPUT_TIMEOUT_MS = 15 * 60_000;
 
 type Pending = {
   settle: (answers: Record<string, string> | null) => void;
+  request: InputRequest;
 };
 
 const pending = new Map<number, Pending>();
@@ -26,6 +27,7 @@ let nextId = 1;
 
 export function requestUserInput(
   req: {
+    chatId?: number | null;
     title: string;
     description?: string;
     fields: InputField[];
@@ -60,16 +62,21 @@ export function requestUserInput(
 
     const onAbort = () => settle(null);
 
-    pending.set(id, { settle });
-    signal?.addEventListener("abort", onAbort, { once: true });
-
     const request: InputRequest = {
       id,
       ...req,
       host: os.hostname(),
     };
+    pending.set(id, { settle, request });
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     events.emitEvent("input:request", request);
   });
+}
+
+/** Forms a client that connects mid-request has not seen yet. */
+export function pendingInputs(): InputRequest[] {
+  return [...pending.values()].map((entry) => entry.request);
 }
 
 /** Returns false when there is no pending request under this id. */

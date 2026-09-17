@@ -107,10 +107,68 @@ describe("isReadOnlyBash", () => {
     expect(isReadOnlyBash("grep foo < notes.txt")).toBe(true);
   });
 
-  it("handles env prefixes", () => {
+  it("allows env prefixes that only change locale or output", () => {
     expect(isReadOnlyBash("LC_ALL=C sort file.txt")).toBe(true);
-    expect(isReadOnlyBash("FOO=1 BAR=2 git status")).toBe(true);
+    expect(isReadOnlyBash("LANG=C NO_COLOR=1 git status")).toBe(true);
     expect(isReadOnlyBash("NODE_ENV=dev node --version")).toBe(true);
+  });
+
+  it("asks when an env prefix could change what runs", () => {
+    expect(
+      isReadOnlyBash("GIT_SSH_COMMAND='touch x' git ls-remote git@h:a/b"),
+    ).toBe(false);
+    expect(isReadOnlyBash("GIT_EXTERNAL_DIFF='touch x' git diff")).toBe(false);
+    expect(isReadOnlyBash("NODE_OPTIONS=--require=./x.js node --version")).toBe(
+      false,
+    );
+    expect(isReadOnlyBash("PATH=. ls")).toBe(false);
+    expect(isReadOnlyBash("PAGER=./x git log")).toBe(false);
+    expect(isReadOnlyBash("FOO=1 BAR=2 git status")).toBe(false);
+  });
+
+  it("asks on read verbs whose flags run a program or write a file", () => {
+    for (const command of [
+      "rg --pre ./x needle",
+      "rg --pre=./x needle",
+      "ag --pager=./x needle",
+      "bat --paging=always --pager='sh -c x' notes.md",
+      "ack needle",
+      "git diff --output=out.patch",
+      "git log --output out.txt",
+      "git grep -O needle",
+      "git grep --open-files-in-pager=./x needle",
+      "git ls-remote --upload-pack='touch x' .",
+      "git ls-remote -u 'touch x' .",
+      "uniq in.txt out.txt",
+      "xxd in.bin out.hex",
+      "tree -o out.txt",
+      "base64 -i in.txt -o out.txt",
+      "base64 --output=out.txt in.txt",
+      "file -C -m magic",
+      "go list -toolexec=./x ./...",
+      "go list -exec ./x ./...",
+    ]) {
+      expect(isReadOnlyBash(command), command).toBe(false);
+    }
+  });
+
+  it("still allows the plain forms of those verbs", () => {
+    for (const command of [
+      "rg --json needle",
+      "ag needle src",
+      "bat README.md",
+      "git grep -n needle",
+      "git ls-remote origin",
+      "git status -u",
+      "uniq -c sorted.txt",
+      "xxd file.bin",
+      "tree -L 2",
+      "base64 -i in.txt",
+      "file -b bin/main",
+      "go list ./...",
+    ]) {
+      expect(isReadOnlyBash(command), command).toBe(true);
+    }
   });
 
   it("allows package-manager reads, guarded shapes included", () => {

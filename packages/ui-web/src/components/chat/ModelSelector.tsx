@@ -15,6 +15,8 @@ import type { ModelListing } from "@kotys/contracts";
 import { useOverflowFlip } from "./useOverflowFlip";
 
 interface IProps {
+  /** The chat's model; without it the picker shows the global default. */
+  model?: ModelListing;
   onSelect?: (model: ModelListing) => void | Promise<void>;
   /** Compact pill for the composer footer; dropdown opens upward. */
   compact?: boolean;
@@ -25,12 +27,13 @@ interface IProps {
 // it reaches React.
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
-function ModelSelectorBase({ onSelect, compact }: IProps) {
+function ModelSelectorBase({ model, onSelect, compact }: IProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const models = useModels();
   const { defaultModel, setDefaultModel } = useAppStore();
+  const shown = model ?? defaultModel;
   const [popupRef, popupSide] = useOverflowFlip<HTMLDivElement>(open);
 
   const filtered = useMemo(() => {
@@ -58,19 +61,19 @@ function ModelSelectorBase({ onSelect, compact }: IProps) {
         onClick={handleOpen}
         aria-expanded={open}
         aria-label="Select model"
-        title={`Model — ${defaultModel.name}`}
+        title={`Model — ${shown.name}`}
         style={NO_DRAG}
         className="flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-surface-2 text-[11px] transition"
       >
         <Cpu size={11} className="text-text-muted" />
         <span className="text-text-muted">
-          {defaultModel.provider === "omlx"
+          {shown.provider === "omlx"
             ? "omlx"
-            : defaultModel.source === "local"
+            : shown.source === "local"
               ? "local"
               : "cloud"}
         </span>
-        {defaultModel.name}
+        {shown.name}
         <ChevronDown size={10} className={open ? "rotate-180" : ""} />
       </button>
       {open && (

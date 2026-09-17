@@ -10,24 +10,38 @@ export function resolvePath(raw: string, homedir: string): string {
   return path.resolve(homedir, trimmed);
 }
 
+const MAX_LINK_HOPS = 40;
+
 /**
  * Lexical path with symlinks resolved as far as the target exists on disk.
  * Denylists that only inspect the literal path are bypassed by symlinks, so
  * callers that gate access should test this form as well.
  */
-export async function realResolvedPath(resolved: string): Promise<string> {
-  const trailing: string[] = [path.basename(resolved)];
-  let dir = path.dirname(resolved);
+export async function realResolvedPath(
+  resolved: string,
+  hops = 0,
+): Promise<string> {
+  const trailing: string[] = [];
+  let current = resolved;
   for (;;) {
     try {
-      const real = await fs.realpath(dir);
+      const real = await fs.realpath(current);
       return path.resolve(real, ...[...trailing].reverse());
     } catch {
-      const parent = path.dirname(dir);
+      // A dangling link still decides where a write lands.
+      const link = await fs.readlink(current).catch(() => null);
+      if (link !== null && hops < MAX_LINK_HOPS) {
+        const target = path.resolve(path.dirname(current), link);
+        return realResolvedPath(
+          path.resolve(target, ...[...trailing].reverse()),
+          hops + 1,
+        );
+      }
+      const parent = path.dirname(current);
       // Hit the filesystem root without finding anything that exists.
-      if (parent === dir) return resolved;
-      trailing.push(path.basename(dir));
-      dir = parent;
+      if (parent === current) return resolved;
+      trailing.push(path.basename(current));
+      current = parent;
     }
   }
 }

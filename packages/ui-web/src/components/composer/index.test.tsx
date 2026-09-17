@@ -1,8 +1,26 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+const voice = vi.hoisted(() => ({
+  onTranscript: null as ((text: string) => void) | null,
+}));
+
 vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
+vi.mock("@kotys/core", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useVoiceInput: (_platform: unknown, onTranscript: (text: string) => void) => {
+    voice.onTranscript = onTranscript;
+    return {
+      status: "idle",
+      error: null,
+      start: async () => {},
+      stop: () => {},
+      cancel: () => {},
+      clearError: () => {},
+    };
+  },
+}));
 const { rpc, initTestClients } = await import("../../test/mocks/rpc");
 const { KotysProviderForTest } = await import("../../test/platform");
 
@@ -152,6 +170,31 @@ describe("Composer slash menu", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     await userEvent.keyboard("{Enter}");
     expect(onSend).toHaveBeenCalledWith("and/or see /usr/", []);
+  });
+
+  it("the Send button sends even while the menu is open", async () => {
+    const { onSend } = renderComposer();
+    await type("/create-kotys-pr");
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByLabelText("Send message"));
+    expect(onSend).toHaveBeenCalledWith("/create-kotys-pr", []);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("shows no menu when no skill matches", async () => {
+    renderComposer();
+    await type("see /zzz");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("sends a dictated message and keeps the typed draft", async () => {
+    const { onSend } = renderComposer();
+    await type("draft to keep");
+    act(() => voice.onTranscript?.("dictated words"));
+    expect(onSend).toHaveBeenCalledWith("dictated words", []);
+    expect(composer()).toHaveTextContent("draft to keep");
   });
 
   it("hidden skills never appear in the menu", async () => {

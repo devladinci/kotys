@@ -73,6 +73,16 @@ const headers = (apiKey: string): Record<string, string> => ({
 });
 
 /** OpenAI tool arguments arrive as a JSON string; parse leniently. */
+const MAX_ERROR_DETAIL = 500;
+
+// The server's own words: "retry without think/tools" reads them, and a bare
+// status code tells the user nothing.
+const errorDetail = async (res: Response): Promise<string> => {
+  const body = await res.text().catch(() => "");
+  const trimmed = body.trim().slice(0, MAX_ERROR_DETAIL);
+  return trimmed ? ` — ${trimmed}` : "";
+};
+
 const parseToolArgs = (raw: string | undefined): Record<string, unknown> => {
   if (!raw) return {};
   try {
@@ -298,7 +308,11 @@ export function createOpenAiCompatibleConnector(
         headers: headers(apiKey),
         body: JSON.stringify(chatBody(req, {})),
       });
-      if (!res.ok) throw new Error(`chat/completions failed: ${res.status}`);
+      if (!res.ok) {
+        throw new Error(
+          `chat/completions failed: ${res.status}${await errorDetail(res)}`,
+        );
+      }
       const body = (await res.json()) as OpenAiResponse;
       const choice = body.choices?.[0];
       return {
@@ -329,8 +343,11 @@ export function createOpenAiCompatibleConnector(
             ),
             signal: controller.signal,
           });
-          if (!res.ok || !res.body)
-            throw new Error(`chat/completions stream failed: ${res.status}`);
+          if (!res.ok || !res.body) {
+            throw new Error(
+              `chat/completions stream failed: ${res.status}${await errorDetail(res)}`,
+            );
+          }
           const toolAcc = new Map<
             number,
             { id: string; name: string; arguments: string }

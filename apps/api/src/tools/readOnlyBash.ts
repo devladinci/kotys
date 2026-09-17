@@ -9,7 +9,6 @@
  * most forms and write in a few; the write forms ask, the read forms pass.
  */
 
-// Verbs that only read state or transform stdin→stdout.
 const READ_ONLY_VERBS = new Set([
   "ls",
   "pwd",
@@ -55,7 +54,6 @@ const READ_ONLY_VERBS = new Set([
   "fgrep",
   "rg",
   "ag",
-  "ack",
   "cut",
   "tr",
   "sort",
@@ -332,8 +330,62 @@ const PM_GUARDED_SUBS: Record<string, Record<string, RegExp[]>> = {
   },
 };
 
+// Env prefixes that only change locale, colour or terminal size. Others
+// (PATH, PAGER, NODE_OPTIONS, GIT_*) can change what actually runs.
+const SAFE_ENV_PREFIX =
+  /^(LC_[A-Z]+|LANG|LANGUAGE|TZ|NO_COLOR|FORCE_COLOR|CLICOLOR|CLICOLOR_FORCE|TERM|COLUMNS|LINES|NODE_ENV)=/;
+
+// getopt_long and git accept any unambiguous prefix of a long option.
+const isLongFlag = (word: string, names: string[]): boolean => {
+  const name = word.split("=")[0];
+  return (
+    name.startsWith("--") &&
+    name.length > 2 &&
+    names.some((full) => full.startsWith(name))
+  );
+};
+
+const hasShortFlag = (word: string, letter: string): boolean =>
+  /^-[^-]/.test(word) && word.includes(letter);
+
 // `sort -o file` writes without any `>`, so it escapes the redirect policy.
-const FILTER_WRITE_FLAGS = [/^-o$/, /^--output$/, /^-o[^-]/, /^--output=/];
+const OUTPUT_FLAG_VERBS = new Set(["sort", "shuf", "tree", "base64"]);
+
+const isOutputFlag = (word: string): boolean =>
+  hasShortFlag(word, "o") || isLongFlag(word, ["--output"]);
+
+const EXEC_OR_WRITE_FLAGS: Record<string, (word: string) => boolean> = {
+  rg: (word) => word === "--pre" || word.startsWith("--pre="),
+  ag: (word) => isLongFlag(word, ["--pager"]),
+  bat: (word) => word === "--pager" || word.startsWith("--pager="),
+  file: (word) => hasShortFlag(word, "C") || isLongFlag(word, ["--compile"]),
+  go: (word) => /^--?(toolexec|exec)(=|$)/.test(word),
+};
+
+// `uniq in out` and `xxd in out` write their second operand.
+const SECOND_OPERAND_WRITERS: Record<string, string[]> = {
+  uniq: ["-f", "-s", "-w"],
+  xxd: ["-c", "-g", "-l", "-n", "-o", "-s", "-cols", "-groupsize", "-len"],
+};
+
+const operandCount = (words: string[], valueFlags: string[]): number => {
+  let count = 0;
+  for (let i = 0; i < words.length; i += 1) {
+    if (valueFlags.includes(words[i])) i += 1;
+    else if (!words[i].startsWith("-")) count += 1;
+  }
+  return count;
+};
+
+const isUnsafeGitFlag = (sub: string, word: string): boolean =>
+  isLongFlag(word, [
+    "--output",
+    "--open-files-in-pager",
+    "--upload-pack",
+    "--exec",
+  ]) ||
+  hasShortFlag(word, "O") ||
+  (sub === "ls-remote" && hasShortFlag(word, "u"));
 
 const GO_ENV_WRITE_FLAGS = [/^-w$/, /^--write$/, /^-u$/, /^--unset$/];
 
@@ -374,7 +426,7 @@ const SHELL_KEYWORDS = new Set([
   "]]",
 ]);
 
-// verbs whose argument (or stdin) is another command
+// verbs that run another command, interpret a script, or write files
 const EXEC_WORDS = new Set([
   "sudo",
   "doas",
@@ -627,6 +679,7 @@ function splitTopLevel(command: string): string[] | null {
 function gitRead(words: string[]): boolean {
   const gsub = words[0];
   if (gsub === undefined) return false;
+  if (words.some((word) => isUnsafeGitFlag(gsub, word))) return false;
   if (GIT_READ_SUBS.has(gsub)) return true;
   const guard = GIT_GUARDED_SUBS[gsub];
   if (!guard) return false;
@@ -701,6 +754,7 @@ function classifySegment(segmentRaw: string): boolean {
   for (;;) {
     const t = tokens[i];
     if (t?.kind === "word" && isEnvPrefix(t.value)) {
+      if (!SAFE_ENV_PREFIX.test(t.value)) return false;
       i += 1;
       continue;
     }
@@ -721,9 +775,12 @@ function classifySegment(segmentRaw: string): boolean {
   if (verb === "find") {
     return words.every((a) => !FIND_WRITE_FLAGS.test(a));
   }
-  if (verb === "sort" || verb === "shuf") {
-    return words.every((a) => !FILTER_WRITE_FLAGS.some((re) => re.test(a)));
-  }
+  if (OUTPUT_FLAG_VERBS.has(verb) && words.some(isOutputFlag)) return false;
+  const execOrWrite = EXEC_OR_WRITE_FLAGS[verb];
+  if (execOrWrite && words.some(execOrWrite)) return false;
+  const valueFlags = SECOND_OPERAND_WRITERS[verb];
+  if (valueFlags && operandCount(words, valueFlags) > 1) return false;
+  if (verb === "sort" || verb === "shuf") return true;
   if (verb === "go" && words[0] === "env") {
     return !words
       .slice(1)

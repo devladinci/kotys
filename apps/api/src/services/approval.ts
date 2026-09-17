@@ -1,4 +1,5 @@
 import os from "node:os";
+import type { ApprovalRequest } from "@kotys/contracts";
 import { events } from "./events.js";
 
 /**
@@ -22,6 +23,7 @@ const APPROVAL_TIMEOUT_MS = 10 * 60_000;
 
 type Pending = {
   settle: (approved: boolean) => void;
+  request: ApprovalRequest;
 };
 
 const pending = new Map<number, Pending>();
@@ -60,15 +62,17 @@ export function requestApproval(
 
     const onAbort = () => settle(false);
 
-    pending.set(id, { settle });
+    const request: ApprovalRequest = { id, ...req, host: os.hostname() };
+    pending.set(id, { settle, request });
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    events.emitEvent("approval:request", {
-      id,
-      ...req,
-      host: os.hostname(),
-    });
+    events.emitEvent("approval:request", request);
   });
+}
+
+/** Dialogs a client that connects mid-request has not seen yet. */
+export function pendingApprovals(): ApprovalRequest[] {
+  return [...pending.values()].map((entry) => entry.request);
 }
 
 /** Returns false when there is no pending request under this id. */

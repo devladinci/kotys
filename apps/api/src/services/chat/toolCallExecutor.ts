@@ -127,8 +127,14 @@ export function createToolExecutor(args: ToolExecutorArgs): ToolExecutor {
         : "";
       const duplicate = dedupeKey !== "" && seenCalls.has(dedupeKey);
       if (dedupeKey) seenCalls.add(dedupeKey);
+      const disabled = !args.toolEnabled(name);
       let declined = false;
-      if (args.gateRead && !duplicate && !SELF_APPROVING_TOOLS.has(name)) {
+      if (
+        args.gateRead &&
+        !disabled &&
+        !duplicate &&
+        !SELF_APPROVING_TOOLS.has(name)
+      ) {
         const approved = await requestApproval(
           {
             tool: name,
@@ -152,7 +158,10 @@ export function createToolExecutor(args: ToolExecutorArgs): ToolExecutor {
         if (!approved) declined = true;
       }
       try {
-        if (declined) {
+        if (disabled) {
+          resultContent = `${name} is disabled in settings.`;
+          entry = finish({ ...baseMeta, status: "error", error: "disabled" });
+        } else if (declined) {
           resultContent = `User declined the ${name} call. Continue without it.`;
           entry = finish({ ...baseMeta, status: "error", error: "declined" });
         } else if (duplicate) {
@@ -210,13 +219,6 @@ export function createToolExecutor(args: ToolExecutorArgs): ToolExecutor {
               ...baseMeta,
               status: "done",
               ...result.activity,
-            });
-          } else if (!args.toolEnabled(name)) {
-            resultContent = `${name} is disabled in settings.`;
-            entry = finish({
-              ...baseMeta,
-              status: "error",
-              error: "disabled",
             });
           } else {
             const mcpResult = await callMcpTool(name, callArgs, signal);

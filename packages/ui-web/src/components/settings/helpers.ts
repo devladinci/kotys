@@ -1,3 +1,5 @@
+export const TOOLS_ENABLED_SETTING = "tools_enabled";
+
 export function readEnabledMap(raw: string | null): Record<string, boolean> {
   if (!raw) return {};
   try {

@@ -2,11 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useRpc } from "@kotys/core";
 import type { ToolListing } from "@kotys/contracts";
-import { readEnabledMap, CATEGORY_STYLES } from "./helpers";
+import {
+  CATEGORY_STYLES,
+  readEnabledMap,
+  TOOLS_ENABLED_SETTING,
+} from "./helpers";
 import { ToggleSwitch } from "./ToggleSwitch";
 import { TOOL_ICONS } from "../chat/toolDisplay";
 
-export default function ToolsSettings() {
+export function ToolsSettings() {
   const rpc = useRpc();
   const [tools, setTools] = useState<ToolListing[] | null>(null);
   const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({});
@@ -19,7 +23,7 @@ export default function ToolsSettings() {
     void (async () => {
       const [list, raw] = await Promise.all([
         rpc.tools.list(),
-        rpc.settings.get({ key: "tools_enabled" }),
+        rpc.settings.get({ key: TOOLS_ENABLED_SETTING }),
       ]);
       if (cancelled) return;
       setTools(list);
@@ -37,7 +41,7 @@ export default function ToolsSettings() {
       setEnabledMap((prev) => {
         const next = { ...prev, [name]: enabled };
         void rpc.settings.set({
-          key: "tools_enabled",
+          key: TOOLS_ENABLED_SETTING,
           value: JSON.stringify(next),
         });
         return next;

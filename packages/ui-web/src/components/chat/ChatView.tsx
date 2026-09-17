@@ -23,10 +23,10 @@ import { useAppStore } from "@kotys/core";
 import { useTodoStore } from "@kotys/core";
 import { useChat } from "@kotys/core";
 import { useTokenEstimator } from "@kotys/core";
-import { useUserInputStore } from "@kotys/core";
+import { isInputForChat, useUserInputStore } from "@kotys/core";
 import { DEFAULT_CONTEXT } from "@kotys/contracts";
 import PomodoroChip from "../pomodoro/PomodoroChip";
-import MessageList from "./MessageList";
+import MessageList, { type IMessageListHandle } from "./MessageList";
 import Composer from "../composer";
 import UserInputComposer from "../user-input/UserInputComposer";
 import ModelSelector from "./ModelSelector";
@@ -80,7 +80,7 @@ export default function ChatView({
   openSearchResultRef,
 }: IProps) {
   const chatModel = activeChat?.llmModel ?? defaultModel;
-  const inputPending = useUserInputStore((s) => s.pending);
+  const inputRequest = useUserInputStore((s) => s.pending);
   const {
     messages,
     isLoading,
@@ -121,7 +121,7 @@ export default function ChatView({
   const railOpen = useTodoStore((s) => s.sidebarOpen);
   const navigate = useNavigate();
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listHandle = useRef<IMessageListHandle>(null);
   const atBottomRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -173,26 +173,31 @@ export default function ChatView({
   }, [openSearchResult, activeChatId, openSearchResultRef]);
 
   const setPinned = useCallback((value: boolean) => {
+    if (atBottomRef.current === value) return;
     atBottomRef.current = value;
     setAtBottom(value);
   }, []);
 
   const scrollToBottom = useCallback((smooth = false) => {
-    const el = scrollRef.current;
-    if (el)
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: smooth ? "smooth" : "auto",
-      });
+    listHandle.current?.scrollToBottom(smooth);
   }, []);
 
   useEffect(() => {
     if (atBottomRef.current) scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
 
+  const inputForThisChat = isInputForChat(inputRequest, activeChatId);
+
   const handleImageClick = useCallback((src: string) => {
     setLightboxImage(src);
   }, []);
+
+  const handleAtBottomChange = setPinned;
+
+  const handleJumpToLatest = () => {
+    setPinned(true);
+    scrollToBottom(true);
+  };
 
   const handleSend = useCallback(
     async (text: string, images: string[]) => {
@@ -210,6 +215,31 @@ export default function ChatView({
     [send, navigate, scrollToBottom],
   );
 
+  const handlePickExample = (text: string) => void handleSend(text, []);
+
+  const handleToggleSidebar = () => onToggleSidebar?.();
+
+  const handleToggleRail = () =>
+    useTodoStore.getState().setSidebarOpen(!railOpen);
+
+  const handleCloseLightbox = () => setLightboxImage(null);
+
+  const thinkingIndicator =
+    isLoading && streamingId === null ? (
+      <div className="py-3 px-6 bg-surface">
+        <div className="max-w-3xl mx-auto flex gap-4">
+          <div className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-semibold text-white">
+            AI
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" />
+            <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.2s]" />
+            <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.4s]" />
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   const visionCapable = chatModel.capabilities.includes("vision");
   const compactUpto = activeChat?.summary ? (activeChat.summary_upto ?? 0) : 0;
 
@@ -221,7 +251,7 @@ export default function ChatView({
           style={{ WebkitAppRegion: "drag" } as CSSProperties}
         >
           <button
-            onClick={() => onToggleSidebar?.()}
+            onClick={handleToggleSidebar}
             aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
             title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
             className="p-1.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text transition"
@@ -293,7 +323,7 @@ export default function ChatView({
         style={{ WebkitAppRegion: "drag" } as CSSProperties}
       >
         <button
-          onClick={() => onToggleSidebar?.()}
+          onClick={handleToggleSidebar}
           aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
           title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
           className="p-1.5 rounded-lg hover:bg-surface-2 text-text-muted hover:text-text transition"
@@ -329,7 +359,7 @@ export default function ChatView({
             mirrors the left sidebar's, not a control named after one of the
             two sections inside it. */}
         <button
-          onClick={() => useTodoStore.getState().setSidebarOpen(!railOpen)}
+          onClick={handleToggleRail}
           aria-label={railOpen ? "Hide side panel" : "Show side panel"}
           aria-expanded={railOpen}
           title={railOpen ? "Hide side panel (⌘⇧T)" : "Show side panel (⌘⇧T)"}
@@ -344,53 +374,24 @@ export default function ChatView({
         </button>
       </header>
       <div className="flex-1 relative min-h-0">
-        <div
-          ref={scrollRef}
-          className="h-full overflow-y-auto scrollbar-thin"
-          onWheel={(e) => {
-            const el = e.currentTarget;
-            if (e.deltaY < 0 && el.scrollHeight > el.clientHeight + 4)
-              setPinned(false);
-          }}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-            if (near !== atBottomRef.current) setPinned(near);
-          }}
-        >
-          <MessageList
-            messages={messages}
-            streamingId={streamingId}
-            highlightId={highlightId}
-            compactUpto={compactUpto}
-            summary={activeChat?.summary ?? null}
-            onImageClick={handleImageClick}
-            onRegenerate={regenerate}
-            onEditAndResend={editAndResend}
-            isLoading={isLoading}
-            onPickExample={(text) => void handleSend(text, [])}
-          />
-          {isLoading && streamingId === null && (
-            <div className="py-3 px-6 bg-surface">
-              <div className="max-w-3xl mx-auto flex gap-4">
-                <div className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-semibold text-white">
-                  AI
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" />
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.2s]" />
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce [animation-delay:0.4s]" />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <MessageList
+          ref={listHandle}
+          onAtBottomChange={handleAtBottomChange}
+          footer={thinkingIndicator}
+          messages={messages}
+          streamingId={streamingId}
+          highlightId={highlightId}
+          compactUpto={compactUpto}
+          summary={activeChat?.summary ?? null}
+          onImageClick={handleImageClick}
+          onRegenerate={regenerate}
+          onEditAndResend={editAndResend}
+          isLoading={isLoading}
+          onPickExample={handlePickExample}
+        />
         {!atBottom && (
           <button
-            onClick={() => {
-              setPinned(true);
-              scrollToBottom(true);
-            }}
+            onClick={handleJumpToLatest}
             title="Jump to latest"
             aria-label="Jump to latest"
             className="absolute bottom-4 right-6 p-2 rounded-full bg-surface-2 border border-border shadow-lg hover:bg-border transition"
@@ -445,8 +446,8 @@ export default function ChatView({
               )}
             </div>
           )}
-          <UserInputComposer />
-          {!inputPending && (
+          {inputForThisChat && <UserInputComposer />}
+          {!inputForThisChat && (
             <Composer
               isApiKeyMissing={chatModel.source === "cloud" && !apiKeyPresent}
               modelName={chatModel.name}
@@ -466,7 +467,11 @@ export default function ChatView({
               className="inline-flex items-center rounded-md border border-border bg-surface py-0.5"
               style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
             >
-              <ModelSelector onSelect={onSelectModel} compact />
+              <ModelSelector
+                model={chatModel}
+                onSelect={onSelectModel}
+                compact
+              />
               {chatModel.capabilities.includes("thinking") && (
                 <ThinkingSelector />
               )}
@@ -492,7 +497,7 @@ export default function ChatView({
         <div
           ref={(el) => el?.focus()}
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-zoom-out"
-          onClick={() => setLightboxImage(null)}
+          onClick={handleCloseLightbox}
           onKeyDown={(e) => {
             if (e.key === "Escape" || e.key === "Enter") {
               setLightboxImage(null);

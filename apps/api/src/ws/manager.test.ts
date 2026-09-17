@@ -31,6 +31,8 @@ vi.mock("../services/events.js", () => ({
 import type { ChatStreamResult } from "@kotys/contracts";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { onMessage, onOpen } from "./manager.js";
+import { requestApproval, resolveApproval } from "../services/approval.js";
+import { requestUserInput, resolveUserInput } from "../services/input.js";
 import { drainAppends, resetStreams } from "./streams.js";
 
 type FakeWs = {
@@ -317,5 +319,35 @@ describe("ws manager: chat:resume", () => {
     expect(b.sent.some((m) => m.type === "chat:error")).toBe(false);
     settle(result("done now"));
     await pending;
+  });
+});
+
+describe("late clients", () => {
+  it("replays a pending approval to a client that connects after it", async () => {
+    const asked = requestApproval({ tool: "bash", command: "ls" });
+    const late = connect();
+    const request = late.sent.find((m) => m.type === "approval:request");
+    expect(request).toBeDefined();
+    const id = (request as { payload: { id: number } }).payload.id;
+    expect(resolveApproval(id, false)).toBe(true);
+    await expect(asked).resolves.toBe(false);
+  });
+
+  it("replays a pending question to a client that connects after it", async () => {
+    const asked = requestUserInput({
+      title: "Pick",
+      fields: [{ id: "a", kind: "text" }],
+    });
+    const late = connect();
+    const request = late.sent.find((m) => m.type === "input:request");
+    expect(request).toBeDefined();
+    const id = (request as { payload: { id: number } }).payload.id;
+    expect(resolveUserInput(id)).toBe(true);
+    await expect(asked).resolves.toBeNull();
+  });
+
+  it("sends nothing extra when nothing is pending", () => {
+    const late = connect();
+    expect(late.sent.map((m) => m.type)).toEqual(["ready"]);
   });
 });

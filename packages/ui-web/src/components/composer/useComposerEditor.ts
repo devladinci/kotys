@@ -60,11 +60,7 @@ export function useComposerEditor({
     setComposerConfig({ onSend, getImages, skills, placeholder });
   });
 
-  const submit = useCallback((activeEditor: Editor): boolean => {
-    const menu = getSlashMenuState();
-    if (menu.isOpen && menu.items.length > 0) {
-      return applySlashPick(activeEditor, menu.items[menu.index]);
-    }
+  const sendNow = useCallback((activeEditor: Editor): boolean => {
     const text = markdownOf(activeEditor);
     const images = composerConfig.getImages();
     if (!text.trim() && images.length === 0) return true;
@@ -72,6 +68,18 @@ export function useComposerEditor({
     activeEditor.commands.clearContent(true);
     return true;
   }, []);
+
+  // Enter picks the highlighted skill; the Send button always sends.
+  const submitKey = useCallback(
+    (activeEditor: Editor): boolean => {
+      const menu = getSlashMenuState();
+      if (menu.isOpen && menu.items.length > 0) {
+        return applySlashPick(activeEditor, menu.items[menu.index]);
+      }
+      return sendNow(activeEditor);
+    },
+    [sendNow],
+  );
 
   const editor = useEditor({
     extensions: [
@@ -104,7 +112,7 @@ export function useComposerEditor({
       handleKeyDown: (_view, event): boolean => {
         if (event.key !== "Enter" || event.shiftKey) return false;
         if (!editor) return false;
-        return submit(editor);
+        return submitKey(editor);
       },
     },
   });
@@ -119,11 +127,6 @@ export function useComposerEditor({
     };
   }, [editor]);
 
-  const send = useCallback(() => {
-    if (!editor) return;
-    submit(editor);
-  }, [editor, submit]);
-
   const dismissMenu = useCallback(() => {
     if (!editor) return;
     if (slashPluginKey.getState(editor.state)?.active) {
@@ -132,6 +135,12 @@ export function useComposerEditor({
       );
     }
   }, [editor]);
+
+  const send = useCallback(() => {
+    if (!editor) return;
+    dismissMenu();
+    sendNow(editor);
+  }, [editor, dismissMenu, sendNow]);
 
   return { editor, send, isEmpty, dismissMenu };
 }

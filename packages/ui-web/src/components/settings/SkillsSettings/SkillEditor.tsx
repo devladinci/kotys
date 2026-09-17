@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import type { ChangeEvent } from "react";
 import { Loader2, Save, Trash2 } from "lucide-react";
 import { useRpc } from "@kotys/core";
 
@@ -14,17 +15,13 @@ export type SkillDraft = {
 const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BODY_MAX = 64 * 1024;
 
-function validateDraft(
-  draft: SkillDraft,
-  currentName: string | null,
-): string | null {
+function validateDraft(draft: SkillDraft): string | null {
   if (!NAME_PATTERN.test(draft.name) || draft.name.length > 64)
     return "Name: 1–64 chars, a-z 0-9 and hyphens; no leading/trailing or doubled hyphen";
   if (!draft.description.trim()) return "Description is required";
   if (draft.description.length > 1024)
     return "Description must be 1024 characters or fewer";
   if (draft.body.length > BODY_MAX) return "Body exceeds 64 KB";
-  void currentName;
   return null;
 }
 
@@ -36,8 +33,7 @@ interface IProps {
   onSaved: () => void;
 }
 
-/** Form-based editor: typed frontmatter fields plus a monospace body. */
-export default function SkillEditor({
+export function SkillEditor({
   currentName,
   initial,
   onClose,
@@ -47,11 +43,29 @@ export default function SkillEditor({
   const [draft, setDraft] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const validationError = validateDraft(draft, currentName);
+  const validationError = validateDraft(draft);
   const rpcSkills = rpc.skills;
 
-  const set = (patch: Partial<SkillDraft>) =>
+  const update = (patch: Partial<SkillDraft>) =>
     setDraft((d) => ({ ...d, ...patch }));
+
+  const handleNameChange = (e: ChangeEvent<HTMLInputElement>) =>
+    update({ name: e.target.value.toLowerCase() });
+
+  const handleArgumentHintChange = (e: ChangeEvent<HTMLInputElement>) =>
+    update({ argumentHint: e.target.value });
+
+  const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) =>
+    update({ description: e.target.value });
+
+  const handleUserInvocableChange = (e: ChangeEvent<HTMLInputElement>) =>
+    update({ userInvocable: e.target.checked });
+
+  const handleModelInvocableChange = (e: ChangeEvent<HTMLInputElement>) =>
+    update({ disableModelInvocation: !e.target.checked });
+
+  const handleBodyChange = (e: ChangeEvent<HTMLTextAreaElement>) =>
+    update({ body: e.target.value });
 
   const save = useCallback(async () => {
     if (validationError || saving) return;
@@ -105,6 +119,10 @@ export default function SkillEditor({
     }
   }, [currentName, saving, rpcSkills, onSaved, onClose]);
 
+  const handleRemoveClick = () => void remove();
+
+  const handleSaveClick = () => void save();
+
   return (
     <div className="border border-border rounded-xl bg-bg p-4 space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -113,7 +131,7 @@ export default function SkillEditor({
           <input
             type="text"
             value={draft.name}
-            onChange={(e) => set({ name: e.target.value.toLowerCase() })}
+            onChange={handleNameChange}
             placeholder="release-notes"
             aria-label="Skill name"
             className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm outline-none focus:border-accent font-mono"
@@ -126,7 +144,7 @@ export default function SkillEditor({
           <input
             type="text"
             value={draft.argumentHint}
-            onChange={(e) => set({ argumentHint: e.target.value })}
+            onChange={handleArgumentHintChange}
             placeholder="[tag range]"
             aria-label="Argument hint"
             className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm outline-none focus:border-accent"
@@ -140,7 +158,7 @@ export default function SkillEditor({
         </span>
         <textarea
           value={draft.description}
-          onChange={(e) => set({ description: e.target.value })}
+          onChange={handleDescriptionChange}
           rows={2}
           aria-label="Skill description"
           className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm outline-none focus:border-accent resize-y"
@@ -154,7 +172,7 @@ export default function SkillEditor({
           <input
             type="checkbox"
             checked={draft.userInvocable}
-            onChange={(e) => set({ userInvocable: e.target.checked })}
+            onChange={handleUserInvocableChange}
             className="accent-[var(--accent,theme(colors.blue.600))]"
           />
           <span className="text-xs">Slash command (/name)</span>
@@ -163,7 +181,7 @@ export default function SkillEditor({
           <input
             type="checkbox"
             checked={!draft.disableModelInvocation}
-            onChange={(e) => set({ disableModelInvocation: !e.target.checked })}
+            onChange={handleModelInvocableChange}
             className="accent-[var(--accent,theme(colors.blue.600))]"
           />
           <span className="text-xs">Model may auto-trigger</span>
@@ -176,7 +194,7 @@ export default function SkillEditor({
         </span>
         <textarea
           value={draft.body}
-          onChange={(e) => set({ body: e.target.value })}
+          onChange={handleBodyChange}
           rows={12}
           aria-label="Skill body"
           className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm outline-none focus:border-accent font-mono resize-y min-h-40"
@@ -190,7 +208,7 @@ export default function SkillEditor({
         {currentName && (
           <button
             type="button"
-            onClick={() => void remove()}
+            onClick={handleRemoveClick}
             disabled={saving}
             aria-label="Delete skill"
             className="p-1.5 rounded text-text-muted hover:text-red-500 hover:bg-surface-2 transition disabled:opacity-50"
@@ -208,7 +226,7 @@ export default function SkillEditor({
         </button>
         <button
           type="button"
-          onClick={() => void save()}
+          onClick={handleSaveClick}
           disabled={Boolean(validationError) || saving}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium transition disabled:opacity-50"
         >
