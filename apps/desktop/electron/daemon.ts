@@ -1,49 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { execFile } from "node:child_process";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
-import { parseTailscaleIp, plausibleHost } from "./daemonHost";
+import { resolveBindHost } from "./daemonHost";
 
 const PORT = Number(process.env.KOTYS_PORT ?? 3017);
 const BASE = `http://127.0.0.1:${PORT}`;
-
-/**
- * Tailscale IPv4, or null when Tailscale is absent/down. Parsing rules are
- * in daemonHost.ts (unit-tested) — the CLI can exit cleanly while printing
- * an error to stdout.
- */
-function tailscaleHost(): Promise<string | null> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value: string | null) => {
-      if (!settled) {
-        settled = true;
-        resolve(value);
-      }
-    };
-    const candidates =
-      process.platform === "darwin"
-        ? [
-            "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
-            "/opt/homebrew/bin/tailscale",
-            "/usr/local/bin/tailscale",
-          ]
-        : ["tailscale"];
-    for (const bin of candidates) {
-      execFile(bin, ["ip", "-4"], { timeout: 3000 }, (err, stdout) => {
-        if (!err && stdout) {
-          const ip = parseTailscaleIp(stdout);
-          if (ip) {
-            finish(ip);
-            return;
-          }
-        }
-      });
-    }
-    setTimeout(() => finish(null), 3000);
-  });
-}
 
 function augmentPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const home = env.HOME ?? "";
@@ -133,13 +95,11 @@ async function findRunningDaemon(host: string): Promise<string | null> {
  * database and port.
  */
 export async function ensureDaemon(): Promise<string> {
-  // KOTYS_HOST wins, then Tailscale, then loopback; malformed values fall
-  // through rather than dying on a DNS lookup.
-  const envHost = process.env.KOTYS_HOST;
-  const host =
-    (envHost && plausibleHost(envHost) ? envHost : null) ??
-    (await tailscaleHost()) ??
-    "127.0.0.1";
+  // KOTYS_HOST wins, else 0.0.0.0; malformed values fall through rather than
+  // dying on a DNS lookup. The wide default is what keeps a paired phone
+  // working off the home Wi-Fi — the bearer token is the security boundary,
+  // not the bind address.
+  const host = resolveBindHost(process.env.KOTYS_HOST);
 
   const running = await findRunningDaemon(host);
   if (running) {
@@ -168,7 +128,10 @@ export async function ensureDaemon(): Promise<string> {
   });
   child.stdout?.on("data", (d) => console.log(`[api] ${d}`));
   child.stderr?.on("data", (d) => console.error(`[api] ${d}`));
-  if (host !== "127.0.0.1") console.log(`[api] bound to ${host} (tailscale)`);
+  if (host === "0.0.0.0")
+    console.log("[api] bound to 0.0.0.0 (all interfaces)");
+  else if (host !== "127.0.0.1")
+    console.log(`[api] bound to ${host} (tailscale)`);
 
   // Die fast on early exit (stderr tail included); otherwise wait out the
   // health timeout.

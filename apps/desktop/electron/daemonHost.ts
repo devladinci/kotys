@@ -5,23 +5,16 @@
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
-const isDottedQuad = (s: string): boolean => {
-  const m = IPV4.exec(s);
-  return m !== null && m.slice(1).every((p) => Number(p) <= 255);
-};
-
 /**
- * First valid IPv4 in tailscale CLI output, or null. The CLI can exit
- * cleanly while printing an error to stdout, and error text past through
- * as a bind hostname crashes the daemon on DNS lookup.
+ * Bind target: explicit KOTYS_HOST, else 0.0.0.0. The wide default is what
+ * lets a paired phone reach the daemon from any network — LAN, foreign
+ * Wi-Fi, cellular — instead of dying the moment it leaves the single
+ * interface the daemon happens to be bound to. The bearer token is the
+ * security boundary, not the bind address.
  */
-export function parseTailscaleIp(stdout: string): string | null {
-  return (
-    stdout
-      .split("\n")
-      .map((l) => l.trim())
-      .find((l) => isDottedQuad(l)) ?? null
-  );
+export function resolveBindHost(envHost: string | undefined): string {
+  if (envHost && plausibleHost(envHost)) return envHost;
+  return "0.0.0.0";
 }
 
 /** A plausible bind target: IPv4 or a sane hostname (no spaces). */

@@ -56,9 +56,10 @@ export function PairingScreen({
     <View style={[s.form, { backgroundColor: t.bg }]}>
       <Text style={[s.heading, { color: t.text }]}>Pair with your Mac</Text>
       <Text style={[s.hint, { color: t.textMuted }]}>
-        Base URL of the daemon — e.g. http://100.x.y.z:3017 over Tailscale, or
-        http://192.168.x.x:3017 on your LAN. 127.0.0.1 never works from a phone
-        — that is the phone itself, not the Mac.
+        Base URL of the daemon — e.g. http://100.x.y.z:3017 over Tailscale
+        (works from any network), or http://192.168.x.x:3017 on your home Wi-Fi
+        only. 127.0.0.1 never works from a phone — that is the phone itself, not
+        the Mac.
       </Text>
 
       <Text style={[s.label, { color: t.text }]}>Server URL</Text>

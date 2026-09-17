@@ -42,7 +42,8 @@ zero DOM references, which is what makes the mobile client mostly a UI exercise.
 
 The API exposes `bash`, `write_file`, and `apply_patch`. It is therefore:
 
-- bound to `127.0.0.1` by default,
+- bound to `0.0.0.0` by default (the desktop shell; the bearer token is the
+  security boundary — set `KOTYS_HOST` to narrow it),
 - authenticated with a bearer token generated on first run,
 - protected by an `Origin` allowlist (the DNS-rebinding defence — "localhost
   only" is not on its own a security property),
