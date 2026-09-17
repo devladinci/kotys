@@ -5,8 +5,9 @@
     "apps/api": {
       "entry": ["scripts/e2e-computer-observe.mts"],
       // pbcopy/osascript are macOS system binaries (clipboard type and the
-      // Chromium-safe paste path), not package dependencies.
-      "ignoreBinaries": ["pbcopy", "osascript"]
+      // Chromium-safe paste path), not package dependencies. tailscale is an
+      // optional system CLI — MagicDNS name lookup degrades gracefully.
+      "ignoreBinaries": ["pbcopy", "osascript", "tailscale"]
     },
     "apps/desktop": {
       "entry": ["electron/main.ts", "electron/preload.ts"],

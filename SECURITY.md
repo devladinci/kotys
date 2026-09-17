@@ -42,19 +42,28 @@ read any file you can read, and a shell command can reach the network.
 
 ### Network surface
 
-- The API binds to loopback (`127.0.0.1`) by default. It is not reachable
-  from other machines unless you explicitly override `KOTYS_HOST`.
+- The desktop app's daemon binds to `0.0.0.0` (all interfaces) by default so
+  a paired phone works from any network; `KOTYS_HOST` narrows the bind (e.g.
+  `127.0.0.1`, a Tailscale IP). The bind address is not the security
+  boundary — the token below is.
 - Every RPC call requires a bearer token: 32 random bytes, generated on
   first run, persisted in a `0600` file beside the database, compared with
   a timing-safe comparison.
 - HTTP requests must pass an Origin check: the configured allowlist
   (`KOTYS_ALLOWED_ORIGINS`, which includes the desktop app's `app://kotys`)
-  plus any `localhost`/`127.0.0.1` origin. The same function answers for the
-  CORS middleware and the request guard, so they cannot drift. This is a
-  DNS-rebinding defense: a rebound page presents its own (attacker) hostname
-  as Origin, which matches neither the allowlist nor localhost, and CORS
-  preflights fail. Browser access from a LAN or Tailscale address requires
-  adding that origin to `KOTYS_ALLOWED_ORIGINS` explicitly.
+  plus loopback origins (`localhost`/`127.0.0.1`/`::1`, any port). On a
+  wildcard bind, http(s) origins are additionally accepted only when their
+  host is **one of this machine's own addresses** (LAN, Tailscale, IPv6, via
+  `os.networkInterfaces()`) or **one of its own names** (hostname, mDNS
+  `.local`, MagicDNS name, Expo dev tunnels `*.exp.direct`). Other devices
+  on the same network — a café captive portal, a neighboring laptop, another
+  tailnet node, a Tailscale Funnel page on `*.ts.net` — are rejected. The
+  same function answers for the CORS middleware and the request guard, so
+  they cannot drift. This is a DNS-rebinding defense: a rebound page
+  presents its own (attacker) hostname as Origin, which matches neither the
+  allowlist nor the machine's own addresses, and CORS preflights fail.
+  Browser access from a host that is not this machine requires adding that
+  origin to `KOTYS_ALLOWED_ORIGINS` explicitly.
 - WebSockets authenticate via the same token passed as a query parameter.
   Browsers cannot set custom headers on WebSocket connections, which is
   why the query string is used; the Origin check still applies to the
