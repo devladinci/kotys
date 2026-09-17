@@ -173,9 +173,9 @@ function ComposerBase({
 
   const platform = usePlatform();
 
+  // The draft stays: dictation sends its own message beside it.
   const handleTranscript = (text: string) => {
     handleSend(text, effectiveImages);
-    editor?.commands.clearContent(true);
   };
 
   const voice = useVoiceInput(platform, handleTranscript);
@@ -205,7 +205,7 @@ function ComposerBase({
 
   return (
     <div className="komposer relative">
-      {menu.isOpen && (
+      {menu.isOpen && menu.items.length > 0 && (
         <SlashMenu
           items={menu.items}
           index={menu.index}
