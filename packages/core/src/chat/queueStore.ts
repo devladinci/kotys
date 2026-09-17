@@ -62,17 +62,18 @@ export function confirmSteer(key: string): void {
   }
 }
 
-// The head check guards a dequeue that raced the drain.
-export function drainQueued(
-  chatId: number,
-  next: QueuedMessage,
-  rest: QueuedMessage[],
-): void {
+/**
+ * Takes the head for sending. False when it is no longer the head — dequeued
+ * meanwhile, or already taken — and the caller must not send it.
+ */
+export function drainQueued(chatId: number, id: number): boolean {
   const queue = queues.get(chatId);
-  if (!queue || queue[0]?.id !== next.id) return;
+  if (!queue || queue[0]?.id !== id) return false;
+  const rest = queue.slice(1);
   if (rest.length === 0) queues.delete(chatId);
   else queues.set(chatId, rest);
   emit();
+  return true;
 }
 
 export function getQueued(chatId: number): QueuedMessage[] {

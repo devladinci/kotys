@@ -298,6 +298,9 @@ export function useChat({
     onGone: (requestId) => {
       if (activeChatId === null) return;
       releaseLiveStream(requestId);
+      // A liveness check answers about the stream it adopted; by the time it
+      // lands the queue may have started the next turn, which owns the entry.
+      if (getStreamingId(activeChatId) !== requestId) return;
       finishStreamEntry(activeChatId);
       clearStreamActivity(activeChatId);
       refreshMessages();
@@ -423,23 +426,36 @@ export function useChat({
       let content = text;
       const commands = findSlashCommands(text);
 
+      // Null until the first send creates the chat; the claim below only
+      // applies to a chat that already exists.
+      const openChatId = activeChatId;
       // Checked before the claim is taken so a second send queues instead of
       // starting a turn of its own.
       const busyAtEntry =
-        activeChatId !== null &&
-        (isChatBusy(activeChatId) ||
-          candidateLiveStream(activeChatId) !== null);
+        openChatId !== null &&
+        (isChatBusy(openChatId) || candidateLiveStream(openChatId) !== null);
       // Claimed before the slash lookup below is awaited, so the drain effect
       // cannot re-fire while it runs and two quick slash sends cannot both
       // pass the busy check.
-      const claimed = activeChatId !== null && !busyAtEntry;
-      if (claimed) startStreamEntry(activeChatId, -1);
+      let claimed = false;
+      if (openChatId !== null && !busyAtEntry) {
+        startStreamEntry(openChatId, -1);
+        claimed = true;
+      }
 
       if (commands.length > 0) content = await expandSkill(text, commands);
 
-      if (busyAtEntry) {
-        enqueue(text, images, content);
-        return { needsSettings: false as const };
+      if (openChatId !== null && busyAtEntry) {
+        // The turn can end while the lookup runs: the drain already looked at
+        // an empty queue, so a message enqueued now would sit there forever.
+        const stillBusy =
+          isChatBusy(openChatId) || candidateLiveStream(openChatId) !== null;
+        if (stillBusy || getQueued(openChatId).length > 0) {
+          enqueue(text, images, content);
+          return { needsSettings: false as const };
+        }
+        startStreamEntry(openChatId, -1);
+        claimed = true;
       }
 
       let currentChatId = activeChatId;
@@ -454,9 +470,9 @@ export function useChat({
       }
 
       if (!currentChatId) {
-        if (claimed) {
-          finishStreamEntry(activeChatId);
-          clearStreamActivity(activeChatId);
+        if (claimed && openChatId !== null) {
+          finishStreamEntry(openChatId);
+          clearStreamActivity(openChatId);
         }
         return { needsSettings: false as const };
       }
@@ -470,16 +486,16 @@ export function useChat({
           images.length > 0 ? images : undefined,
         );
       } catch (err) {
-        if (claimed) {
-          finishStreamEntry(activeChatId);
-          clearStreamActivity(activeChatId);
+        if (claimed && openChatId !== null) {
+          finishStreamEntry(openChatId);
+          clearStreamActivity(openChatId);
         }
         throw err;
       }
       if (userMessageId === null) {
-        if (claimed) {
-          finishStreamEntry(activeChatId);
-          clearStreamActivity(activeChatId);
+        if (claimed && openChatId !== null) {
+          finishStreamEntry(openChatId);
+          clearStreamActivity(openChatId);
         }
         return { needsSettings: false as const };
       }
@@ -598,14 +614,16 @@ export function useChat({
   useEffect(() => {
     if (activeChatId === null) return;
     if (isChatBusy(activeChatId) || isStreaming(activeChatId)) return;
-    const [next, ...rest] = getQueued(activeChatId);
+    const [next] = getQueued(activeChatId);
     if (!next) return;
-    drain(next, rest);
     // Deferred past the effect body (react-hooks/set-state-in-effect);
     // cancelled guards a chat switch in between.
     let cancelled = false;
     void Promise.resolve().then(() => {
       if (cancelled) return;
+      // Taken here, not in the effect body: a run that never sends (a chat
+      // switch, StrictMode's double mount) must leave the message queued.
+      if (!drain(next.id)) return;
       void sendRef.current(next.text, next.images, {
         skipTitleInference: true,
       });
@@ -662,6 +680,10 @@ export function useChat({
       if (!apiKeyPresent && chatModel.source !== "local") return;
       const idx = messages.findIndex((m) => m.id === assistantId);
       if (idx === -1 || messages[idx].role !== "assistant") return;
+      if (isChatBusy(activeChatId)) return;
+      // Claimed before the reset below is awaited: a second click, or a send
+      // during the wait, would otherwise start a turn of its own.
+      startStreamEntry(activeChatId, -1);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -680,7 +702,13 @@ export function useChat({
 
       // Wipe the row first: a persisted error marker would replay to the model
       // as its own reply, and old tool results would crowd out the fresh turn.
-      await rpc.messages.resetForRetry({ id: assistantId });
+      try {
+        await rpc.messages.resetForRetry({ id: assistantId });
+      } catch (err) {
+        finishStreamEntry(activeChatId);
+        clearStreamActivity(activeChatId);
+        throw err;
+      }
       startStreamEntry(activeChatId, assistantId);
       claimLiveStream(assistantId, activeChatId);
       declareStreamActivity(activeChatId);
