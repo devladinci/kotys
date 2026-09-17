@@ -24,7 +24,9 @@ import {
   candidateLiveStream,
   chatIdFor,
   claimLiveStream,
+  markStreamStopped,
   releaseLiveStream,
+  forgetStreamStopped,
 } from "./liveStreams.js";
 import {
   finishStreamEntry,
@@ -267,6 +269,21 @@ export function useChat({
     activeChatId,
   );
 
+  // Viewer cleanup (adoption gone / daemon idle): only a foreign entry is
+  // cleared — a stream this client started meanwhile owns the entry.
+  const clearViewerState = useCallback(
+    (requestId?: number) => {
+      if (activeChatId === null) return;
+      const id = getStreamingId(activeChatId);
+      if (id === -1 || candidateLiveStream(activeChatId) !== null) return;
+      if (requestId !== undefined && id !== requestId) return;
+      if (id === null) return;
+      finishStreamEntry(activeChatId);
+      refreshMessages();
+    },
+    [activeChatId, refreshMessages],
+  );
+
   useStreamAdoption(activeChatId, {
     adopt: (requestId) => {
       if (activeChatId === null) return;
@@ -287,19 +304,8 @@ export function useChat({
       if (getStreamingId(activeChatId) === requestId) return;
       startStreamEntry(activeChatId, requestId);
     },
-    onForeignGone: (requestId) => {
-      if (activeChatId === null) return;
-      if (getStreamingId(activeChatId) !== requestId) return;
-      finishStreamEntry(activeChatId);
-      refreshMessages();
-    },
-    onNone: () => {
-      if (activeChatId === null) return;
-      const id = getStreamingId(activeChatId);
-      if (id === null || id === -1) return;
-      finishStreamEntry(activeChatId);
-      refreshMessages();
-    },
+    onForeignGone: (requestId) => clearViewerState(requestId),
+    onNone: () => clearViewerState(),
   });
 
   useEffect(() => {
@@ -351,6 +357,7 @@ export function useChat({
       // background chat's done must clear its own entry, not the open chat's.
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
       releaseLiveStream(assistantId);
+      forgetStreamStopped(assistantId);
       if (doneChatId === null) return;
       finishStreamEntry(doneChatId);
       clearStreamActivity(doneChatId);
@@ -387,6 +394,7 @@ export function useChat({
       toolBuffersRef.current.delete(assistantId);
       const doneChatId = chatIdFor(assistantId) ?? activeChatId;
       releaseLiveStream(assistantId);
+      forgetStreamStopped(assistantId);
       if (doneChatId === null) return;
       finishStreamEntry(doneChatId);
       clearStreamActivity(doneChatId);
@@ -618,7 +626,10 @@ export function useChat({
   const abort = useCallback(() => {
     if (streamingId === null || activeChatId === null) return;
     abortStream(streamingId);
-    releaseLiveStream(streamingId);
+    // Stopped, not released: the daemon still emits the final pulse and
+    // chat:done for this stream, and chatSync must keep treating them as
+    // this client's late frames.
+    markStreamStopped(streamingId);
     clearStreamActivity(activeChatId);
     finishStreamEntry(activeChatId);
   }, [activeChatId, streamingId, abortStream]);

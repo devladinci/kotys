@@ -2,6 +2,7 @@ import type { RouterClient } from "@orpc/server";
 import type { AppRouter, ClientMessage, ServerMessage } from "@kotys/api";
 import type { KotysConfig } from "@kotys/client";
 import { createRpcClient, KotysSocket } from "@kotys/client";
+import { hasLiveStream } from "../chat/liveStreams.js";
 
 /**
  * Module-level singletons for code that runs outside React's render cycle
@@ -15,7 +16,11 @@ let config: KotysConfig | null = null;
 export function setClients(cfg: KotysConfig): KotysSocket {
   config = cfg;
   rpc = createRpcClient(cfg);
-  const s = new KotysSocket(cfg);
+  const s = new KotysSocket(cfg, {
+    // Only streams this client started are resumable; watching another
+    // device's stream would duplicate its chunks over the HTTP refetch.
+    ownsStream: (requestId) => hasLiveStream(requestId),
+  });
   s.connect();
   socket = s;
   return s;
