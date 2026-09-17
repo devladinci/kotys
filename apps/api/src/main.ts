@@ -13,6 +13,7 @@ import {
   originGuard,
   requireAuth,
   writeTokenFile,
+  localIdentity,
 } from "./auth.js";
 import { bindEvents, onClose, onMessage, onOpen } from "./ws/manager.js";
 import { connectMcpServers } from "./services/mcp.js";
@@ -43,7 +44,10 @@ void connectMcpServers({ skipOAuth: true }).catch((err) => {
 
 const app = new Hono();
 
-// Preflight here, actual check in originGuard — the two must agree.
+// Preflight here, actual check in originGuard — the two must agree. The
+// local identity (own addresses/names) is resolved once at startup so the
+// CORS callback and the guard see the same machine snapshot.
+const identity = localIdentity();
 app.use(
   "*",
   cors({
@@ -52,7 +56,7 @@ app.use(
     credentials: false,
   }),
 );
-app.use("*", originGuard());
+app.use("*", originGuard(identity));
 
 app.get("/health", (c) => c.json({ ok: true }));
 

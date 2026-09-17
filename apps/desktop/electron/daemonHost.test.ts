@@ -11,6 +11,10 @@ describe("resolveBindHost", () => {
     expect(resolveBindHost("bad host")).toBe("0.0.0.0");
     expect(resolveBindHost("")).toBe("0.0.0.0");
     expect(resolveBindHost(undefined)).toBe("0.0.0.0");
+    // Node can't bind to "*" or "0.0.0.0"-as-explicit-noop; normalize to the
+    // real wildcard so the API's origin rule matches the actual bind.
+    expect(resolveBindHost("*")).toBe("0.0.0.0");
+    expect(resolveBindHost("0.0.0.0")).toBe("0.0.0.0");
   });
 });
 
@@ -30,5 +34,11 @@ describe("plausibleHost", () => {
     ).toBe(false);
     expect(plausibleHost("")).toBe(false);
     expect(plausibleHost("bad host")).toBe(false);
+    expect(plausibleHost("*")).toBe(false);
+  });
+
+  it("rejects mixed-case hosts (origin matching is case-insensitive; a KOTYS_HOST with capitals could never equal a real address)", () => {
+    expect(plausibleHost("MyMac.local")).toBe(false);
+    expect(plausibleHost("192.168.68.110")).toBe(true);
   });
 });

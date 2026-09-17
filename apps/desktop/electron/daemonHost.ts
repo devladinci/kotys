@@ -17,7 +17,18 @@ export function resolveBindHost(envHost: string | undefined): string {
   return "0.0.0.0";
 }
 
-/** A plausible bind target: IPv4 or a sane hostname (no spaces). */
+/** A plausible bind target: IPv4 or a sane hostname (no spaces). `*` and
+ * unbindable junk normalize to 0.0.0.0 — Node cannot bind to `*`, and if it
+ * fell through the daemon would degrade to loopback while the API's origin
+ * logic still applied the wide wildcard rule. */
 export function plausibleHost(value: string): boolean {
-  return IPV4.test(value) || /^[a-zA-Z0-9.-]+$/.test(value);
+  return (
+    (IPV4.test(value) && value !== "0.0.0.0") ||
+    (/^[a-zA-Z0-9.-]+$/.test(value) && value !== "*" && !hasUpper(value))
+  );
+}
+
+/** Hostnames are matched case-insensitively downstream; reject oddities. */
+function hasUpper(value: string): boolean {
+  return /[A-Z]/.test(value);
 }
