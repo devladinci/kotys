@@ -62,6 +62,10 @@ export const rpcMock = {
   tools: {
     list: fn([]),
   },
+  models: {
+    list: fn([]),
+    refresh: fn([]),
+  },
   skills: {
     list: fn([]),
     get: fn(null),

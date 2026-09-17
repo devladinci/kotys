@@ -213,7 +213,8 @@ export async function streamChat(
     chatTopics: streamChatId ? getChatTopics(streamChatId) : [],
     signal,
     requestApproval: consent,
-    requestUserInput: (req) => requestUserInput(req, signal),
+    requestUserInput: (req) =>
+      requestUserInput({ chatId: streamChatId, ...req }, signal),
     toolEnabled,
     gateRead,
     parentModel: {

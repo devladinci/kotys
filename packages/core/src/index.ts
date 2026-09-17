@@ -34,5 +34,6 @@ export * from "./pomodoro/usePomodoroStore.js";
 export * from "./pomodoro/presets.js";
 
 export * from "./skills/SkillMessage.js";
+export * from "./chat/userInputScope.js";
 export * from "./skills/slashCommand.js";
 export * from "./skills/useSkills.js";

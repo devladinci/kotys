@@ -27,6 +27,7 @@ let nextId = 1;
 
 export function requestUserInput(
   req: {
+    chatId?: number | null;
     title: string;
     description?: string;
     fields: InputField[];
