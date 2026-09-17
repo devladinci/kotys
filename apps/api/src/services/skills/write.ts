@@ -1,6 +1,6 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { skillsRoot, containsPath } from "./paths.js";
+import { containsPath, isSkillDirName, skillDir, skillsRoot } from "./paths.js";
 import { SKILL_BODY_MAX, SKILL_FILE, parseSkillDir } from "./parse.js";
 import { scanSkills } from "./registry.js";
 
@@ -45,7 +45,6 @@ export type SkillWriteInput = {
   body: string;
 };
 
-/** Spec rules, for the editor's live feedback and the write path alike. */
 function validateSkillInput(
   input: SkillWriteInput,
   currentName?: string,
@@ -63,17 +62,14 @@ function validateSkillInput(
   return null;
 }
 
-/** Build the full SKILL.md text from typed fields + a Markdown body. */
 function buildSkillFile(input: SkillWriteInput): string {
   return `---\n${serializeFrontmatter(input)}\n---\n${input.body.replace(/^\n/, "")}`;
 }
 
-/** Create a skill directory + SKILL.md atomically (temp file, then rename). */
 export async function createSkill(input: SkillWriteInput): Promise<void> {
   const error = validateSkillInput(input);
   if (error) throw new Error(error);
-  const dir = path.join(skillsRoot(), input.name);
-  if (!(await containsPath(skillsRoot(), dir))) throw new Error("invalid path");
+  const dir = skillDir(input.name);
   if (await exists(dir)) throw new Error(`"${input.name}" already exists`);
   await fs.mkdir(dir, { recursive: true });
   await atomicWrite(path.join(dir, SKILL_FILE), buildSkillFile(input));
@@ -87,10 +83,8 @@ export async function updateSkill(
 ): Promise<void> {
   const error = validateSkillInput(input, currentName);
   if (error) throw new Error(error);
-  const currentDir = path.join(skillsRoot(), currentName);
-  if (!(await containsPath(skillsRoot(), currentDir)))
-    throw new Error(`skill "${currentName}" does not exist`);
-  const nextDir = path.join(skillsRoot(), input.name);
+  const currentDir = skillDir(currentName);
+  const nextDir = skillDir(input.name);
   if (input.name !== currentName) {
     if (await exists(nextDir))
       throw new Error(`"${input.name}" already exists`);
@@ -100,27 +94,30 @@ export async function updateSkill(
   await scanSkills();
 }
 
-/** Delete a skill directory after confirming it belongs to the root. */
 export async function removeSkill(name: string): Promise<void> {
-  const dir = path.join(skillsRoot(), name);
-  const real = await fs.realpath(dir).catch(() => dir);
-  if (!(await containsPath(skillsRoot(), real)))
+  const dir = skillDir(name);
+  const [real, realRoot] = await Promise.all([
+    fs.realpath(dir).catch(() => dir),
+    fs.realpath(skillsRoot()).catch(() => skillsRoot()),
+  ]);
+  if (!containsPath(realRoot, real))
     throw new Error(`skill "${name}" does not exist`);
   await fs.rm(dir, { recursive: true, force: true });
   await scanSkills();
 }
 
-/** Read one skill for the editor (404-ish when absent). */
-export async function readSkill(name: string): Promise<{
+type SkillDetail = {
   name: string;
   description: string;
   argumentHint?: string;
   disableModelInvocation: boolean;
   userInvocable: boolean;
   body: string;
-} | null> {
-  const dir = path.join(skillsRoot(), name);
-  if (!(await containsPath(skillsRoot(), dir))) return null;
+};
+
+export async function readSkill(name: string): Promise<SkillDetail | null> {
+  if (!isSkillDirName(name)) return null;
+  const dir = skillDir(name);
   let raw: string;
   try {
     raw = await fs.readFile(path.join(dir, SKILL_FILE), "utf8");

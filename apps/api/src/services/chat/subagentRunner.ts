@@ -65,7 +65,10 @@ export async function runSubagent(req: SpawnRequest): Promise<SubagentRun> {
       ? createChildChat(req.parentChatId, agent, model)
       : null;
 
-  const tools = toolsForAgent(agent, TOOL_DEFINITIONS);
+  const toolEnabled = toolContext.toolEnabled ?? (() => true);
+  const tools = toolsForAgent(agent, TOOL_DEFINITIONS).filter((def) =>
+    toolEnabled(def.function.name),
+  );
   const chatMessages: ConnectorChatMessage[] = [
     { role: "system", content: agent.body },
     { role: "user", content: req.prompt },
@@ -88,10 +91,10 @@ export async function runSubagent(req: SpawnRequest): Promise<SubagentRun> {
   const executor = createToolExecutor({
     toolContext,
     enabledDefs: tools,
-    toolEnabled: () => true,
+    toolEnabled,
     builtinDefs: TOOL_DEFINITIONS,
     chatId: childChatId,
-    gateRead: false,
+    gateRead: toolContext.gateRead ?? false,
     contentLength: () => streamer.content.length,
     turnStartedAt: Date.now(),
   });
@@ -205,7 +208,6 @@ function persistChildTurn(
   }
 }
 
-/** Wraps the final text as the tool result the parent sees. */
 export function wrapSubagentResult(
   content: string,
   childChatId: number | null,
