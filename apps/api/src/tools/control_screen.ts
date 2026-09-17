@@ -1,7 +1,13 @@
 import { execFile, spawn } from "node:child_process";
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
 import type { ToolContext } from "./types.js";
-import { listWindows, pickWindow, type WindowInfo } from "./capture_screen.js";
+import {
+  listWindows,
+  pickWindow,
+  getScreenInfo,
+  imageToPoints,
+  type WindowInfo,
+} from "./capture_screen.js";
 
 /**
  * control_screen — mouse and keyboard actions on macOS.
@@ -31,6 +37,8 @@ export type ControlAction =
   | { op: "type"; text: string }
   | { op: "key"; key: string; modifiers?: Modifier[] }
   | { op: "wait"; ms: number };
+
+type CoordinateSpace = "points" | "image";
 
 const KNOWN_KEYS = new Set([
   "return",
@@ -341,6 +349,17 @@ export const definition: ToolDefinition = {
           type: "integer",
           description: `Milliseconds to wait after each action, ${MIN_SETTLE_MS}–${MAX_SETTLE_MS} (default ${DEFAULT_SETTLE_MS}). Raise for slow apps.`,
         },
+        space: {
+          type: "string",
+          enum: ["points", "image"],
+          description:
+            'Coordinate space of click x/y: "points" (screen or window points, default) or "image" (pixels of the last capture_screen image — converted for you using its reported screen size and scale).',
+        },
+        verify: {
+          type: "boolean",
+          description:
+            "When true, the response includes a fresh capture_screen screenshot of the target after the actions, saving a separate capture round-trip.",
+        },
       },
       required: ["actions"],
     },
@@ -437,6 +456,53 @@ export async function execute(
       ? Math.min(args.settle_ms, MAX_SETTLE_MS)
       : DEFAULT_SETTLE_MS;
 
+  const space: CoordinateSpace = args.space === "image" ? "image" : "points";
+  const doVerify = args.verify === true;
+  let imageGeom: {
+    width: number;
+    height: number;
+    w: number;
+    h: number;
+  } | null = null;
+
+  if (space === "image") {
+    if (!target) {
+      return {
+        content:
+          'Error: space:"image" with absolute coordinates needs screen size, which comes from a capture_screen of the whole screen. Capture first, then pass its reported `screen` and `scale` via a window-scoped call or retry with space:"points".',
+        activity: {
+          status: "error",
+          error: "space=image requires a prior full-screen capture",
+        },
+      };
+    }
+    const screen = await getScreenInfo(ctx.signal);
+    if (!screen) {
+      return {
+        content:
+          'Error: could not read the display size, so image coordinates cannot be converted. Retry with space:"points".',
+        activity: {
+          status: "error",
+          error: "screen size unavailable",
+        },
+      };
+    }
+    imageGeom = {
+      width: screen.w,
+      height: screen.h,
+      w: target.width,
+      h: target.height,
+    };
+  }
+
+  const toLocal = (x: number, y: number): { x: number; y: number } => {
+    if (space === "image") {
+      const p = imageToPoints(x, y, imageGeom!);
+      return { x: p.x, y: p.y };
+    }
+    return { x, y };
+  };
+
   try {
     for (const action of actions) {
       if (action.op === "wait") {
@@ -448,8 +514,9 @@ export async function execute(
           ctx.signal,
         );
       } else if (action.op === "click") {
-        const x = target ? target.x + action.x : action.x;
-        const y = target ? target.y + action.y : action.y;
+        const local = toLocal(action.x, action.y);
+        const x = target ? target.x + local.x : local.x;
+        const y = target ? target.y + local.y : local.y;
         await runCliclick([`c:${x},${y}`], ctx.signal);
       } else if (action.op === "key" && action.modifiers?.length) {
         const mods = action.modifiers
@@ -475,11 +542,36 @@ export async function execute(
     };
   }
 
+  const base = {
+    acted_on: label,
+    done: actions.length,
+    actions: describeActions(actions),
+  };
+
+  if (doVerify) {
+    const verified = await captureForVerify(target, ctx);
+    return {
+      content: JSON.stringify({
+        ...base,
+        verify: verified ? "captured" : "unavailable",
+        note: verified
+          ? "Fresh capture attached; check it before acting further."
+          : "Actions ran, but the follow-up capture failed — call capture_screen to verify.",
+      }),
+      resultImages: verified?.resultImages,
+      activity: {
+        status: "done",
+        query: `${describeActions(actions)} in ${label}`,
+        images: verified?.activity.images,
+        widget: verified?.activity.widget,
+        unchanged: verified?.activity.unchanged,
+      },
+    };
+  }
+
   return {
     content: JSON.stringify({
-      acted_on: label,
-      done: actions.length,
-      actions: describeActions(actions),
+      ...base,
       note: "Verify the result with capture_screen before acting further.",
     }),
     activity: {
@@ -487,4 +579,14 @@ export async function execute(
       query: `${describeActions(actions)} in ${label}`,
     },
   };
+}
+
+async function captureForVerify(
+  target: WindowInfo | null,
+  ctx: ToolContext,
+): Promise<ToolResult | null> {
+  const { execute: runCapture } = await import("./capture_screen.js");
+  const res = await runCapture(target ? { app: target.app } : {}, ctx);
+  if (res.activity.status === "error") return null;
+  return res;
 }
