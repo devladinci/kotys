@@ -14,6 +14,7 @@ import type {
 import { ERROR_TURN_PREFIX, isSteerActivity } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
+import { expandSkill } from "../skills/expandSkill.js";
 import { findSlashCommands } from "../skills/slashCommand.js";
 import { SkillMessage } from "../skills/SkillMessage.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
@@ -434,23 +435,10 @@ export function useChat({
       const claimed = activeChatId !== null && !busyAtEntry;
       if (claimed) startStreamEntry(activeChatId, -1);
 
-      if (commands.length > 0) {
-        const details = await Promise.all(
-          commands.map((command) =>
-            rpc.skills.get({ name: command.name }).catch(() => null),
-          ),
-        );
-
-        const index = details.findIndex(Boolean);
-        const detail = details[index];
-        if (detail) {
-          const { name, args } = commands[index];
-          content = SkillMessage.build(name, args, detail.body);
-        }
-      }
+      if (commands.length > 0) content = await expandSkill(text, commands);
 
       if (busyAtEntry) {
-        enqueue(content, images);
+        enqueue(text, images, content);
         return { needsSettings: false as const };
       }
 
@@ -645,7 +633,7 @@ export function useChat({
       if (!item || steerStateOf(item, streamingId) !== "ready") return;
       // Hand-built: React Native (Hermes) has no crypto.randomUUID.
       const key = `${streamingId}.${queuedId}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-      if (!appendStream(streamingId, item.text, key)) return;
+      if (!appendStream(streamingId, item.content, key)) return;
       markSteering(activeChatId, queuedId, { requestId: streamingId, key });
     },
     [activeChatId, streamingId, queuedMessages, appendStream],
@@ -728,10 +716,11 @@ export function useChat({
       if (!apiKeyPresent && chatModel.source !== "local") return;
       const idx = messages.findIndex((m) => m.id === userMessageId);
       if (idx === -1 || messages[idx].role !== "user") return;
-      await updateMessage(userMessageId, { content: newText });
+      const content = await expandSkill(newText, findSlashCommands(newText));
+      await updateMessage(userMessageId, { content });
       const updatedUser: Message = {
         ...messages[idx],
-        content: newText,
+        content,
         images: newImages && newImages.length > 0 ? newImages : undefined,
       };
       const updatedMessages = [...messages.slice(0, idx), updatedUser];
