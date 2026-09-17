@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,6 +15,11 @@ import { useAppStore, useRpc, getSocket } from "@kotys/core";
 const FOCUSABLE =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+const isEditable = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
 const RAIL_ITEMS = [
   { to: "/settings", label: "General", Icon: Cpu, end: true },
   { to: "/settings/tools", label: "Tooling", Icon: Wrench, end: false },
@@ -25,7 +30,7 @@ const RAIL_ITEMS = [
   { to: "/settings/voice", label: "Voice", Icon: Mic, end: false },
 ] as const;
 
-export default function SettingsLayout() {
+export function SettingsLayout() {
   const navigate = useNavigate();
   const { activeChatId } = useAppStore();
   const rpc = useRpc();
@@ -78,12 +83,22 @@ export default function SettingsLayout() {
     });
   }, [refreshSkillCount]);
 
+  const handleClose = useCallback(() => {
+    if (activeChatId !== null) navigate(`/chat/${activeChatId}`);
+    else navigate("/");
+  }, [navigate, activeChatId]);
+
+  const outletContext = useMemo(
+    () => ({ refreshMcpCount, refreshMemoryCount }),
+    [refreshMcpCount, refreshMemoryCount],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (e.defaultPrevented || isEditable(e.target)) return;
         e.preventDefault();
-        if (activeChatId !== null) navigate(`/chat/${activeChatId}`);
-        else navigate("/");
+        handleClose();
         return;
       }
       if (e.key === "Tab" && panelRef.current) {
@@ -107,25 +122,16 @@ export default function SettingsLayout() {
       document.removeEventListener("keydown", onKey);
       prevActive?.focus?.();
     };
-  }, [navigate, activeChatId]);
-
-  const close = () => {
-    if (activeChatId !== null) navigate(`/chat/${activeChatId}`);
-    else navigate("/");
-  };
+  }, [handleClose]);
 
   return (
     <main className="flex-1 flex flex-col min-w-0">
-      <header
-        className="pt-10 px-6 pb-3 border-b border-border bg-surface flex items-center gap-3 flex-shrink-0"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      >
+      <header className="app-drag pt-10 px-6 pb-3 border-b border-border bg-surface flex items-center gap-3 flex-shrink-0">
         <button
-          onClick={close}
+          onClick={handleClose}
           aria-label="Back to chat"
           title="Back to chat (Esc)"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-border text-xs transition"
-          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          className="app-no-drag flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-border text-xs transition"
         >
           <ArrowLeft size={14} />
           Back
@@ -174,7 +180,7 @@ export default function SettingsLayout() {
         </nav>
         <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin bg-bg">
           <div className="max-w-2xl mx-auto p-6 space-y-4">
-            <Outlet context={{ refreshMcpCount, refreshMemoryCount }} />
+            <Outlet context={outletContext} />
           </div>
         </div>
       </div>

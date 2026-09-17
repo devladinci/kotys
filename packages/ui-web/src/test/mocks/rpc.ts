@@ -64,6 +64,11 @@ export const rpcMock = {
   },
   skills: {
     list: fn([]),
+    get: fn(null),
+    create: fn({ ok: true }),
+    update: fn({ ok: true }),
+    remove: fn({ ok: true }),
+    setEnabled: fn({ ok: true }),
   },
   mcp: {
     servers: fn([]),

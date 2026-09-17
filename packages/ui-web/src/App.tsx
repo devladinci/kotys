@@ -1,146 +1,42 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
-  Navigate,
-  Route,
-  Routes,
-  useNavigate,
-  useParams,
-} from "react-router-dom";
-import { useAppStore } from "@kotys/core";
-import {
-  useTodoStore,
-  subscribeTodoChanges,
   subscribeChatSync,
-} from "@kotys/core";
-import {
   subscribePomodoro,
+  subscribeTodoChanges,
   subscribeToolApprovals,
   subscribeUserInput,
+  useAppStore,
+  useChatList,
+  usePlatform,
   usePomodoroStore,
+  useRpc,
+  useSettings,
+  useTodoStore,
 } from "@kotys/core";
-import { useChatList } from "@kotys/core";
-import { useSettings } from "@kotys/core";
-import { usePlatform } from "@kotys/core";
+import type { SearchResultRow } from "@kotys/contracts";
 import { useTheme } from "./hooks/useTheme";
 import { useNotifications } from "./hooks/useNotifications";
 import {
   useKeyboardShortcuts,
   focusComposer,
 } from "./hooks/useKeyboardShortcuts";
-import { useRpc } from "@kotys/core";
-import type { SearchResultRow } from "@kotys/contracts";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/chat/Sidebar";
-import ChatView from "./components/chat/ChatView";
 import ApprovalPrompt from "./components/chat/ApprovalPrompt";
 import CommandPalette from "./components/chat/CommandPalette";
 import TodoSidebar from "./components/todos/TodoSidebar";
-import SettingsLayout from "./components/settings/SettingsLayout";
+import { SettingsLayout } from "./components/settings/SettingsLayout";
 import AnalyticsPage from "./components/analytics";
-import GeneralSettings from "./components/settings/GeneralSettings";
-import ToolsSettings from "./components/settings/ToolsSettings";
+import { ToolsSettings } from "./components/settings/ToolsSettings";
 import McpSettings from "./components/settings/McpSettings";
 import SkillsSettings from "./components/settings/SkillsSettings";
 import MemorySettings from "./components/settings/MemorySettings";
 import PomodoroSettings from "./components/settings/PomodoroSettings";
 import VoiceSettings from "./components/settings/VoiceSettings";
-
-function ChatRoute() {
-  const { chatId } = useParams<{ chatId: string }>();
-  const id = chatId ? Number(chatId) : null;
-  const {
-    setActiveChatId,
-    activeChatId,
-    sidebarHidden,
-    setSidebarHidden,
-    defaultModel,
-  } = useAppStore();
-  const { chats, loaded, createChat, selectModelForActiveChat } = useChatList();
-  const { bumpChatsVersion } = useAppStore();
-  const navigate = useNavigate();
-  const openSearchResultRef = useRef<((r: SearchResultRow) => void) | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (id !== null && id !== activeChatId) {
-      setActiveChatId(id);
-    }
-  }, [id, activeChatId, setActiveChatId]);
-
-  // The chat under this route disappeared (deleted here or from another
-  // client) — leave instead of rendering a dead chat against a stale id.
-  useEffect(() => {
-    if (id !== null && loaded && !chats.some((c) => c.id === id)) {
-      navigate("/", { replace: true });
-    }
-  }, [id, loaded, chats, navigate]);
-
-  const handleCreateChat = useCallback(async () => {
-    const newId = await createChat();
-    navigate(`/chat/${newId}`);
-    focusComposer();
-  }, [createChat, navigate]);
-
-  const activeChat = useMemo(() => chats.find((c) => c.id === id), [chats, id]);
-
-  return (
-    <ChatView
-      activeChat={activeChat}
-      activeChatId={id}
-      defaultModel={defaultModel}
-      sidebarHidden={sidebarHidden}
-      onToggleSidebar={() => setSidebarHidden(!sidebarHidden)}
-      onCreateChat={() => void handleCreateChat()}
-      onChatCreated={(newId) => setActiveChatId(newId)}
-      onTopicsInferred={bumpChatsVersion}
-      onTitleInferred={bumpChatsVersion}
-      onSummaryChanged={bumpChatsVersion}
-      onSelectModel={selectModelForActiveChat}
-      openSearchResultRef={openSearchResultRef}
-    />
-  );
-}
-
-function IndexRoute() {
-  const { activeChatId, setActiveChatId, defaultModel } = useAppStore();
-  const { chats, createChat } = useChatList();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (activeChatId !== null && chats.some((c) => c.id === activeChatId)) {
-      navigate(`/chat/${activeChatId}`, { replace: true });
-    } else if (chats.length > 0) {
-      // activeChatId points at a deleted (or not-yet-loaded) chat.
-      setActiveChatId(chats[0].id);
-      navigate(`/chat/${chats[0].id}`, { replace: true });
-    } else if (activeChatId !== null) {
-      // Last chat deleted: clear the stale pointer, stay on the welcome state.
-      setActiveChatId(null);
-    }
-  }, [activeChatId, chats, navigate, setActiveChatId]);
-
-  return (
-    <ChatView
-      activeChat={undefined}
-      activeChatId={null}
-      defaultModel={defaultModel}
-      onCreateChat={() => void createChat()}
-      onChatCreated={(newId) => {
-        setActiveChatId(newId);
-        navigate(`/chat/${newId}`);
-      }}
-      onSelectModel={async () => undefined}
-    />
-  );
-}
-
-function GeneralRoute() {
-  const { theme, setTheme } = useAppStore();
-  return (
-    <GeneralSettings theme={theme} onThemeChange={(m) => void setTheme(m)} />
-  );
-}
+import { ChatRoute } from "./routes/ChatRoute";
+import { GeneralRoute } from "./routes/GeneralRoute";
+import { IndexRoute } from "./routes/IndexRoute";
 
 export default function App() {
   const { hydrated } = useSettings();
@@ -243,6 +139,16 @@ export default function App() {
     [renameChat],
   );
 
+  const handleDeleteChatClick = (id: number) => void handleDeleteChat(id);
+
+  const handleTogglePinned = (id: number) => void togglePinned(id);
+
+  const handleOpenSettings = () => navigate("/settings");
+
+  const handleOpenAnalytics = () => navigate("/analytics");
+
+  const handleClosePalette = () => setPaletteOpen(false);
+
   const handleOpenSearchResult = useCallback(
     (r: SearchResultRow) => {
       setActiveChatId(r.chat_id);
@@ -272,13 +178,13 @@ export default function App() {
             pinnedChatIds={pinnedChatIds}
             onCreateChat={handleCreateChat}
             onSelectChat={handleSelectChat}
-            onDeleteChat={(id) => void handleDeleteChat(id)}
+            onDeleteChat={handleDeleteChatClick}
             onRenameChat={handleRenameChat}
             onSearchChange={setSearchQuery}
             onOpenSearchResult={handleOpenSearchResult}
-            onTogglePinned={(id) => void togglePinned(id)}
-            onOpenSettings={() => navigate("/settings")}
-            onOpenAnalytics={() => navigate("/analytics")}
+            onTogglePinned={handleTogglePinned}
+            onOpenSettings={handleOpenSettings}
+            onOpenAnalytics={handleOpenAnalytics}
           />
         )}
         <Routes>
@@ -303,7 +209,7 @@ export default function App() {
             chats={chats}
             onSelectChat={handleSelectChat}
             onCreateChat={handleCreateChat}
-            onClose={() => setPaletteOpen(false)}
+            onClose={handleClosePalette}
           />
         )}
       </div>
