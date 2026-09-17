@@ -9,6 +9,15 @@ export type KotysConfig = {
   token: string;
 };
 
+export type SocketOptions = {
+  /**
+   * Only streams this client started are resumable. A watching client that
+   * replays another device's chunks appends them to text the HTTP refetch
+   * already brought in, duplicating it — so foreign frames are not tracked.
+   */
+  ownsStream?: (requestId: number) => boolean;
+};
+
 /**
  * Config is injected, never read from the environment inside this package.
  *

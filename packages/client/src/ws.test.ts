@@ -315,6 +315,35 @@ describe("KotysSocket resume", () => {
     );
     socket.close();
   });
+
+  it("never tracks a stream this client does not own", () => {
+    const socket = new KotysSocket(
+      { baseUrl: "http://test", token: "t" },
+      { ownsStream: (id) => id === 42 },
+    );
+    socket.connect();
+    const ws = lastSocket!;
+    ws.open();
+    emit(ws, {
+      type: "chat:chunk",
+      seq: 3,
+      chatId: 7,
+      payload: { requestId: 42, thinkingDelta: "", contentDelta: "x" },
+    });
+    emit(ws, {
+      type: "chat:chunk",
+      seq: 9,
+      chatId: 7,
+      payload: { requestId: 99, thinkingDelta: "", contentDelta: "x" },
+    });
+    ws.onclose?.();
+    vi.advanceTimersByTime(500);
+    lastSocket!.open();
+    const resumes = lastSocket!.sent.filter((s) => s.includes("chat:resume"));
+    expect(JSON.parse(resumes[0]).payload.requestId).toBe(42);
+    expect(resumes).toHaveLength(1);
+    socket.close();
+  });
 });
 
 describe("KotysSocket abandon", () => {

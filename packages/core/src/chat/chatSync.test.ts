@@ -11,18 +11,19 @@ import type { ServerMessage } from "@kotys/api";
  */
 const socketListeners = new Set<(msg: ServerMessage) => void>();
 const statusListeners = new Set<(status: string) => void>();
+const socket = {
+  on: (cb: (msg: ServerMessage) => void) => {
+    socketListeners.add(cb);
+    return () => socketListeners.delete(cb);
+  },
+  onStatus: (cb: (status: string) => void) => {
+    statusListeners.add(cb);
+    return () => statusListeners.delete(cb);
+  },
+};
 
 vi.mock("../shared/clients.js", () => ({
-  getSocket: () => ({
-    on: (cb: (msg: ServerMessage) => void) => {
-      socketListeners.add(cb);
-      return () => socketListeners.delete(cb);
-    },
-    onStatus: (cb: (status: string) => void) => {
-      statusListeners.add(cb);
-      return () => statusListeners.delete(cb);
-    },
-  }),
+  getSocket: () => socket,
 }));
 
 const frame = (

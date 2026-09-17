@@ -1,5 +1,5 @@
 import type { ClientMessage, ServerMessage } from "@kotys/api";
-import type { KotysConfig } from "./rpc.js";
+import type { KotysConfig, SocketOptions } from "./rpc.js";
 
 export type { ClientMessage, ServerMessage };
 
@@ -39,9 +39,11 @@ export class KotysSocket {
   clientId: string | null = null;
 
   private config: KotysConfig;
+  private ownsStream?: (requestId: number) => boolean;
 
-  constructor(config: KotysConfig) {
+  constructor(config: KotysConfig, options?: SocketOptions) {
     this.config = config;
+    this.ownsStream = options?.ownsStream;
   }
 
   connect(): void {
@@ -100,7 +102,12 @@ export class KotysSocket {
       if ("seq" in msg && "payload" in msg) {
         const payload = msg.payload as { requestId?: number };
         if (typeof payload.requestId === "number") {
-          this.lastSeq.set(payload.requestId, msg.seq);
+          if (
+            this.ownsStream === undefined ||
+            this.ownsStream(payload.requestId)
+          ) {
+            this.lastSeq.set(payload.requestId, msg.seq);
+          }
           if (msg.type === "chat:done" || msg.type === "chat:error") {
             this.lastSeq.delete(payload.requestId);
           }

@@ -263,6 +263,8 @@ describe("ws manager: chat:resume", () => {
     const chunks = b.sent.filter((m) => m.type === "chat:chunk");
     expect(chunks).toHaveLength(2);
     expect(chunks.map((m) => m.seq)).toEqual([1, 2]);
+    const done = b.sent.find((m) => m.type === "chat:done");
+    expect(done).toBeDefined();
   });
 
   it("falls back to a DB-backed chat:done when the buffer is gone", async () => {

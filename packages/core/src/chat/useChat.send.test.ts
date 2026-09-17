@@ -75,6 +75,7 @@ const { resetEchoGuard } = await import("./echoGuard.js");
 const { useAppStore } = await import("../shared/useAppStore.js");
 
 const { useChat } = await import("./useChat.js");
+const { subscribeChatSync } = await import("./chatSync.js");
 const { renderHook, act } = await import("@testing-library/react");
 
 const model = {
@@ -105,6 +106,190 @@ function renderChat(activeChatId: number) {
 type Sent = { type: string; payload: Record<string, unknown> };
 const sentOf = (type: string) =>
   (h.sent as Sent[]).filter((m) => m.type === type);
+
+const emitFrame = (msg: unknown) => {
+  h.listeners.forEach((listener) => listener(msg));
+};
+
+const emptyResult = {
+  content: "done",
+  thinking: "",
+  promptTokens: 0,
+  evalTokens: 0,
+  tokensMeasured: false,
+  toolCalls: [],
+};
+
+describe("useChat: watching a stream another device started", () => {
+  beforeEach(() => {
+    h.sent.length = 0;
+    h.inserts.length = 0;
+    h.net.online = true;
+    h.userInsert.mode = "ok";
+    h.skill.mode = "ok";
+    h.skill.resolve = null;
+    resetStreamState();
+    resetLiveStreams();
+    resetQueued();
+    resetEchoGuard();
+    useAppStore.setState({ apiKeyPresent: true });
+    // The app root wires this listener; the busy state travels through it.
+    subscribeChatSync();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("Stop on a foreign stream aborts the other device's turn", async () => {
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 4242, thinkingDelta: "", contentDelta: "hi" },
+      });
+    });
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.streamingId).toBe(4242);
+
+    act(() => {
+      result.current.abort();
+    });
+    const aborted = sentOf("chat:abort");
+    expect(aborted).toHaveLength(1);
+    expect(aborted[0].payload.requestId).toBe(4242);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("a send while another device streams queues instead of starting a turn", async () => {
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 4242, thinkingDelta: "", contentDelta: "hi" },
+      });
+    });
+
+    await act(async () => {
+      await result.current.send("meanwhile", []);
+    });
+
+    expect(sentOf("chat:stream")).toHaveLength(0);
+    expect(result.current.queuedMessages.map((q) => q.text)).toEqual([
+      "meanwhile",
+    ]);
+  });
+
+  it("foreign chunks render in the open chat and done applies the result", async () => {
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 9000, thinkingDelta: "", contentDelta: "Hel" },
+      });
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 2,
+        payload: { requestId: 9000, thinkingDelta: "", contentDelta: "lo" },
+      });
+    });
+
+    // The assistant row does not exist in this client's list yet; the text
+    // waits for the row (refetch on progress pulses) or the done frame.
+    expect(result.current.messages).toHaveLength(0);
+
+    await act(async () => {
+      emitFrame({
+        type: "chat:done",
+        chatId: 7,
+        seq: 3,
+        payload: {
+          requestId: 9000,
+          result: { ...emptyResult, content: "Hello" },
+        },
+      });
+    });
+
+    // applyDone without the row is a no-op here; the row arrives via refetch.
+    expect(sentOf("chat:stream")).toHaveLength(0);
+  });
+
+  it("a steer offered to a foreign stream appends to it", async () => {
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 4242, thinkingDelta: "", contentDelta: "hi" },
+      });
+    });
+
+    act(() => {
+      void result.current.send("queued first", []);
+    });
+    expect(result.current.queuedMessages).toHaveLength(1);
+    const queued = result.current.queuedMessages[0];
+
+    act(() => {
+      result.current.steer(queued.id);
+    });
+
+    const appended = sentOf("chat:append");
+    expect(appended).toHaveLength(1);
+    expect(appended[0].payload.requestId).toBe(4242);
+    expect(appended[0].payload.content).toBe("queued first");
+  });
+
+  it("a foreign done settles the steer receipt and empties the queue", async () => {
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 4242, thinkingDelta: "", contentDelta: "hi" },
+      });
+    });
+    act(() => {
+      void result.current.send("queued first", []);
+    });
+    const queued = result.current.queuedMessages[0];
+    act(() => {
+      result.current.steer(queued.id);
+    });
+    expect(result.current.queuedMessages[0].steer?.requestId).toBe(4242);
+    // The daemon echoes the steer key back as the receipt's widget id.
+    const key = result.current.queuedMessages[0].steer?.key;
+
+    await act(async () => {
+      emitFrame({
+        type: "chat:tool",
+        chatId: 7,
+        seq: 2,
+        payload: {
+          requestId: 4242,
+          index: 0,
+          tool: "steer",
+          status: "done",
+          widget: { kind: "steer", text: "queued first", id: key },
+        },
+      });
+    });
+
+    // The steer receipt settles the queued message; nothing drains.
+    expect(getQueued(7).some((q) => q.id === queued.id)).toBe(false);
+    expect(sentOf("chat:stream")).toHaveLength(0);
+  });
+});
 
 describe("useChat send", () => {
   beforeEach(() => {
@@ -169,9 +354,61 @@ describe("useChat send", () => {
       if (first) await first;
     });
 
-    // The first turn streams, then the queue drains the held message.
+    // The turn ends (chat:done frame), then the queue drains the held
+    // message into a second turn.
+    const firstId = sentOf("chat:stream")[0].payload.requestId as number;
+    emitFrame({
+      type: "chat:done",
+      chatId: 7,
+      seq: 9,
+      payload: { requestId: firstId, result: emptyResult },
+    });
+    await act(async () => {});
     expect(sentOf("chat:stream")).toHaveLength(2);
     expect(getQueued(7)).toHaveLength(0);
+    expect(isChatBusy(7)).toBe(true);
+  });
+
+  it("a stop keeps late frames of the old turn from wiping the next turn's state", async () => {
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("first", []);
+    });
+    expect(sentOf("chat:stream")).toHaveLength(1);
+    const firstTurnId = sentOf("chat:stream")[0].payload.requestId as number;
+    expect(getStreamingId(7)).toBe(firstTurnId);
+
+    // A second message queues behind the running turn, then Stop is pressed.
+    act(() => {
+      void result.current.send("second", []);
+    });
+    expect(getQueued(7)).toHaveLength(1);
+
+    act(() => {
+      result.current.abort();
+    });
     expect(isChatBusy(7)).toBe(false);
+
+    // The daemon's late progress pulse and chat:done for the aborted stream
+    // race the queue drain into the next turn.
+    emitFrame({
+      type: "messages:progress",
+      payload: { chatId: 7, messageId: firstTurnId },
+    });
+    emitFrame({
+      type: "chat:done",
+      chatId: 7,
+      seq: 9,
+      payload: { requestId: firstTurnId, result: emptyResult },
+    });
+
+    // The drain effect started the next turn before the late frames landed;
+    // they must not clear it.
+    await act(async () => {});
+    const streams = sentOf("chat:stream");
+    expect(streams).toHaveLength(2);
+    expect(isChatBusy(7)).toBe(true);
+    expect(getStreamingId(7)).not.toBe(firstTurnId);
   });
 });
