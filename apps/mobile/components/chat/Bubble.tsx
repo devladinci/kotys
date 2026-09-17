@@ -13,7 +13,8 @@ import {
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import type { ThemeMode } from "../../lib/theme";
-import { InputCard, ToolTimeline } from "../kit";
+import { InputCard } from "../kit/InputCard";
+import { ToolTimeline } from "../kit/ToolTimeline";
 import { markdownStyles, s, themedStyles } from "./styles";
 
 interface IProps {
@@ -208,7 +209,7 @@ function BubbleBase({
         ) : null}
         {toolCalls.length > 0 && !isUser ? (
           <View style={s.toolTimeline}>
-            <ToolTimeline calls={toolCalls} streaming={isStreaming} />
+            <ToolTimeline calls={toolCalls} isStreaming={isStreaming} />
           </View>
         ) : null}
         {isUser ? (

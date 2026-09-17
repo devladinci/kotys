@@ -45,12 +45,10 @@ import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
 import { UserInputInline } from "../../components/UserInputInline";
 import { SlashMenu } from "../../components/chat/SlashMenu";
-import {
-  ModelPickers,
-  ModePicker,
-  ThinkingPicker,
-  TokenBadge,
-} from "../../components/kit";
+import { ModelPickers } from "../../components/kit/ModelPickers";
+import { ModePicker } from "../../components/kit/ModePicker";
+import { ThinkingPicker } from "../../components/kit/ThinkingPicker";
+import { TokenBadge } from "../../components/kit/TokenBadge";
 
 type ChatRouteParams = { id: string };
 
@@ -281,7 +279,7 @@ function ChatScreen() {
             used={contextUsed}
             pct={headerBadge.pct}
             ctx={headerBadge.ctx}
-            compacted={isCompacted}
+            isCompacted={isCompacted}
             isCompacting={isCompacting}
             onCompact={handleCompact}
           />
@@ -819,17 +817,17 @@ function ChatScreen() {
       )}
 
       <ModelPickers
-        visible={modelSheet}
+        isVisible={modelSheet}
         onClose={handleCloseModelSheet}
         chatModel={chatModel}
         onSelectModel={handleSelectModel}
       />
       <ThinkingPicker
-        visible={thinkSheet}
+        isVisible={thinkSheet}
         onClose={handleCloseThinkSheet}
         model={chatModel}
       />
-      <ModePicker visible={modeSheet} onClose={handleCloseModeSheet} />
+      <ModePicker isVisible={modeSheet} onClose={handleCloseModeSheet} />
     </View>
   );
 }
