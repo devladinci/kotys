@@ -34,7 +34,7 @@ import {
   CHAT_BUCKET_LABELS,
   relTime,
   type ChatBucket,
-} from "../../components/kit";
+} from "../../components/chatBuckets";
 
 /** Date labels and Today/Yesterday headers tick on this clock. */
 const DATE_TICK_MS = 60_000;

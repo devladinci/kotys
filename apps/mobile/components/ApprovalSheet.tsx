@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useToolApproval } from "@kotys/core";
 import type { ApprovalRequest } from "@kotys/contracts";
 import { theme, useThemeMode } from "../lib/theme";
-import { Sheet } from "./kit";
+import { Sheet } from "./kit/Sheet";
 
 const useApprovalSheet = create<{
   open: boolean;
@@ -54,7 +54,7 @@ export function ApprovalSheet() {
   if (!pending) return null;
 
   return (
-    <Sheet visible={open} onClose={close} title="Approval request">
+    <Sheet isVisible={open} onClose={close} title="Approval request">
       <ApprovalCard
         request={pending}
         onAccept={() => act("accept")}

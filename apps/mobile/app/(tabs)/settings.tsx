@@ -29,11 +29,13 @@ import { theme, useThemeMode } from "../../lib/theme";
 import { palette } from "@kotys/ui-tokens";
 import { clearConfig } from "../../lib/config";
 import { PairingScreen } from "../../components/PairingScreen";
-import { Sheet } from "../../components/kit";
+import { Sheet } from "../../components/kit/Sheet";
 
 type Section = "general" | "tools" | "mcp" | "skills" | "memory" | "voice";
 
-const SECTIONS: { key: Section; label: string; icon: string }[] = [
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+const SECTIONS: { key: Section; label: string; icon: IoniconName }[] = [
   { key: "general", label: "General", icon: "settings-outline" },
   { key: "tools", label: "Tools", icon: "construct-outline" },
   { key: "mcp", label: "MCP Servers", icon: "hardware-chip-outline" },
@@ -84,7 +86,7 @@ export default function SettingsScreen() {
               ]}
             >
               <Ionicons
-                name={sec.icon as never}
+                name={sec.icon}
                 size={13}
                 color={active ? "#fff" : t.textMuted}
               />
@@ -365,7 +367,7 @@ function Voice({
         )}
       </View>
       <Sheet
-        visible={pickerOpen}
+        isVisible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         title="Transcription model"
       >
@@ -399,8 +401,6 @@ function Voice({
     </ScrollView>
   );
 }
-
-type IoniconName = keyof typeof Ionicons.glyphMap;
 
 /** Tool name → Ionicon, mirroring the desktop TOOL_ICONS (lucide) mapping. */
 const TOOL_ICONS: Record<string, IoniconName> = {
