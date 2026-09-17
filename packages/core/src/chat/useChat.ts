@@ -14,7 +14,7 @@ import type {
 import { ERROR_TURN_PREFIX, isSteerActivity } from "@kotys/contracts";
 import { hostFor, useAppStore } from "../shared/useAppStore.js";
 import { getRpc } from "../shared/clients.js";
-import { parseSlashCommand } from "../skills/slashCommand.js";
+import { findSlashCommands } from "../skills/slashCommand.js";
 import { SkillMessage } from "../skills/SkillMessage.js";
 import { projectedUsedTokens } from "./useTokenEstimator.js";
 import type { ChunkDeltas, ToolDelta } from "./streamThrottle.js";
@@ -59,12 +59,16 @@ interface IProps {
   onSummaryChanged?: () => void;
 }
 
-interface PendingInference {
+interface IPendingInference {
   chatId: number;
   userText: string;
   model: ModelListing;
   needsTopics: boolean;
   isFreshChat: boolean;
+}
+
+interface ISendOptions {
+  skipTitleInference?: boolean;
 }
 
 const STREAM_FLUSH_MS = 90;
@@ -117,7 +121,7 @@ export function useChat({
 
   const streamBuffersRef = useRef<Map<number, ChunkDeltas>>(new Map());
   const toolBuffersRef = useRef<Map<number, Message["toolCalls"]>>(new Map());
-  const pendingInferenceRef = useRef<Map<number, PendingInference>>(new Map());
+  const pendingInferenceRef = useRef<Map<number, IPendingInference>>(new Map());
 
   const {
     messages,
@@ -403,11 +407,7 @@ export function useChat({
   );
 
   const send = useCallback(
-    async (
-      text: string,
-      images: string[],
-      opts?: { skipTitleInference?: boolean },
-    ) => {
+    async (text: string, images: string[], opts?: ISendOptions) => {
       if (!text.trim() && images.length === 0)
         return { needsSettings: false as const };
 
@@ -417,10 +417,10 @@ export function useChat({
         return { needsSettings: true as const };
       }
 
-      // A leading /command resolves to the skill body and is persisted that
-      // way, so the instructions survive context rebuilds on later turns.
+      // A /command resolves to the skill body and is persisted that way, so
+      // the instructions survive context rebuilds on later turns.
       let content = text;
-      const slash = parseSlashCommand(text);
+      const commands = findSlashCommands(text);
 
       // Checked before the claim is taken so a second send queues instead of
       // starting a turn of its own.
@@ -434,14 +434,18 @@ export function useChat({
       const claimed = activeChatId !== null && !busyAtEntry;
       if (claimed) startStreamEntry(activeChatId, -1);
 
-      if (slash) {
-        try {
-          const detail = await rpc.skills.get({ name: slash.name });
-          if (detail) {
-            content = SkillMessage.build(slash.name, slash.args, detail.body);
-          }
-        } catch {
-          content = text;
+      if (commands.length > 0) {
+        const details = await Promise.all(
+          commands.map((command) =>
+            rpc.skills.get({ name: command.name }).catch(() => null),
+          ),
+        );
+
+        const index = details.findIndex(Boolean);
+        const detail = details[index];
+        if (detail) {
+          const { name, args } = commands[index];
+          content = SkillMessage.build(name, args, detail.body);
         }
       }
 

@@ -14,6 +14,7 @@ import type {
   ListRenderItemInfo,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  TextInputSelectionChangeEvent,
 } from "react-native";
 import { Bubble } from "../../components/chat/Bubble";
 import { QueuedMessageRow } from "../../components/chat/QueuedMessageRow";
@@ -24,7 +25,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DEFAULT_MODEL,
-  parseSlashQuery,
+  findSlashQuery,
+  insertSlashCommand,
   queueCaption,
   useAppStore,
   useChat,
@@ -42,7 +44,7 @@ import { useChatScreen } from "../../lib/useChatScreen";
 import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
 import { UserInputInline } from "../../components/UserInputInline";
-import SlashMenu from "../../components/chat/SlashMenu";
+import { SlashMenu } from "../../components/chat/SlashMenu";
 import {
   ModelPickers,
   ModePicker,
@@ -183,8 +185,15 @@ function ChatScreen() {
   const visionCapable = chatModel.capabilities.includes("vision");
   const platform = usePlatform();
   const { skills } = useSkills();
-  const slashQuery = useMemo(() => parseSlashQuery(draft), [draft]);
-  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [cursor, setCursor] = useState<number | null>(null);
+
+  const slashQuery = useMemo(
+    () => (cursor === null ? null : findSlashQuery(draft, cursor)),
+    [draft, cursor],
+  );
+
+  const slashKey = slashQuery ? `${slashQuery.from}:${slashQuery.query}` : null;
+  const [slashDismissed, setSlashDismissed] = useState<string | null>(null);
   const hasText = draft.trim() !== "";
   const canSubmit = hasText || pendingImages.length > 0;
 
@@ -350,7 +359,7 @@ function ChatScreen() {
     if (!canSubmit) return;
     const text = draft.trim();
     const images = visionCapable ? pendingImages : [];
-    setSlashDismissed(false);
+    setSlashDismissed(null);
     clearDraft();
     pinBottom();
     reportSend(send(text, images));
@@ -369,17 +378,25 @@ function ChatScreen() {
 
   const handlePick = useCallback(
     (skill: SkillListing) => {
-      const tail = slashQuery?.args ? ` ${slashQuery.args}` : "";
-      setDraft(`/${skill.name}${tail} `);
-      setSlashDismissed(true);
+      if (!slashQuery) return;
+      const picked = insertSlashCommand(draft, slashQuery, skill.name);
+      setDraft(picked.text);
+      setCursor(picked.cursor);
+      setSlashDismissed(`${slashQuery.from}:${skill.name}`);
     },
-    [slashQuery, setDraft],
+    [draft, slashQuery, setDraft],
   );
 
   const handleDismiss = useCallback(() => {
-    setSlashDismissed(true);
-    setDraft("");
-  }, [setDraft]);
+    setSlashDismissed(slashKey);
+  }, [slashKey]);
+
+  const handleSelectionChange = useCallback(
+    ({ nativeEvent: { selection } }: TextInputSelectionChangeEvent) => {
+      setCursor(selection.start === selection.end ? selection.end : null);
+    },
+    [],
+  );
 
   const handleTranscript = useCallback(
     (text: string) => {
@@ -649,7 +666,7 @@ function ChatScreen() {
               ))}
             </View>
           ) : null}
-          {slashQuery && !slashDismissed && !inputPending ? (
+          {slashQuery && slashKey !== slashDismissed && !inputPending ? (
             <SlashMenu
               skills={skills}
               query={slashQuery.query}
@@ -661,6 +678,7 @@ function ChatScreen() {
             <TextInput
               value={draft}
               onChangeText={setDraft}
+              onSelectionChange={handleSelectionChange}
               placeholder={composerPlaceholder(voiceStatus, voiceSeconds)}
               placeholderTextColor={isRecording ? t.danger : t.textMuted}
               pointerEvents={isRecording ? "none" : "auto"}

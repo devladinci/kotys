@@ -320,6 +320,10 @@ const createThemedStyles = (mode: ThemeMode) => {
       backgroundColor: t.surface,
       borderColor: t.border,
     },
+    slashMenu: {
+      backgroundColor: t.surface,
+      borderColor: t.border,
+    },
     sendActive: {
       backgroundColor: t.accent,
     },
