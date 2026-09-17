@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MessageBubble } from "./MessageBubble";
 import type { Message } from "@kotys/contracts";
 
@@ -55,6 +56,52 @@ describe("MessageBubble skill message", () => {
   it("does not treat a message that merely starts with / as a skill", () => {
     renderBubble(userMessage("/not-a-skill with no fence"));
     expect(screen.getByText("/not-a-skill with no fence")).toBeDefined();
+  });
+});
+
+describe("MessageBubble edit", () => {
+  const renderEditable = (content: string) => {
+    const onEditAndResend = vi.fn();
+    render(
+      <MessageBubble
+        message={userMessage(content)}
+        isStreamingThis={false}
+        isHighlighted={false}
+        onImageClick={noop}
+        onEditAndResend={onEditAndResend}
+      />,
+    );
+    return { onEditAndResend };
+  };
+
+  it("edits a skill message as typed, without the skill body", async () => {
+    const user = userEvent.setup();
+    renderEditable(SKILL_MESSAGE);
+    await user.click(screen.getByLabelText("Edit and resend"));
+    expect(screen.getByRole("textbox")).toHaveValue(
+      "/typescript-react-style have you followed all rules?",
+    );
+  });
+
+  it("does not resend a skill message left unchanged", async () => {
+    const user = userEvent.setup();
+    const { onEditAndResend } = renderEditable(SKILL_MESSAGE);
+    await user.click(screen.getByLabelText("Edit and resend"));
+    await user.keyboard("{Enter}");
+    expect(onEditAndResend).not.toHaveBeenCalled();
+  });
+
+  it("resends the edited text", async () => {
+    const user = userEvent.setup();
+    const { onEditAndResend } = renderEditable(SKILL_MESSAGE);
+    await user.click(screen.getByLabelText("Edit and resend"));
+    await user.type(screen.getByRole("textbox"), " twice");
+    await user.keyboard("{Enter}");
+    expect(onEditAndResend).toHaveBeenCalledWith(
+      1,
+      "/typescript-react-style have you followed all rules? twice",
+      undefined,
+    );
   });
 });
 

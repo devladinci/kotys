@@ -1,3 +1,4 @@
+import type { ParsedSlashCommand } from "./slashCommand.js";
 import {
   parseSlashCommand,
   SKILL_FENCE_PREFIX,
@@ -7,17 +8,19 @@ import {
 const SKILL_FENCE = new RegExp(
   "```" +
     SKILL_FENCE_PREFIX.replace(":", "\\:") +
-    "([a-z0-9-]*)\\n([\\s\\S]*?)\\n?```",
+    "([a-z0-9-]+)\\n([\\s\\S]*?)\\n?```",
 );
 
 export class SkillMessage {
   readonly name: string;
   readonly args: string;
+  readonly text: string;
   readonly body: string;
 
-  private constructor(name: string, args: string, body: string) {
+  private constructor(name: string, args: string, text: string, body: string) {
     this.name = name;
     this.args = args;
+    this.text = text;
     this.body = body;
   }
 
@@ -25,19 +28,27 @@ export class SkillMessage {
     const fence = SKILL_FENCE.exec(content);
     if (!fence) return null;
 
-    const parsed = parseSlashCommand(content.slice(0, fence.index));
-    if (!parsed) return null;
-
-    return new SkillMessage(parsed.name, parsed.args, fence[2]);
+    const name = fence[1];
+    const text = content.slice(0, fence.index).trim();
+    const leading = parseSlashCommand(text);
+    const args = leading?.name === name ? leading.args : text;
+    return new SkillMessage(name, args, text, fence[2]);
   }
 
-  static build(name: string, args: string, body: string): string {
-    const header = `/${name}${args ? ` ${args}` : ""}`;
+  static typedText(content: string): string {
+    return SkillMessage.fromContent(content)?.text ?? content;
+  }
+
+  static build(
+    text: string,
+    { name, args }: ParsedSlashCommand,
+    body: string,
+  ): string {
     const fenced = `\`\`\`${SKILL_FENCE_PREFIX}${name}\n${substituteSkillArgs(body, args).trimEnd()}\n\`\`\``;
-    return `${header}\n\n${fenced}`;
+    return `${text.trim()}\n\n${fenced}`;
   }
 
-  // The fence renders as the skill chip, so the raw header is dropped to
+  // The fence renders as the skill chip, so a leading command is dropped to
   // avoid showing the invocation twice.
   get displayContent(): string {
     const fence = `\`\`\`${SKILL_FENCE_PREFIX}${this.name}\n${this.body}\n\`\`\``;

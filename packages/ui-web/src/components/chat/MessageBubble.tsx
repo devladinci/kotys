@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
-import { splitContentByWidgets } from "@kotys/core";
+import { SkillMessage, splitContentByWidgets } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
 import { MessageImages } from "./MessageImages";
 import {
@@ -72,13 +72,15 @@ function MessageBubbleBase({
   const fullTime = createdAt?.toLocaleString();
 
   const handleEditStart = () => {
-    setDraft(message.content);
+    setDraft(SkillMessage.typedText(message.content));
     setEditing(true);
   };
 
   const handleEditCommit = () => {
     setEditing(false);
-    if (!draft.trim() || draft === message.content) return;
+    if (!draft.trim() || draft === SkillMessage.typedText(message.content)) {
+      return;
+    }
     onEditAndResend?.(message.id, draft, message.images);
   };
 
