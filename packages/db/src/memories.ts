@@ -5,7 +5,8 @@ import { chatExists, escapeLike } from "./internal.js";
 
 type MemoryBase = Omit<MemoryRecord, "topics">;
 const MEMORY_COLS = `m.id, m.key, m.content, m.type, m.source_chat_id,
-         c.title AS source_chat_title, m.created_at, m.updated_at`;
+         c.title AS source_chat_title, m.created_at, m.updated_at,
+         m.use_count, m.last_used_at`;
 // LEFT JOIN, not INNER: a memory whose source chat was deleted still shows,
 // with a null title.
 const MEMORY_FROM = `FROM memories m LEFT JOIN chats c ON c.id = m.source_chat_id`;
@@ -39,6 +40,17 @@ function attachTopics(rows: MemoryBase[]): MemoryRecord[] {
     else byId.set(row.memory_id, [row.name]);
   }
   return rows.map((r) => ({ ...r, topics: byId.get(r.id) ?? [] }));
+}
+
+function touchUsage(ids: number[]) {
+  if (ids.length === 0) return;
+  getDb()
+    .prepare(
+      `UPDATE memories
+       SET use_count = use_count + 1, last_used_at = unixepoch()
+       WHERE id IN (${ids.map(() => "?").join(",")})`,
+    )
+    .run(...ids);
 }
 
 /** Shared write path for the topic namespace: every writer normalizes here. */
@@ -188,6 +200,7 @@ export function searchMemories(opts: {
        LIMIT ?`,
     )
     .all(...values, opts.limit ?? 30) as MemoryBase[];
+  touchUsage(rows.map((r) => r.id));
   return attachTopics(rows);
 }
 export function getMemoriesForChat(
@@ -208,9 +221,11 @@ export function getMemoriesForChat(
     .prepare(
       `SELECT ${MEMORY_COLS} ${MEMORY_FROM}
        WHERE ${ALWAYS_ON_SQL}${topicClause}
-       ORDER BY CASE WHEN ${ALWAYS_ON_SQL} THEN 0 ELSE 1 END, m.updated_at DESC
+       ORDER BY CASE WHEN ${ALWAYS_ON_SQL} THEN 0 ELSE 1 END,
+                m.use_count DESC, m.updated_at DESC
        LIMIT ?`,
     )
     .all(...topics, limit) as MemoryBase[];
+  touchUsage(rows.map((r) => r.id));
   return attachTopics(rows);
 }
