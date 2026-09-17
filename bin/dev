@@ -19,15 +19,16 @@ if [ ! -d node_modules ]; then
   exit 1
 fi
 
-# Pairing hint for phones: only printed when bound wider than loopback.
+# Pairing hint for phones: printed unless the bind is explicitly narrowed
+# to loopback (the Electron shell now defaults to 0.0.0.0).
 LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || true)
 TS_IP=$(tailscale ip -4 2>/dev/null || true)
-if [ "${KOTYS_HOST:-}" = "0.0.0.0" ]; then
-  [ -n "$TS_IP" ] && printf 'phone pairing (tailscale):  http://%s:3017\n' "$TS_IP" >&2
-  [ -n "$LAN_IP" ] && printf 'phone pairing (lan):  http://%s:3017\n' "$LAN_IP" >&2
+if [ "${KOTYS_HOST:-}" != "127.0.0.1" ]; then
+  [ -n "$TS_IP" ] && printf 'phone pairing (tailscale, works from any network):  http://%s:3017\n' "$TS_IP" >&2
+  [ -n "$LAN_IP" ] && printf 'phone pairing (lan, home Wi-Fi only):  http://%s:3017\n' "$LAN_IP" >&2
   printf 'token: ~/Library/Application Support/Kotys/token\n' >&2
 else
-  printf 'note: daemon binds 127.0.0.1 (this Mac only). For phone access run: KOTYS_HOST=0.0.0.0 bin/dev\n' >&2
+  printf 'note: KOTYS_HOST=127.0.0.1 — the daemon is reachable from this Mac only\n' >&2
 fi
 
 # Anything after `bin/dev` is forwarded, e.g. `bin/dev --port 5180`.

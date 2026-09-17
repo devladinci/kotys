@@ -96,18 +96,18 @@ addresses that work from anywhere, not just your home Wi-Fi.
 
 1. Install [Tailscale](https://tailscale.com) on your computer and your phone,
    and sign in with the same account.
-2. Start Kotys wider than loopback so the phone can reach it. The pairing
-   hint comes from the `bin/dev` wrapper, which starts the desktop stack, not
-   from `pnpm dev`:
+2. Start Kotys. The daemon binds `0.0.0.0` by default, so the phone can
+   reach it on any interface. The pairing hint comes from the `bin/dev`
+   wrapper, which starts the desktop stack, not from `pnpm dev`:
 
    ```bash
-   KOTYS_HOST=0.0.0.0 bin/dev
+   bin/dev
    ```
 
    The terminal prints a pairing hint with your Tailscale IP, something like
-   `phone pairing (tailscale): http://100.x.y.z:3017`, then the path to your
-   token. Started without `KOTYS_HOST`, it prints a reminder that the daemon
-   is bound to `127.0.0.1` instead.
+   `phone pairing (tailscale, works from any network): http://100.x.y.z:3017`,
+   then the path to your token. Prefer the Tailscale URL — it works from any
+   network, not just your home Wi-Fi.
 
 3. Open the Kotys mobile app, point it at that address, and paste the pairing
    token. The token sits next to the database: on macOS

@@ -1,28 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { parseTailscaleIp, plausibleHost } from "./daemonHost";
 
-describe("parseTailscaleIp", () => {
-  it("returns the first valid IPv4 line", () => {
-    expect(parseTailscaleIp("100.64.0.1\n")).toBe("100.64.0.1");
-    expect(parseTailscaleIp("noise\n100.64.0.1\nmore\n")).toBe("100.64.0.1");
+import { plausibleHost, resolveBindHost } from "./daemonHost";
+describe("resolveBindHost", () => {
+  it("KOTYS_HOST wins", () => {
+    expect(resolveBindHost("127.0.0.1")).toBe("127.0.0.1");
+    expect(resolveBindHost("100.77.236.93")).toBe("100.77.236.93");
   });
 
-  it("rejects the real-world failure: CLI error text on stdout", () => {
-    const out =
-      "The Tailscale GUI failed to start: The operation couldn't be completed. (Tailscale.CLIError error 3.)\n";
-    expect(parseTailscaleIp(out)).toBeNull();
-  });
-
-  it("rejects malformed quads", () => {
-    expect(parseTailscaleIp("1.2.3\n")).toBeNull();
-    expect(parseTailscaleIp("1.2.3.4.5\n")).toBeNull();
-    expect(parseTailscaleIp("999.1.1.1\n")).toBeNull();
-    expect(parseTailscaleIp("")).toBeNull();
-  });
-
-  it("accepts quads within the valid range", () => {
-    expect(parseTailscaleIp("255.255.255.255\n")).toBe("255.255.255.255");
-    expect(parseTailscaleIp("0.0.0.0\n")).toBe("0.0.0.0");
+  it("malformed KOTYS_HOST falls through instead of dying on DNS", () => {
+    expect(resolveBindHost("bad host")).toBe("0.0.0.0");
+    expect(resolveBindHost("")).toBe("0.0.0.0");
+    expect(resolveBindHost(undefined)).toBe("0.0.0.0");
   });
 });
 
