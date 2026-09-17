@@ -12,6 +12,15 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* Electron window dragging for custom title bars. */
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 @theme {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

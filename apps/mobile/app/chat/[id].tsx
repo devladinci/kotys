@@ -29,6 +29,7 @@ import {
   insertSlashCommand,
   isInputForChat,
   queueCaption,
+  SkillMessage,
   useAppStore,
   useChat,
   useChatList,
@@ -492,7 +493,8 @@ function ChatScreen() {
   }, []);
 
   const handleEdit = useCallback(
-    (m: Message) => setEditing({ id: m.id, text: m.content }),
+    (m: Message) =>
+      setEditing({ id: m.id, text: SkillMessage.typedText(m.content) }),
     [setEditing],
   );
 

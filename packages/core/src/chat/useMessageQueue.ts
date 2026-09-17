@@ -22,9 +22,9 @@ export function useMessageQueue(activeChatId: number | null) {
   );
 
   const enqueue = useCallback(
-    (text: string, images: string[]) => {
+    (text: string, images: string[], content: string) => {
       if (activeChatId === null) return;
-      enqueueQueued(activeChatId, text, images);
+      enqueueQueued(activeChatId, text, images, content);
     },
     [activeChatId],
   );

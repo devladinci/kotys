@@ -32,7 +32,7 @@ interface IHoverCardProps {
 }
 
 export function HoverCard({ children, rect }: IHoverCardProps) {
-  const [ref, side] = useOverflowFlip<HTMLDivElement>(true);
+  const [ref, side] = useOverflowFlip<HTMLDivElement>(rect);
   return createPortal(
     <div
       ref={ref}

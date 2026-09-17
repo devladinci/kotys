@@ -1,5 +1,5 @@
 import { SkillMessage } from "@kotys/core";
-import MarkdownBody from "./MarkdownBody";
+import { MarkdownBody } from "./MarkdownBody";
 
 interface IProps {
   content: string;

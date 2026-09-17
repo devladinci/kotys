@@ -4,6 +4,8 @@
 export interface QueuedMessage {
   id: number;
   text: string;
+  // What a steer injects: the typed text with any skill already expanded.
+  content: string;
   images: string[];
   /** Queued until the receipt; if the turn ends first, the drain sends it. */
   steer?: { requestId: number; key: string };
@@ -22,8 +24,9 @@ export function enqueueQueued(
   chatId: number,
   text: string,
   images: string[],
+  content = text,
 ): void {
-  const queued: QueuedMessage = { id: ++nextId, text, images };
+  const queued: QueuedMessage = { id: ++nextId, text, content, images };
   queues.set(chatId, [...(queues.get(chatId) ?? []), queued]);
   emit();
 }

@@ -5,6 +5,7 @@ import { queueCaption, steerStateOf } from "./queuedSteer.js";
 const queued = (overrides: Partial<QueuedMessage> = {}): QueuedMessage => ({
   id: 1,
   text: "use Y instead",
+  content: "use Y instead",
   images: [],
   ...overrides,
 });

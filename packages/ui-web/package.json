@@ -37,7 +37,6 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/suggestion": "^3.31.3",
-    "dompurify": "^3.4.13",
     "highlight.js": "^11.11.2",
     "lucide-react": "^1.28.0",
     "react-markdown": "^10.1.0",

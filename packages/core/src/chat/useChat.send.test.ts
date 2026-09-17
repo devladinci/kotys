@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   const sent: unknown[] = [];
   const inserts: { role: string; content?: string }[] = [];
+  const updates: { id: number; content?: string }[] = [];
   const userInsert: { mode: "ok" | "null" | "throw" } = { mode: "ok" };
   const skill: {
     mode: "ok" | "hang";
@@ -24,7 +25,7 @@ const h = vi.hoisted(() => {
       return true;
     },
   };
-  return { sent, inserts, userInsert, skill, listeners, net, socket };
+  return { sent, inserts, updates, userInsert, skill, listeners, net, socket };
 });
 
 vi.mock("../shared/clients.js", () => ({
@@ -38,7 +39,9 @@ vi.mock("../shared/clients.js", () => ({
         if (h.userInsert.mode === "throw") throw new Error("db gone");
         return 9000 + h.inserts.length;
       },
-      update: async () => {},
+      update: async (input: { id: number; content?: string }) => {
+        h.updates.push(input);
+      },
       list: async () => [],
       get: async () => null,
     },
@@ -252,6 +255,33 @@ describe("useChat: watching a stream another device started", () => {
     expect(appended[0].payload.content).toBe("queued first");
   });
 
+  it("a steered skill message carries the skill body", async () => {
+    h.skill.bodies = { review: "Review the diff." };
+    const { result } = renderChat(7);
+    await act(async () => {
+      emitFrame({
+        type: "chat:chunk",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId: 4242, thinkingDelta: "", contentDelta: "hi" },
+      });
+    });
+
+    await act(async () => {
+      await result.current.send("/review now", []);
+    });
+
+    act(() => {
+      result.current.steer(result.current.queuedMessages[0].id);
+    });
+
+    const appended = sentOf("chat:append");
+    expect(appended).toHaveLength(1);
+    expect(appended[0].payload.content).toBe(
+      "/review now\n\n```kotys-skill:review\nReview the diff.\n```",
+    );
+  });
+
   it("a foreign done settles the steer receipt and empties the queue", async () => {
     const { result } = renderChat(7);
     await act(async () => {
@@ -297,6 +327,7 @@ describe("useChat send", () => {
   beforeEach(() => {
     h.sent.length = 0;
     h.inserts.length = 0;
+    h.updates.length = 0;
     h.net.online = true;
     h.userInsert.mode = "ok";
     h.skill.mode = "ok";
@@ -346,7 +377,7 @@ describe("useChat send", () => {
 
     const user = h.inserts.find((row) => row.role === "user");
     expect(user?.content).toBe(
-      "/review see /tmp/x.log then /review it\n\n```kotys-skill:review\nReview the diff.\n```",
+      "see /tmp/x.log then /review it\n\n```kotys-skill:review\nReview the diff.\n```",
     );
   });
 
@@ -360,7 +391,7 @@ describe("useChat send", () => {
 
     const user = h.inserts.find((row) => row.role === "user");
     expect(user?.content).toMatch(
-      /^\/review copy to \/backup and \/review\n\n```kotys-skill:review\n/,
+      /^copy to \/backup and \/review\n\n```kotys-skill:review\n/,
     );
   });
 
@@ -373,6 +404,69 @@ describe("useChat send", () => {
 
     const user = h.inserts.find((row) => row.role === "user");
     expect(user?.content).toBe("copy to /backup");
+  });
+
+  it("queues a skill message as typed and expands it once when it is sent", async () => {
+    h.skill.bodies = { review: "Review the diff." };
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("first", []);
+    });
+
+    await act(async () => {
+      await result.current.send("/review now", []);
+    });
+
+    expect(getQueued(7).map((q) => q.text)).toEqual(["/review now"]);
+
+    const firstId = sentOf("chat:stream")[0].payload.requestId as number;
+    await act(async () => {
+      emitFrame({
+        type: "chat:done",
+        chatId: 7,
+        seq: 9,
+        payload: { requestId: firstId, result: emptyResult },
+      });
+    });
+
+    await vi.waitFor(() => expect(sentOf("chat:stream")).toHaveLength(2));
+    const users = h.inserts.filter((row) => row.role === "user");
+    expect(users.map((row) => row.content)).toEqual([
+      "first",
+      "/review now\n\n```kotys-skill:review\nReview the diff.\n```",
+    ]);
+  });
+
+  it("an edited message applies its skill again", async () => {
+    h.skill.bodies = { review: "Review $ARGUMENTS." };
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("/review the diff", []);
+    });
+
+    const firstId = sentOf("chat:stream")[0].payload.requestId as number;
+    await act(async () => {
+      emitFrame({
+        type: "chat:done",
+        chatId: 7,
+        seq: 9,
+        payload: { requestId: firstId, result: emptyResult },
+      });
+    });
+
+    const userId = result.current.messages.find((m) => m.role === "user")!.id;
+    await act(async () => {
+      await result.current.editAndResend(userId, "/review the tests");
+    });
+
+    const edited =
+      "/review the tests\n\n```kotys-skill:review\nReview the tests.\n```";
+    expect(h.updates.find((u) => u.id === userId)?.content).toBe(edited);
+    expect(result.current.messages.find((m) => m.id === userId)?.content).toBe(
+      edited,
+    );
   });
 
   it("claims the chat before the skill lookup so a second send queues", async () => {
