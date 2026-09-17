@@ -393,6 +393,19 @@ export function useChat({
       // way, so the instructions survive context rebuilds on later turns.
       let content = text;
       const slash = parseSlashCommand(text);
+
+      // Checked before the claim is taken so a second send queues instead of
+      // starting a turn of its own.
+      const busyAtEntry =
+        activeChatId !== null &&
+        (isChatBusy(activeChatId) ||
+          candidateLiveStream(activeChatId) !== null);
+      // Claimed before the slash lookup below is awaited, so the drain effect
+      // cannot re-fire while it runs and two quick slash sends cannot both
+      // pass the busy check.
+      const claimed = activeChatId !== null && !busyAtEntry;
+      if (claimed) startStreamEntry(activeChatId, -1);
+
       if (slash) {
         try {
           const detail = await rpc.skills.get({ name: slash.name });
@@ -404,16 +417,10 @@ export function useChat({
         }
       }
 
-      if (
-        activeChatId !== null &&
-        (isChatBusy(activeChatId) || candidateLiveStream(activeChatId) !== null)
-      ) {
+      if (busyAtEntry) {
         enqueue(content, images);
         return { needsSettings: false as const };
       }
-      // Claimed before the RPCs below are awaited, so the drain effect cannot
-      // re-fire while they run.
-      if (activeChatId !== null) startStreamEntry(activeChatId, -1);
 
       let currentChatId = activeChatId;
       if (!currentChatId) {
@@ -426,15 +433,36 @@ export function useChat({
         onChatCreated?.(currentChatId);
       }
 
-      if (!currentChatId) return { needsSettings: false as const };
+      if (!currentChatId) {
+        if (claimed) {
+          finishStreamEntry(activeChatId);
+          clearStreamActivity(activeChatId);
+        }
+        return { needsSettings: false as const };
+      }
 
-      const userMessageId = await insertMessage(
-        currentChatId,
-        "user",
-        content,
-        images.length > 0 ? images : undefined,
-      );
-      if (userMessageId === null) return { needsSettings: false as const };
+      let userMessageId: number | null;
+      try {
+        userMessageId = await insertMessage(
+          currentChatId,
+          "user",
+          content,
+          images.length > 0 ? images : undefined,
+        );
+      } catch (err) {
+        if (claimed) {
+          finishStreamEntry(activeChatId);
+          clearStreamActivity(activeChatId);
+        }
+        throw err;
+      }
+      if (userMessageId === null) {
+        if (claimed) {
+          finishStreamEntry(activeChatId);
+          clearStreamActivity(activeChatId);
+        }
+        return { needsSettings: false as const };
+      }
 
       const userMessage: Message = {
         id: userMessageId,
