@@ -114,7 +114,7 @@ export function UserInputForm({ request, onSubmit, onCancel }: IProps) {
             submit();
           }}
           disabled={missing}
-          className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white transition text-sm font-medium disabled:opacity-40 disabled:hover:bg-accent disabled:cursor-not-allowed"
+          className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink transition text-sm font-medium disabled:opacity-40 disabled:hover:bg-accent disabled:cursor-not-allowed"
         >
           {request.submitLabel ?? "Submit"}
         </button>

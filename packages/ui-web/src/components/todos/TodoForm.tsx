@@ -468,7 +468,7 @@ function TodoFormBase({ todo, onClose }: IProps) {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-all duration-150 hover:shadow-md hover:shadow-accent/30 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-sm font-medium transition-all duration-150 hover:shadow-md hover:shadow-accent/30 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {saving ? "Saving…" : todo ? "Save" : "Create"}
             </button>

@@ -202,7 +202,7 @@ export default function TodosScreen() {
           >
             <Text
               style={{
-                color: filter.status === f ? "#fff" : t.textMuted,
+                color: filter.status === f ? t.accentInk : t.textMuted,
                 fontSize: 12,
                 fontWeight: "600",
                 textTransform: "capitalize",
@@ -615,7 +615,7 @@ export function TodoForm({
               >
                 <Text
                   style={{
-                    color: priority === p ? "#fff" : t.textMuted,
+                    color: priority === p ? t.accentInk : t.textMuted,
                     fontSize: 12,
                     fontWeight: "600",
                     textTransform: "capitalize",
@@ -713,7 +713,9 @@ export function TodoForm({
                 },
               ]}
             >
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+              <Text
+                style={{ color: t.accentInk, fontWeight: "700", fontSize: 14 }}
+              >
                 Save
               </Text>
             </Pressable>

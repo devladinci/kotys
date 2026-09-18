@@ -334,7 +334,7 @@ function ComposerBase({
               onClick={send}
               disabled={isLoading || !canSend}
               aria-label="Send message"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent text-white transition"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent text-accent-ink transition"
             >
               <Send size={16} />
             </button>

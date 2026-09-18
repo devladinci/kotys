@@ -75,7 +75,7 @@ function PomodoroFormBase({ defaultDuration, defaultBreak, onStart }: IProps) {
 
       <button
         onClick={submit}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-[13px] font-medium transition"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-[13px] font-medium transition"
       >
         <Timer size={14} />
         Start {duration}m focus

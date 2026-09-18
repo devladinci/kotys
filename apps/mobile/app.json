@@ -22,7 +22,7 @@
     "android": {
       "package": "app.kotys.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#F5763A",
+        "backgroundColor": "#2CD2BA",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -36,7 +36,7 @@
       [
         "expo-notifications",
         {
-          "color": "#F5763A"
+          "color": "#2CD2BA"
         }
       ],
       "expo-web-browser",

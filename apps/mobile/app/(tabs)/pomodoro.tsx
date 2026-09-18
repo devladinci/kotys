@@ -130,7 +130,9 @@ export default function PomodoroScreen() {
             accessibilityRole="button"
             accessibilityLabel="Start focus session"
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            <Text
+              style={{ color: t.accentInk, fontWeight: "700", fontSize: 15 }}
+            >
               Start {clampNum(focus, FOCUS_BOUNDS.min, FOCUS_BOUNDS.max, 25)}m
               focus
             </Text>
@@ -218,7 +220,7 @@ function DurationRow({
           >
             <Text
               style={{
-                color: num === p ? "#fff" : t.text,
+                color: num === p ? t.accentInk : t.text,
                 fontSize: 12,
                 fontWeight: "600",
               }}

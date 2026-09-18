@@ -55,7 +55,7 @@ function TodoCardBase({ widget }: { widget: TodoWidget }) {
             }`}
           >
             {completed && (
-              <Check size={11} strokeWidth={3} className="text-white" />
+              <Check size={11} strokeWidth={3} className="text-accent-ink" />
             )}
           </span>
         )}

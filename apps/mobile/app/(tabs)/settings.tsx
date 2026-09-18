@@ -88,11 +88,11 @@ export default function SettingsScreen() {
               <Ionicons
                 name={sec.icon}
                 size={13}
-                color={active ? "#fff" : t.textMuted}
+                color={active ? t.accentInk : t.textMuted}
               />
               <Text
                 style={{
-                  color: active ? "#fff" : t.text,
+                  color: active ? t.accentInk : t.text,
                   fontSize: 13,
                   fontWeight: "600",
                 }}
@@ -184,7 +184,9 @@ function General({
             }}
             style={[s.primaryBtn, { backgroundColor: t.accent }]}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>
+            <Text
+              style={{ color: t.accentInk, fontWeight: "700", fontSize: 14 }}
+            >
               Save key
             </Text>
           </Pressable>
@@ -219,11 +221,11 @@ function General({
                       : "moon-outline"
                 }
                 size={14}
-                color={themePref === m ? "#fff" : t.textMuted}
+                color={themePref === m ? t.accentInk : t.textMuted}
               />
               <Text
                 style={{
-                  color: themePref === m ? "#fff" : t.text,
+                  color: themePref === m ? t.accentInk : t.text,
                   fontSize: 12,
                   fontWeight: "600",
                   textTransform: "capitalize",
@@ -253,7 +255,7 @@ function General({
             >
               <Text
                 style={{
-                  color: thinkingEffort === e ? "#fff" : t.text,
+                  color: thinkingEffort === e ? t.accentInk : t.text,
                   fontSize: 12,
                   fontWeight: "600",
                   textTransform: "capitalize",
@@ -557,7 +559,7 @@ function Tools({
                 value={on}
                 onValueChange={(v) => toggle(item.name, v)}
                 trackColor={{ true: t.accent, false: t.border }}
-                thumbColor="#fff"
+                thumbColor={on ? t.accentInk : "#fff"}
               />
             </View>
           );
@@ -643,7 +645,7 @@ function Skills({
               value={item.enabled}
               onValueChange={(v) => toggle(item.name, v)}
               trackColor={{ true: t.accent, false: t.border }}
-              thumbColor="#fff"
+              thumbColor={item.enabled ? t.accentInk : "#fff"}
             />
           </View>
         )}
@@ -931,7 +933,7 @@ function Memory({
                     >
                       <Text
                         style={{
-                          color: "#fff",
+                          color: t.accentInk,
                           fontSize: 12,
                           fontWeight: "600",
                         }}

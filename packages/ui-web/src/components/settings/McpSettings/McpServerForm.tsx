@@ -201,7 +201,7 @@ export function McpServerForm({
           type="button"
           onClick={onSave}
           disabled={isSaving}
-          className="px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium transition disabled:opacity-50"
+          className="px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-xs font-medium transition disabled:opacity-50"
         >
           {isSaving ? "Saving…" : "Save"}
         </button>
