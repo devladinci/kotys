@@ -57,7 +57,11 @@ function ComposeTabButton({ children }: { children: React.ReactNode }) {
           { backgroundColor: isPressed ? t.accentHover : t.accent },
         ]}
       >
-        {creating ? <ActivityIndicator size="small" color="#fff" /> : children}
+        {creating ? (
+          <ActivityIndicator size="small" color={t.accentInk} />
+        ) : (
+          children
+        )}
       </View>
     </Pressable>
   );
@@ -106,7 +110,9 @@ export default function TabsLayout() {
         options={{
           title: "",
           tabBarLabel: () => null,
-          tabBarIcon: () => <Ionicons name="add" size={26} color="#fff" />,
+          tabBarIcon: () => (
+            <Ionicons name="add" size={26} color={t.accentInk} />
+          ),
           tabBarButton: (props) => <ComposeTabButton {...props} />,
         }}
       />

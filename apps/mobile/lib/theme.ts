@@ -16,6 +16,7 @@ export function theme(mode: ThemeMode) {
     textMuted: p.textMuted,
     accent: p.accent,
     accentHover: p.accentHover,
+    accentInk: p.accentInk,
     danger: "#d73a49",
     ok: "#1a7f37",
     warn: "#f59e0b",

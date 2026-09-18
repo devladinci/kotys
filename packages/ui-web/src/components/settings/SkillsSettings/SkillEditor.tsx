@@ -228,7 +228,7 @@ export function SkillEditor({
           type="button"
           onClick={handleSaveClick}
           disabled={Boolean(validationError) || saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-medium transition disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-xs font-medium transition disabled:opacity-50"
         >
           {saving ? (
             <Loader2 size={12} className="animate-spin" />

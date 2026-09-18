@@ -60,7 +60,7 @@ export function UserInputInline() {
                 >
                   <Text
                     style={{
-                      color: selected ? "#fff" : t.text,
+                      color: selected ? t.accentInk : t.text,
                       fontSize: 14,
                       fontWeight: selected ? "700" : "500",
                     }}
@@ -68,7 +68,7 @@ export function UserInputInline() {
                     {opt.label}
                   </Text>
                   {selected ? (
-                    <Ionicons name="checkmark" size={16} color="#fff" />
+                    <Ionicons name="checkmark" size={16} color={t.accentInk} />
                   ) : null}
                 </Pressable>
               );
@@ -114,7 +114,7 @@ export function UserInputInline() {
             { backgroundColor: t.accent, opacity: missing ? 0.4 : 1 },
           ]}
         >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>
+          <Text style={{ color: t.accentInk, fontWeight: "600" }}>
             {pending.submitLabel ?? "Submit"}
           </Text>
         </Pressable>

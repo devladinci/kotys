@@ -273,7 +273,7 @@ export default function ChatView({
           </div>
           <button
             onClick={onCreateChat}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-accent hover:bg-accent-hover text-white font-medium transition"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-accent hover:bg-accent-hover text-accent-ink font-medium transition"
           >
             <Plus size={18} />
             Start a new chat

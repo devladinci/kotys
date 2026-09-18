@@ -158,7 +158,12 @@ function ApprovalCard({
             { backgroundColor: request.destructive ? t.danger : t.accent },
           ]}
         >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>
+          <Text
+            style={{
+              color: request.destructive ? "#fff" : t.accentInk,
+              fontWeight: "600",
+            }}
+          >
             {request.destructive && !confirming ? "Approve…" : "Approve"}
           </Text>
         </Pressable>

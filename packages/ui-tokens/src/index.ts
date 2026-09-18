@@ -13,8 +13,9 @@ export const palette = {
     border: "#3a3a3a",
     text: "#e8e8e8",
     textMuted: "#9ca3af",
-    accent: "#e8602c",
-    accentHover: "#d14f20",
+    accent: "#14b8a6",
+    accentHover: "#0d9488",
+    accentInk: "#0b1f1c",
   },
   light: {
     bg: "#fefdfb",
@@ -24,8 +25,9 @@ export const palette = {
     border: "#e2dfd7",
     text: "#2c2a26",
     textMuted: "#6b7280",
-    accent: "#dd5f2f",
-    accentHover: "#c94f22",
+    accent: "#0f766e",
+    accentHover: "#115e59",
+    accentInk: "#ffffff",
   },
 } as const;
 

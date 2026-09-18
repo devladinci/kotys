@@ -104,7 +104,7 @@ function Bootstrap({ onUnpair }: { onUnpair: () => void }) {
         onPress={() => void hydrate()}
         style={[s.btn, { backgroundColor: t.accent }]}
       >
-        <Text style={s.btnText}>Retry</Text>
+        <Text style={[s.btnText, { color: t.accentInk }]}>Retry</Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -208,5 +208,5 @@ const s = StyleSheet.create({
     minWidth: 180,
     alignItems: "center",
   },
-  btnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  btnText: { fontSize: 15, fontWeight: "600" },
 });

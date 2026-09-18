@@ -142,13 +142,13 @@ function ApprovalPromptComponent() {
           </button>
           <button
             onClick={() => respond(true)}
-            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white transition text-sm font-medium"
+            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink transition text-sm font-medium"
           >
             Allow
           </button>
           <button
             onClick={() => allowAlways()}
-            className="px-4 py-2 rounded-lg bg-accent/80 hover:bg-accent text-white transition text-sm font-medium"
+            className="px-4 py-2 rounded-lg bg-accent/80 hover:bg-accent text-accent-ink transition text-sm font-medium"
             title={`Always allow ${req.tool} for this session`}
           >
             Always allow

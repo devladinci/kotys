@@ -171,7 +171,7 @@ function MessageBubbleBase({
               <div className="flex items-center gap-2 mt-1.5 text-xs text-text-muted">
                 <button
                   onClick={handleEditCommit}
-                  className="px-2 py-1 rounded bg-accent text-white hover:bg-accent-hover transition"
+                  className="px-2 py-1 rounded bg-accent text-accent-ink hover:bg-accent-hover transition"
                 >
                   Send
                 </button>

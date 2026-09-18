@@ -38,7 +38,7 @@ export default class ErrorBoundary extends Component<IProps, IState> {
             </p>
             <button
               onClick={this.reset}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition"
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-sm font-medium transition"
             >
               Try again
             </button>

@@ -111,9 +111,9 @@ export function PairingScreen({
         ]}
       >
         {checking ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={t.accentInk} />
         ) : (
-          <Text style={s.buttonText}>Connect</Text>
+          <Text style={[s.buttonText, { color: t.accentInk }]}>Connect</Text>
         )}
       </Pressable>
     </View>
@@ -138,5 +138,5 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  buttonText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
+  buttonText: { fontSize: 15, fontWeight: "600" },
 });

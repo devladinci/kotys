@@ -1,23 +1,23 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
 <defs>
   <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="4.2" y1="30.1" x2="156.5" y2="1113.8">
-    <stop offset="0.082" stop-color="#FCA863"/>
-    <stop offset="0.179" stop-color="#FA9C58"/>
-    <stop offset="0.306" stop-color="#F78A49"/>
-    <stop offset="0.435" stop-color="#F5773A"/>
-    <stop offset="0.565" stop-color="#F1662D"/>
-    <stop offset="0.694" stop-color="#EB5B2C"/>
-    <stop offset="0.821" stop-color="#E5512D"/>
-    <stop offset="0.918" stop-color="#E04A2E"/>
+    <stop offset="0.082" stop-color="#49DEBE"/>
+    <stop offset="0.179" stop-color="#41DBBC"/>
+    <stop offset="0.306" stop-color="#37D6BB"/>
+    <stop offset="0.435" stop-color="#2CD2BA"/>
+    <stop offset="0.565" stop-color="#2CC4B2"/>
+    <stop offset="0.694" stop-color="#2FBBAE"/>
+    <stop offset="0.821" stop-color="#32B4AB"/>
+    <stop offset="0.918" stop-color="#35AEA8"/>
   </linearGradient>
   <linearGradient id="hole" gradientUnits="userSpaceOnUse" x1="512" y1="482" x2="512" y2="752">
-    <stop offset="0.237" stop-color="#ED5E2E"/>
-    <stop offset="0.326" stop-color="#EB5B2D"/>
-    <stop offset="0.437" stop-color="#E9572D"/>
-    <stop offset="0.559" stop-color="#E6532D"/>
-    <stop offset="0.681" stop-color="#E34F2E"/>
-    <stop offset="0.804" stop-color="#E14B2E"/>
-    <stop offset="0.893" stop-color="#DF482E"/>
+    <stop offset="0.237" stop-color="#2DB69C"/>
+    <stop offset="0.326" stop-color="#2DB39C"/>
+    <stop offset="0.437" stop-color="#2EB09D"/>
+    <stop offset="0.559" stop-color="#30AC9D"/>
+    <stop offset="0.681" stop-color="#31A99E"/>
+    <stop offset="0.804" stop-color="#32A79E"/>
+    <stop offset="0.893" stop-color="#33A49E"/>
   </linearGradient>
   <filter id="sh" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="65"/>
@@ -31,12 +31,12 @@
 <g clip-path="url(#tile)">
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <g transform="translate(-7,10)" filter="url(#sh)">
-    <path d="M 512,174 L 343.50,342.50 A 239,239 0 1 0 680.50,342.50 Z" fill="#8a2410" fill-opacity="0.5"/>
+    <path d="M 512,174 L 343.50,342.50 A 239,239 0 1 0 680.50,342.50 Z" fill="#144942" fill-opacity="0.5"/>
   </g>
   <path d="M 512,174 L 343.50,342.50 A 239,239 0 1 0 680.50,342.50 Z" fill="#ffffff"/>
   <g clip-path="url(#drop)">
     <g transform="translate(0,6)" filter="url(#ish)">
-      <path d="M 512,482 L 433.15,560.85 A 112,112 0 1 0 590.85,560.85 Z" fill="#8a2410" fill-opacity="0.3"/>
+      <path d="M 512,482 L 433.15,560.85 A 112,112 0 1 0 590.85,560.85 Z" fill="#144942" fill-opacity="0.3"/>
     </g>
     <path d="M 512,482 L 433.15,560.85 A 112,112 0 1 0 590.85,560.85 Z" fill="url(#hole)"/>
   </g>
