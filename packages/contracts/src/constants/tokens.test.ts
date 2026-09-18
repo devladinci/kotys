@@ -6,6 +6,8 @@ import {
   estimateTokensFromChars,
   fmtTokens,
   projectContextTokens,
+  REPLAY_TOOL_BUDGET_TOKENS,
+  replayedToolMessages,
   usableTokens,
 } from "./tokens.js";
 
@@ -83,5 +85,39 @@ describe("contextPct", () => {
 
   it("reads zero for an empty window", () => {
     expect(contextPct(1_000, 0)).toBe(0);
+  });
+});
+
+describe("replayedToolMessages", () => {
+  it("replays every turn while the budget holds", () => {
+    const replayed = replayedToolMessages([
+      { id: 1, tokens: 1_000 },
+      { id: 2, tokens: 2_000 },
+    ]);
+    expect([...replayed].sort()).toEqual([1, 2]);
+  });
+
+  it("fills the budget newest first", () => {
+    const replayed = replayedToolMessages([
+      { id: 1, tokens: 4_000 },
+      { id: 2, tokens: 4_000 },
+    ]);
+    expect([...replayed]).toEqual([2]);
+  });
+
+  it("skips a turn too big to fit but keeps older ones that still do", () => {
+    const replayed = replayedToolMessages([
+      { id: 1, tokens: 1_000 },
+      { id: 2, tokens: REPLAY_TOOL_BUDGET_TOKENS + 1 },
+      { id: 3, tokens: 500 },
+    ]);
+    expect([...replayed].sort()).toEqual([1, 3]);
+  });
+
+  it("replays a turn that exactly fills the budget", () => {
+    const replayed = replayedToolMessages([
+      { id: 1, tokens: REPLAY_TOOL_BUDGET_TOKENS },
+    ]);
+    expect([...replayed]).toEqual([1]);
   });
 });

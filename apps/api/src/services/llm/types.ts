@@ -1,9 +1,7 @@
 import type { ModelListing, ModelRef, ToolDefinition } from "@kotys/contracts";
 
-/** A single non-streaming round's token counts, as the connector reports them. */
 export type ConnectorUsage = { promptTokens: number; evalTokens: number };
 
-/** Provider-neutral message roles the agentic loop speaks. */
 export type ConnectorChatMessage = {
   role: string;
   content: string;
@@ -62,6 +60,8 @@ type ChatJsonRequest = {
  */
 export interface LlmConnector {
   listModels(): Promise<ModelListing[]>;
+  /** For providers whose window is configured server-side and can change under a chat. */
+  describeModel?(name: string): Promise<ModelListing | null>;
   chat(
     req: ConnectorChatRequest,
   ): Promise<{ content: string; usage: ConnectorUsage | null }>;

@@ -192,6 +192,7 @@ function resumeFallback(requestId: number): ServerMessage | null {
       toolCalls: row.tool_calls
         ? (JSON.parse(row.tool_calls) as ChatStreamResult["toolCalls"])
         : [],
+      toolResultTokens: row.tool_result_tokens ?? 0,
     };
     return {
       type: "chat:done",
@@ -237,6 +238,13 @@ export async function onMessage(clientId: string, raw: string): Promise<void> {
               const frame = record(requestId, {
                 type: "chat:tool",
                 payload: { ...activity, requestId, index },
+              });
+              if (frame) broadcastFrame(requestId, frame);
+            },
+            onUsage: (promptTokens) => {
+              const frame = record(requestId, {
+                type: "chat:usage",
+                payload: { requestId, promptTokens },
               });
               if (frame) broadcastFrame(requestId, frame);
             },

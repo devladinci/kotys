@@ -160,3 +160,36 @@ describe("resetAssistantMessage", () => {
     ).toBe("still here");
   });
 });
+
+describe("tool_result_tokens", () => {
+  const newChat = () =>
+    Number(
+      db.createChat("Replay cost", {
+        name: "kimi",
+        contextLength: 8192,
+        capabilities: [],
+        source: "cloud",
+      }),
+    );
+
+  it("sums each stored tool result at chars/4, rounded per result", () => {
+    const chatId = newChat();
+    const reply = db.insertMessage(chatId, "assistant", "done") as number;
+    db.insertToolResults(reply, [
+      { callIndex: 0, content: "a".repeat(400) },
+      { callIndex: 1, content: "b".repeat(6) },
+    ]);
+
+    const row = db.getMessage(reply);
+    // 400/4 + round(6/4) — the same per-result rounding estimateTokens uses.
+    expect(row?.tool_result_tokens).toBe(102);
+    const listed = db.getMessages(chatId) as { tool_result_tokens: number }[];
+    expect(listed[0].tool_result_tokens).toBe(102);
+  });
+
+  it("is null for a message without tool results", () => {
+    const chatId = newChat();
+    const reply = db.insertMessage(chatId, "assistant", "plain") as number;
+    expect(db.getMessage(reply)?.tool_result_tokens).toBeNull();
+  });
+});

@@ -152,4 +152,33 @@ describe("createTurnStreamer", () => {
     expect(deltas.join("")).toBe("before\n\nafter");
     expect(s.content).toBe("before\n\nafter");
   });
+
+  it("reports the turn's peak prompt after every round, for the live meter", async () => {
+    const prompts = [4_554, 26_944, 8_358];
+    let round = 0;
+    const connector = {
+      stream: (
+        _req: unknown,
+        onChunk: (c: ConnectorStreamChunk) => void,
+      ): StreamHandle => ({
+        done: (async () => {
+          onChunk({ thinkingDelta: "", contentDelta: "x" });
+          return { promptTokens: prompts[round++], evalTokens: 10 };
+        })(),
+      }),
+    };
+    const reported: number[] = [];
+    const s = createTurnStreamer(
+      args([], {
+        connector: connector as never,
+        onUsage: (promptTokens) => reported.push(promptTokens),
+      }),
+    );
+
+    await s.round();
+    await s.round();
+    await s.round();
+
+    expect(reported).toEqual([4_554, 26_944, 26_944]);
+  });
 });

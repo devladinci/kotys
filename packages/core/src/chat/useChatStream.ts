@@ -37,6 +37,7 @@ export type StreamFrameHandlers = {
   ) => void;
   onForeignDone: (requestId: number, result: ChatStreamResult) => void;
   onForeignError: () => void;
+  onUsage: (requestId: number, promptTokens: number) => void;
 };
 
 export function useChatStream(
@@ -58,6 +59,7 @@ export function useChatStream(
       if (
         msg.type !== "chat:chunk" &&
         msg.type !== "chat:tool" &&
+        msg.type !== "chat:usage" &&
         msg.type !== "chat:done" &&
         msg.type !== "chat:error"
       ) {
@@ -82,6 +84,10 @@ export function useChatStream(
         const { requestId: id, index, ...activity } = msg.payload;
         if (own) cb.onOwnToolActivity(id, index, activity as ToolActivity);
         else cb.onForeignToolActivity(id, index, activity as ToolActivity);
+        return;
+      }
+      if (msg.type === "chat:usage") {
+        cb.onUsage(requestId, msg.payload.promptTokens);
         return;
       }
       if (msg.type === "chat:done") {

@@ -1,12 +1,17 @@
 import { getDb } from "./client.js";
 import { chatExists, escapeLike, makeSnippet } from "./internal.js";
 
+// estimateTokens (chars / 4, rounded) per result, so the client's meter prices
+// replayed tool output exactly as the server's replay budget does.
+const TOOL_RESULT_TOKENS = `(SELECT SUM((LENGTH(tr.content) + 2) / 4)
+         FROM tool_results tr WHERE tr.message_id = m.id) AS tool_result_tokens`;
+
 // Secondary sort on id keeps user+assistant rows inserted in the same second
 // (created_at has unixepoch granularity) in insertion order after a refetch.
 export function getMessages(chatId: number): unknown[] {
   return getDb()
     .prepare(
-      `SELECT m.*, mo.name AS model_name
+      `SELECT m.*, mo.name AS model_name, ${TOOL_RESULT_TOKENS}
        FROM messages m LEFT JOIN models mo ON mo.id = m.model_id
        WHERE m.chat_id = ? ORDER BY m.created_at ASC, m.id ASC`,
     )
@@ -16,7 +21,7 @@ export function getMessages(chatId: number): unknown[] {
 export function getMessage(id: number): MessageRow | undefined {
   return getDb()
     .prepare(
-      `SELECT m.*, mo.name AS model_name
+      `SELECT m.*, mo.name AS model_name, ${TOOL_RESULT_TOKENS}
        FROM messages m LEFT JOIN models mo ON mo.id = m.model_id
        WHERE m.id = ?`,
     )
@@ -36,6 +41,7 @@ export type MessageRow = {
   eval_tokens: number | null;
   tokens_measured: number | null;
   tool_calls: string | null;
+  tool_result_tokens: number | null;
   created_at: number;
 };
 

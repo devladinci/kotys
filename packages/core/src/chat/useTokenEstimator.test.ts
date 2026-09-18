@@ -254,3 +254,84 @@ describe("useTokenEstimator — meter semantics", () => {
     expect(result.current.pct).toBe(112);
   });
 });
+
+describe("projectedUsedTokens tool replay", () => {
+  const measuredTurn = (
+    id: number,
+    promptTokens: number,
+    toolResultTokens: number,
+  ): TokenizedMessage => ({
+    id,
+    role: "assistant",
+    content: "b".repeat(20),
+    promptTokens,
+    toolResultTokens,
+  });
+
+  it("counts the tool output the next request replays", () => {
+    const msgs: TokenizedMessage[] = [
+      { id: 1, role: "user", content: "a".repeat(40) },
+      measuredTurn(2, 4_554, 3_000),
+    ];
+    // 4554 measured + 20/4 reply + 3000 replayed tool output.
+    expect(projectedUsedTokens(msgs)).toBe(7_559);
+  });
+
+  it("leaves out tool output too big for the replay budget", () => {
+    const msgs: TokenizedMessage[] = [
+      { id: 1, role: "user", content: "a".repeat(40) },
+      measuredTurn(2, 4_554, 22_000),
+    ];
+    expect(projectedUsedTokens(msgs)).toBe(4_559);
+  });
+
+  it("does not add an earlier turn's tool output twice", () => {
+    // Turn 2's replayed output is already inside turn 4's measured prompt.
+    const msgs: TokenizedMessage[] = [
+      measuredTurn(2, 1_000, 2_000),
+      { id: 3, role: "user", content: "c".repeat(40) },
+      measuredTurn(4, 5_000, 1_000),
+    ];
+    expect(projectedUsedTokens(msgs)).toBe(6_005);
+  });
+
+  it("shares the budget newest first, like the server", () => {
+    const msgs: TokenizedMessage[] = [
+      { id: 1, role: "user", content: "" },
+      { id: 2, role: "assistant", content: "", toolResultTokens: 4_000 },
+      { id: 3, role: "user", content: "" },
+      { id: 4, role: "assistant", content: "", toolResultTokens: 4_000 },
+    ];
+    // Unmeasured, so every turn is estimated; only turn 4 fits the budget.
+    expect(projectedUsedTokens(msgs)).toBe(4_000);
+  });
+});
+
+describe("projectedUsedTokens while a turn runs", () => {
+  const settled: TokenizedMessage[] = [
+    { id: 1, role: "user", content: "a".repeat(40) },
+    {
+      id: 2,
+      role: "assistant",
+      content: "b".repeat(20),
+      promptTokens: 4_554,
+    },
+    { id: 3, role: "user", content: "c".repeat(40) },
+  ];
+
+  it("shows the size of the request the model is working on now", () => {
+    const msgs: TokenizedMessage[] = [
+      ...settled,
+      { id: 4, role: "assistant", content: "", livePromptTokens: 26_944 },
+    ];
+    expect(projectedUsedTokens(msgs)).toBe(26_944);
+  });
+
+  it("never reads lower than the projection", () => {
+    const msgs: TokenizedMessage[] = [
+      ...settled,
+      { id: 4, role: "assistant", content: "", livePromptTokens: 100 },
+    ];
+    expect(projectedUsedTokens(msgs)).toBe(4_569);
+  });
+});

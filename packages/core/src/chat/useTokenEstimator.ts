@@ -4,6 +4,7 @@ import {
   DEFAULT_CONTEXT,
   estimateTokens,
   projectContextTokens,
+  replayedToolMessages,
 } from "@kotys/contracts";
 
 export type TokenizedMessage = {
@@ -14,14 +15,17 @@ export type TokenizedMessage = {
   evalTokens?: number;
   /** False marks a chars/4 estimate, which must never anchor the meter. */
   tokensMeasured?: boolean;
+  toolResultTokens?: number;
+  livePromptTokens?: number;
 };
 
 /**
  * Context size as the next send would assemble it, by the same rule the server
  * uses to decide when to compact — or the meter says one thing while the server
- * does another. The provider's measurement leads; that turn's own reply and
- * what followed are estimated. Turns that never reported usage are skipped, and
- * a measurement from before the summary boundary is ignored.
+ * does another. The provider's measurement leads; that turn's own reply, the
+ * tool output it replays and what followed are estimated. Turns that never
+ * reported usage are skipped, and a measurement from before the summary
+ * boundary is ignored.
  */
 export function projectedUsedTokens(
   msgs: TokenizedMessage[],
@@ -41,12 +45,27 @@ export function projectedUsedTokens(
     }
   }
   const since = anchor === -1 ? live : live.slice(anchor);
-  return projectContextTokens({
+  const replayed = replayedToolMessages(
+    live
+      .filter((m) => m.toolResultTokens)
+      .map((m) => ({ id: m.id, tokens: m.toolResultTokens ?? 0 })),
+  );
+
+  const replayTokens = (m: TokenizedMessage) =>
+    replayed.has(m.id) ? (m.toolResultTokens ?? 0) : 0;
+  const projected = projectContextTokens({
     measured: anchor === -1 ? 0 : (live[anchor].promptTokens ?? 0),
-    estimated: since.reduce((n, m) => n + estimateTokens(m.content), 0),
+    estimated: since.reduce(
+      (n, m) => n + estimateTokens(m.content) + replayTokens(m),
+      0,
+    ),
     // Misses the system block, which the client cannot see.
     fallback: estimateTokens(opts?.summary ?? ""),
   });
+
+  // A running turn re-sends its own tool traffic every round, so its latest
+  // request can be far bigger than what the next turn will carry.
+  return live.reduce((n, m) => Math.max(n, m.livePromptTokens ?? 0), projected);
 }
 
 export function useTokenEstimator(

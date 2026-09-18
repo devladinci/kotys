@@ -16,6 +16,7 @@ import {
   estimateTokens,
   IMAGE_TOKENS,
   projectContextTokens,
+  replayedToolMessages,
   usableTokens,
 } from "@kotys/contracts";
 import { compactChat } from "./compact.js";
@@ -39,8 +40,6 @@ type TurnPayload = {
   }[];
   toolResults?: { toolName: string; content: string }[];
 };
-
-const REPLAY_TOOL_BUDGET_TOKENS = 6_000;
 
 // Results match the trace by call_index: steer entries take trace slots but
 // never have a result.
@@ -91,14 +90,13 @@ function withToolResults(turns: TurnPayload[], rows: TurnRow[]): TurnPayload[] {
     list.push(r);
     byMessage.set(r.message_id, list);
   }
-  const budgeted = new Set<number>();
-  let spent = 0;
-  for (const [messageId, rows_] of [...byMessage].reverse()) {
-    const cost = rows_.reduce((n, r) => n + estimateTokens(r.content), 0);
-    if (spent + cost > REPLAY_TOOL_BUDGET_TOKENS) continue;
-    spent += cost;
-    budgeted.add(messageId);
-  }
+  const budgeted = replayedToolMessages(
+    [...byMessage].map(([id, rows_]) => ({
+      id,
+      tokens: rows_.reduce((n, r) => n + estimateTokens(r.content), 0),
+    })),
+  );
+
   return turns.flatMap((t, i) => {
     const row = rows[i];
     if (row?.role !== "assistant") return [t];

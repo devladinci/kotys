@@ -16,12 +16,9 @@ import type {
  * OpenAI usage fields — are mapped here so callers stay provider-dumb.
  */
 export type OpenAiCompatibleConfig = {
-  /** e.g. http://127.0.0.1:7777/v1 */
   baseUrl: string;
   apiKey: string;
-  /** Badge/identity written into ModelListing. */
   provider: string;
-  /** Which listing source these models count as. */
   source?: "cloud" | "local";
 };
 
@@ -72,7 +69,6 @@ const headers = (apiKey: string): Record<string, string> => ({
   ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
 });
 
-/** OpenAI tool arguments arrive as a JSON string; parse leniently. */
 const MAX_ERROR_DETAIL = 500;
 
 // The server's own words: "retry without think/tools" reads them, and a bare
@@ -160,11 +156,10 @@ const toOpenAiMessages = (messages: ConnectorChatMessage[]): OpenAiMessage[] =>
   });
 
 /**
- * Kotys's neutral think control -> the oMLX/OpenAI-compatible wire. Verified
- * against oMLX (Qwen3.8-27B): top-level reasoning_effort alone does nothing;
- * the chat template's enable_thinking is the on/off switch and reasoning_effort
- * modulates depth when thinking is on (false wins over any effort).
- * Servers without these knobs just ignore the extra body fields.
+ * Kotys's neutral think control -> the chat template: enable_thinking is the
+ * on/off switch and reasoning_effort sets depth while thinking is on. An oMLX
+ * model profile that locks these keys (forced_ct_kwargs) silently overrides
+ * them. Servers without these knobs ignore the extra body fields.
  */
 const chatTemplateKwargs = (
   think: ConnectorChatRequest["think"],
@@ -275,7 +270,6 @@ export function createOpenAiCompatibleConnector(
       }));
   };
 
-  /** Audio-model name patterns seen on OpenAI-compatible servers. */
   const listFromModels = async (): Promise<ModelListing[]> => {
     const res = await fetch(`${baseUrl}/models`, { headers: headers(apiKey) });
     if (!res.ok) throw new Error(`/models failed: ${res.status}`);
@@ -299,8 +293,15 @@ export function createOpenAiCompatibleConnector(
       }));
   };
 
+  const listModels = () => listFromStatus().catch(() => listFromModels());
+
   return {
-    listModels: () => listFromStatus().catch(() => listFromModels()),
+    listModels,
+
+    async describeModel(name) {
+      const models = await listModels();
+      return models.find((m) => m.name === name) ?? null;
+    },
 
     async chat(req) {
       const res = await fetch(`${baseUrl}/chat/completions`, {
@@ -352,7 +353,6 @@ export function createOpenAiCompatibleConnector(
             number,
             { id: string; name: string; arguments: string }
           >();
-          // SSE frames: lines separated by \n\n, payload after "data: ".
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
@@ -398,7 +398,6 @@ export function createOpenAiCompatibleConnector(
               }
             }
           }
-          // Emit accumulated tool calls exactly once, after the stream ends.
           if (toolAcc.size > 0) {
             onChunk({
               thinkingDelta: "",
