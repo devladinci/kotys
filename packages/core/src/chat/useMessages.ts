@@ -16,6 +16,7 @@ type MessageRow = {
   eval_tokens: number | null;
   tokens_measured: number | null;
   tool_calls: string | null;
+  tool_result_tokens?: number | null;
   created_at: number;
 };
 
@@ -31,6 +32,7 @@ const rowToMessage = (r: MessageRow): Message => ({
   tokensMeasured:
     r.tokens_measured == null ? undefined : r.tokens_measured === 1,
   toolCalls: parseToolCalls(r.tool_calls),
+  toolResultTokens: r.tool_result_tokens ?? undefined,
   createdAt: r.created_at,
 });
 
@@ -156,6 +158,7 @@ export function useMessages(activeChatId: number | null) {
               next[idx] = {
                 ...parsed,
                 toolCalls: parsed.toolCalls ?? current.toolCalls,
+                livePromptTokens: current.livePromptTokens,
               };
               return next;
             });

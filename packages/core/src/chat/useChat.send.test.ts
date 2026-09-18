@@ -80,6 +80,7 @@ const { resetEchoGuard } = await import("./echoGuard.js");
 const { useAppStore } = await import("../shared/useAppStore.js");
 
 const { useChat } = await import("./useChat.js");
+const { projectedUsedTokens } = await import("./useTokenEstimator.js");
 const { subscribeChatSync } = await import("./chatSync.js");
 const { renderHook, act } = await import("@testing-library/react");
 
@@ -543,5 +544,48 @@ describe("useChat send", () => {
     expect(streams).toHaveLength(2);
     expect(isChatBusy(7)).toBe(true);
     expect(getStreamingId(7)).not.toBe(firstTurnId);
+  });
+
+  it("meters the running turn's real request, then what the next turn carries", async () => {
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("read the repo", []);
+    });
+    const requestId = sentOf("chat:stream")[0].payload.requestId as number;
+    const reply = () => result.current.messages.find((m) => m.id === requestId);
+
+    await act(async () => {
+      emitFrame({
+        type: "chat:usage",
+        chatId: 7,
+        seq: 1,
+        payload: { requestId, promptTokens: 26_944 },
+      });
+    });
+
+    expect(reply()?.livePromptTokens).toBe(26_944);
+    expect(projectedUsedTokens(result.current.messages)).toBe(26_944);
+
+    await act(async () => {
+      emitFrame({
+        type: "chat:done",
+        chatId: 7,
+        seq: 2,
+        payload: {
+          requestId,
+          result: {
+            ...emptyResult,
+            promptTokens: 4_554,
+            tokensMeasured: true,
+            toolResultTokens: 3_000,
+          },
+        },
+      });
+    });
+
+    expect(reply()?.livePromptTokens).toBeUndefined();
+    // 4554 measured + "done" + 3000 of tool output the next turn replays.
+    expect(projectedUsedTokens(result.current.messages)).toBe(7_555);
   });
 });

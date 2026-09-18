@@ -6,7 +6,6 @@ import {
 } from "../usage.js";
 import type { ConnectorChatMessage, LlmConnector } from "../llm/types.js";
 
-/** One round's tool calls, as the connector reports them. */
 export type RoundToolCall = {
   id?: string;
   function: { name: string; arguments: Record<string, unknown> };
@@ -24,6 +23,7 @@ export type TurnStreamerArgs = {
   initialThink: TurnThink;
   signal: AbortSignal;
   onDelta: (thinkingDelta: string, contentDelta: string) => void;
+  onUsage?: (peakPromptTokens: number) => void;
 };
 
 export type TurnStreamer = {
@@ -40,7 +40,6 @@ export type TurnStreamer = {
   round(): Promise<RoundToolCall[]>;
   /** One round with the tools array dropped (final-answer forcing). */
   roundWithoutTools(think?: TurnThink): Promise<RoundToolCall[]>;
-  /** Separate text before and after tool use. */
   separator(): void;
 };
 
@@ -54,7 +53,15 @@ const isAbortError = (err: unknown) =>
  * advertises an empty tools array.
  */
 export function createTurnStreamer(args: TurnStreamerArgs): TurnStreamer {
-  const { connector, modelName, chatMessages, tools, signal, onDelta } = args;
+  const {
+    connector,
+    modelName,
+    chatMessages,
+    tools,
+    signal,
+    onDelta,
+    onUsage,
+  } = args;
   let content = "";
   let thinking = "";
   let usage: TurnUsage = emptyUsage();
@@ -92,6 +99,7 @@ export function createTurnStreamer(args: TurnStreamerArgs): TurnStreamer {
     );
     const roundUsage = await handle.done;
     if (roundUsage) usage = applyConnectorRoundUsage(usage, roundUsage);
+    if (usage.promptTokens > 0) onUsage?.(usage.promptTokens);
     return roundToolCalls;
   };
 
@@ -146,8 +154,7 @@ export function createTurnStreamer(args: TurnStreamerArgs): TurnStreamer {
     separator() {
       // The break must also land in the accumulated content: the persisted
       // writes (progress tick, final result) store `content`, and without it
-      // every round boundary collapses once the message is read back from the
-      // database — the live stream looked right while the saved row did not.
+      // every round boundary collapses once the message is read back.
       if (content) {
         content += "\n\n";
         onDelta("", "\n\n");

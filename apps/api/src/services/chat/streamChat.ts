@@ -9,6 +9,7 @@ import type {
 } from "@kotys/contracts";
 import {
   DEFAULT_CONTEXT,
+  estimateTokens,
   estimateTokensFromChars,
   isSteerActivity,
   OLLAMA_CLOUD_HOST,
@@ -46,6 +47,7 @@ import { getSkillAdvertisement } from "../skills/registry.js";
 import { spawnAgentDefinition, SPAWN_AGENT_NAME } from "./subagentSpawn.js";
 import { getEnabledTools } from "./toolEnabled.js";
 import { maybeNotify } from "./notify.js";
+import { syncModelWindow } from "./modelWindow.js";
 import { createTurnStreamer, isAbortError } from "./turnStream.js";
 import { createToolExecutor } from "./toolCallExecutor.js";
 import {
@@ -59,6 +61,7 @@ import type { BudgetStop } from "./turnWrapUp.js";
 export interface StreamCallbacks {
   onChunk: (chunk: { thinkingDelta: string; contentDelta: string }) => void;
   onToolActivity: (activity: ToolActivity, index: number) => void;
+  onUsage?: (peakPromptTokens: number) => void;
   /** Drains (returns and clears) the steering messages queued so far. */
   pendingAppends?: () => SteerAppend[];
 }
@@ -102,6 +105,7 @@ export async function streamChat(
   const enabledMap = getEnabledTools();
   const toolEnabled = (name: string) => enabledMap[name] !== false;
   const streamChatId = getChatIdForMessage(requestId);
+  await syncModelWindow(connector, model.name, streamChatId);
   // The stored row wins: the client's listing dates from when the model was
   // picked, and the window can change provider-side after that.
   const contextLength =
@@ -171,8 +175,9 @@ export async function streamChat(
     updateMessage(requestId, {
       content: streamer.content,
       thinking: streamer.thinking,
-      // First round, not the peak: the peak includes tool traffic that later
-      // turns never replay.
+      // First round, not the peak: the peak re-sends this turn's own tool
+      // traffic, which the next turn replays only within budget and prices
+      // separately (toolResultTokens).
       promptTokens: streamer.usage.basePromptTokens || undefined,
       evalTokens: streamer.usage.evalTokens || undefined,
       tokensMeasured: streamer.usage.basePromptTokens > 0 || undefined,
@@ -199,6 +204,7 @@ export async function streamChat(
     initialThink,
     signal,
     onDelta: emitChunk,
+    onUsage: callbacks.onUsage,
   });
 
   const cloudApiKey = getSetting("api_key") ?? "";
@@ -403,5 +409,9 @@ export async function streamChat(
     evalTokens: turnUsage.evalTokens,
     tokensMeasured: turnUsage.tokensMeasured,
     toolCalls: trace,
+    toolResultTokens: persist.reduce(
+      (n, p) => n + estimateTokens(p.content),
+      0,
+    ),
   };
 }

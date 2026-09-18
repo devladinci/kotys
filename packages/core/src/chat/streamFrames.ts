@@ -56,6 +56,18 @@ export function applyToolActivity(
   return next;
 }
 
+export function applyUsage(
+  messages: Message[],
+  requestId: number,
+  promptTokens: number,
+): Message[] {
+  const idx = messages.findIndex((m) => m.id === requestId);
+  if (idx === -1) return messages;
+  const next = [...messages];
+  next[idx] = { ...messages[idx], livePromptTokens: promptTokens };
+  return next;
+}
+
 export function applyDone(
   messages: Message[],
   requestId: number,
@@ -73,6 +85,8 @@ export function applyDone(
     evalTokens: result.evalTokens || m.evalTokens,
     tokensMeasured: result.tokensMeasured || m.tokensMeasured,
     toolCalls: result.toolCalls.length > 0 ? result.toolCalls : m.toolCalls,
+    toolResultTokens: result.toolResultTokens || m.toolResultTokens,
+    livePromptTokens: undefined,
   };
   return next;
 }

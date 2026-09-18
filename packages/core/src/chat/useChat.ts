@@ -38,7 +38,12 @@ import {
   subscribeStreaming,
 } from "./streamState.js";
 import { useMessages } from "./useMessages.js";
-import { applyChunk, applyDone, applyToolActivity } from "./streamFrames.js";
+import {
+  applyChunk,
+  applyDone,
+  applyToolActivity,
+  applyUsage,
+} from "./streamFrames.js";
 import { useChatActions } from "./useChatActions.js";
 import { useChatStream } from "./useChatStream.js";
 import { useStreamAdoption } from "./useStreamAdoption.js";
@@ -268,6 +273,9 @@ export function useChat({
         result.toolCalls.forEach(settleSteer);
         setMessages((prev) => applyDone(prev, requestId, result));
       },
+      onUsage: (requestId, promptTokens) => {
+        setMessages((prev) => applyUsage(prev, requestId, promptTokens));
+      },
       // The server already persisted the error into the row.
       onForeignError: refreshMessages,
     },
@@ -354,6 +362,8 @@ export function useChat({
                 tokensMeasured: result.tokensMeasured || undefined,
                 toolCalls:
                   result.toolCalls.length > 0 ? result.toolCalls : undefined,
+                toolResultTokens: result.toolResultTokens || undefined,
+                livePromptTokens: undefined,
               }
             : m,
         ),
@@ -393,6 +403,7 @@ export function useChat({
                 ...m,
                 content: errorContent,
                 thinking: buf?.thinking || undefined,
+                livePromptTokens: undefined,
               }
             : m,
         ),

@@ -15,17 +15,38 @@ export const OLLAMA_LOCAL_HOST = "http://localhost:11434";
  */
 export const LOCAL_CONTEXT = 32_768;
 
-export const estimateTokensFromChars = (chars: number) =>
+export const estimateTokensFromChars = (chars: number): number =>
   Math.max(0, Math.round(chars / 4));
 
-export const estimateTokens = (text: string) =>
+export const estimateTokens = (text: string): number =>
   estimateTokensFromChars(text.length);
 
 /** Compact threshold: the window less room for a reply, capped at a quarter. */
-export const usableTokens = (ctx: number) =>
+export const usableTokens = (ctx: number): number =>
   ctx - Math.min(COMPACT_BUFFER, Math.floor(ctx / 4));
 
 export const IMAGE_TOKENS = 800;
+
+export const REPLAY_TOOL_BUDGET_TOKENS = 6_000;
+
+/**
+ * Which turns carry their tool results into the next request. Shared by the
+ * server's replay and the client's meter, so the meter counts exactly what
+ * gets sent.
+ */
+export const replayedToolMessages = (
+  costs: { id: number; tokens: number }[],
+): Set<number> => {
+  const replayed = new Set<number>();
+  let spent = 0;
+  for (let i = costs.length - 1; i >= 0; i--) {
+    const { id, tokens } = costs[i];
+    if (spent + tokens > REPLAY_TOOL_BUDGET_TOKENS) continue;
+    spent += tokens;
+    replayed.add(id);
+  }
+  return replayed;
+};
 
 /**
  * The one formula for "how big is the next request", shared by the server's
@@ -41,7 +62,7 @@ export const projectContextTokens = (input: {
   (input.measured > 0 ? input.measured : input.fallback) + input.estimated;
 
 /** Share of the model's window, so half a window reads as 50%. */
-export const contextPct = (used: number, ctx: number) =>
+export const contextPct = (used: number, ctx: number): number =>
   ctx <= 0 ? 0 : Math.min(999, Math.round((used / ctx) * 100));
 
 /**
@@ -49,7 +70,7 @@ export const contextPct = (used: number, ctx: number) =>
  * rendered as the unreadable "1049k". Drops the decimal once the leading digits
  * carry enough precision on their own.
  */
-export const fmtTokens = (n: number) => {
+export const fmtTokens = (n: number): string => {
   if (n >= 1_000_000) {
     const m = n / 1_000_000;
     return `${m >= 10 ? Math.round(m) : m.toFixed(1)}M`;

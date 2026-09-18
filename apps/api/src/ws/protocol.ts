@@ -52,6 +52,12 @@ export type ServerMessage =
       payload: ToolEvent;
     }
   | {
+      type: "chat:usage";
+      seq: number;
+      chatId?: number;
+      payload: { requestId: number; promptTokens: number };
+    }
+  | {
       type: "chat:done";
       seq: number;
       chatId?: number;

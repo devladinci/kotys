@@ -41,4 +41,5 @@ export type ChatStreamResult = {
   /** True when the provider reported these counts; false = chars/4 estimate. */
   tokensMeasured: boolean;
   toolCalls: ToolActivity[];
+  toolResultTokens?: number;
 };

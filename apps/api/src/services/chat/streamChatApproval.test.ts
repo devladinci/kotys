@@ -568,8 +568,12 @@ describe("streamChat stop", () => {
       });
     };
 
+  const isChatCall = (url: string | URL) =>
+    String(url).endsWith("/chat/completions");
+
   const stubOmlx = (replies: ReturnType<typeof sse>[]) => {
-    const fetchMock = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (!isChatCall(url)) return new Response("", { status: 404 });
       const reply = replies.shift();
       if (!reply) throw new Error("unexpected request");
       return new Response(reply(init?.signal), {
@@ -627,7 +631,19 @@ describe("streamChat stop", () => {
       ["list", "done"],
     ]);
     // No retry and no forced wrap-up round after a stop.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => isChatCall(url)),
+    ).toHaveLength(2);
+  });
+
+  it("re-reads the model's window from the server before the first request", async () => {
+    const fetchMock = stubOmlx([sse([{ content: "Hi" }], "done")]);
+
+    await streamChat(omlxReq(), cbs(), new AbortController().signal);
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls[0]).toMatch(/\/models\/status$/);
+    expect(urls.findIndex(isChatCall)).toBeGreaterThan(0);
   });
 
   it("a provider failure mid-reply still fails the turn", async () => {
