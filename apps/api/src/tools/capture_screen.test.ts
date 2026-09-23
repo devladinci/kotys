@@ -4,9 +4,14 @@ import {
   pngSize,
   rememberFrame,
   resetFramesForTests,
+  rememberGeometry,
+  getGeometry,
+  resetGeometriesForTests,
   imageToPoints,
   pointsToImage,
+  imageToScreenPoints,
   type WindowInfo,
+  type CaptureGeometry,
 } from "./capture_screen.js";
 import type { ToolContext } from "./types.js";
 import os from "node:os";
@@ -94,6 +99,154 @@ describe("imageToPoints / pointsToImage", () => {
     expect(
       imageToPoints(9999, -3, { width: 100, height: 100, w: 0, h: 50 }),
     ).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("capture geometry memory", () => {
+  beforeEach(() => {
+    resetFramesForTests();
+    resetGeometriesForTests();
+  });
+
+  it("round-trips a window-scoped capture", () => {
+    const geom: CaptureGeometry = {
+      scope: "window",
+      app: "Claude",
+      x: 100,
+      y: 50,
+      width: 1280,
+      height: 827,
+      w: 1600,
+      h: 1034,
+    };
+    rememberGeometry("chat-1", geom);
+    expect(getGeometry("chat-1")).toEqual(geom);
+  });
+
+  it("round-trips a full-screen capture", () => {
+    const geom: CaptureGeometry = {
+      scope: "screen",
+      width: 1280,
+      height: 827,
+      w: 1728,
+      h: 1117,
+    };
+    rememberGeometry("chat-1", geom);
+    expect(getGeometry("chat-1")).toEqual(geom);
+  });
+
+  it("returns null when nothing was stored", () => {
+    expect(getGeometry("chat-9")).toBeNull();
+  });
+
+  it("keeps only the latest capture per chat", () => {
+    rememberGeometry("chat-1", {
+      scope: "screen",
+      width: 100,
+      height: 100,
+      w: 200,
+      h: 200,
+    });
+    rememberGeometry("chat-1", {
+      scope: "window",
+      app: "X",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      w: 20,
+      h: 20,
+    });
+    expect(getGeometry("chat-1")?.scope).toBe("window");
+  });
+
+  it("evicts the oldest chat beyond 64 entries", () => {
+    for (let i = 0; i < 64; i++)
+      rememberGeometry(`chat-${i}`, {
+        scope: "screen",
+        width: 1,
+        height: 1,
+        w: 1,
+        h: 1,
+      });
+    rememberGeometry("chat-64", {
+      scope: "screen",
+      width: 1,
+      height: 1,
+      w: 1,
+      h: 1,
+    });
+    expect(getGeometry("chat-0")).toBeNull();
+    expect(getGeometry("chat-64")).not.toBeNull();
+  });
+});
+
+describe("imageToScreenPoints", () => {
+  it("maps image pixels to absolute screen points on a full-screen capture", () => {
+    const geom: CaptureGeometry = {
+      scope: "screen",
+      width: 1280,
+      height: 827,
+      w: 1728,
+      h: 1117,
+    };
+    expect(imageToScreenPoints(640, 413, geom)).toEqual({
+      x: Math.round(640 * (1728 / 1280)),
+      y: Math.round(413 * (1117 / 827)),
+    });
+  });
+
+  it("maps window-shot pixels to absolute screen points using the window origin", () => {
+    const geom: CaptureGeometry = {
+      scope: "window",
+      app: "Claude",
+      x: 120,
+      y: 90,
+      width: 800,
+      height: 500,
+      w: 800,
+      h: 500,
+    };
+    expect(imageToScreenPoints(400, 250, geom)).toEqual({ x: 520, y: 340 });
+  });
+
+  it("handles Retina window shots", () => {
+    const geom: CaptureGeometry = {
+      scope: "window",
+      app: "Claude",
+      x: 0,
+      y: 0,
+      width: 1600,
+      height: 1034,
+      w: 2400,
+      h: 1551,
+    };
+    const p = imageToScreenPoints(800, 500, geom);
+    expect(p.x).toBe(Math.round(800 * (2400 / 1600)));
+    expect(p.y).toBe(Math.round(500 * (1551 / 1034)));
+  });
+
+  it("clamps out-of-range coordinates into the capture bounds", () => {
+    const geom: CaptureGeometry = {
+      scope: "screen",
+      width: 100,
+      height: 100,
+      w: 200,
+      h: 200,
+    };
+    expect(imageToScreenPoints(9999, 9999, geom)).toEqual({ x: 200, y: 200 });
+    expect(imageToScreenPoints(-5, -5, geom)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("degrades to the origin on a zero-size capture", () => {
+    const geom: CaptureGeometry = {
+      scope: "screen",
+      width: 0,
+      height: 0,
+      w: 0,
+      h: 0,
+    };
+    expect(imageToScreenPoints(50, 50, geom)).toEqual({ x: 0, y: 0 });
   });
 });
 

@@ -3,6 +3,7 @@ import {
   validateActions,
   describeActions,
   keyCommands,
+  clickTarget,
   type ControlAction,
 } from "./control_screen.js";
 import type { ToolContext } from "./types.js";
@@ -77,6 +78,74 @@ describe("keyCommands", () => {
     expect(
       keyCommands({ op: "key", key: "return", modifiers: ["cmd", "shift"] }),
     ).toEqual(["kp:return"]);
+  });
+});
+
+describe("clickTarget", () => {
+  const target = {
+    id: 1,
+    app: "Claude",
+    title: "",
+    x: 100,
+    y: 200,
+    width: 800,
+    height: 600,
+  };
+
+  it("offsets window-relative points by the window origin", () => {
+    expect(clickTarget(120, 80, { target, mode: "window" })).toEqual({
+      x: 220,
+      y: 280,
+    });
+  });
+
+  it("passes absolute points through untouched", () => {
+    expect(clickTarget(864, 528, { target: null, mode: "absolute" })).toEqual({
+      x: 864,
+      y: 528,
+    });
+  });
+
+  it("rejects absolute coordinates that would double-offset a window-scoped click", () => {
+    expect(
+      clickTarget(1728, 1117, {
+        target,
+        mode: "window",
+      }).error,
+    ).toMatch(/outside/);
+  });
+
+  it("rejects clicks outside the target window with a corrective hint", () => {
+    const res = clickTarget(900, 100, { target, mode: "window" });
+    expect(res.error).toMatch(/relative to the window/);
+  });
+
+  it("accepts clicks on the window edges", () => {
+    expect(clickTarget(0, 0, { target, mode: "window" })).toEqual({
+      x: 100,
+      y: 200,
+    });
+    expect(clickTarget(800, 600, { target, mode: "window" })).toEqual({
+      x: 900,
+      y: 800,
+    });
+  });
+
+  it("rejects negative and off-screen absolute clicks", () => {
+    expect(
+      clickTarget(-5, 0, {
+        target: null,
+        mode: "absolute",
+        screen: { w: 1728, h: 1117 },
+      }).error,
+    ).toMatch(/outside/);
+    expect(
+      clickTarget(99999, 0, {
+        target: null,
+        mode: "absolute",
+        screen: { w: 1728, h: 1117 },
+      }).error,
+    ).toMatch(/outside/);
   });
 });
 
