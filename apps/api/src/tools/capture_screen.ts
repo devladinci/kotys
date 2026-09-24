@@ -23,6 +23,7 @@ import type { ToolContext } from "./types.js";
 const DEFAULT_MAX_DIM = 1280;
 const MIN_WINDOW_DIM = 60;
 const THUMB_MAX_DIM = 384;
+const MAX_GEOMETRIES = 64;
 
 export type WindowInfo = {
   id: number;
@@ -33,6 +34,66 @@ export type WindowInfo = {
   x: number;
   y: number;
 };
+
+export type CaptureGeometry =
+  | {
+      scope: "screen";
+      width: number;
+      height: number;
+      w: number;
+      h: number;
+    }
+  | {
+      scope: "window";
+      app: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      w: number;
+      h: number;
+    };
+
+const captureGeometries = new Map<string, CaptureGeometry>();
+
+/** Store the geometry of a chat's last capture; the control tool reads it back. */
+export function rememberGeometry(chatId: string, geom: CaptureGeometry): void {
+  if (captureGeometries.size >= MAX_GEOMETRIES) {
+    const oldest = captureGeometries.keys().next().value;
+    if (oldest !== undefined) captureGeometries.delete(oldest);
+  }
+  captureGeometries.set(chatId, geom);
+}
+
+export function getGeometry(chatId: string): CaptureGeometry | null {
+  return captureGeometries.get(chatId) ?? null;
+}
+
+export function resetGeometriesForTests(): void {
+  captureGeometries.clear();
+}
+
+export function imageToScreenPoints(
+  x: number,
+  y: number,
+  geom: CaptureGeometry,
+): { x: number; y: number } {
+  const w = geom.w <= 0 || geom.width <= 0 ? 0 : geom.w / geom.width;
+  const h = geom.h <= 0 || geom.height <= 0 ? 0 : geom.h / geom.height;
+  if (w <= 0 || h <= 0) return { x: 0, y: 0 };
+  const origin =
+    geom.scope === "window" ? { x: geom.x, y: geom.y } : { x: 0, y: 0 };
+  return {
+    x: Math.max(
+      origin.x,
+      Math.min(origin.x + geom.w, origin.x + Math.round(x * w)),
+    ),
+    y: Math.max(
+      origin.y,
+      Math.min(origin.y + geom.h, origin.y + Math.round(y * h)),
+    ),
+  };
+}
 
 const WINDOW_LIST_JXA = `
 ObjC.import('CoreGraphics');
@@ -61,7 +122,7 @@ JSON.stringify({
 });
 `;
 
-export type ScreenInfo = { w: number; h: number };
+type ScreenInfo = { w: number; h: number };
 
 export type ImageGeom = { width: number; height: number; w: number; h: number };
 
@@ -96,9 +157,7 @@ export function pointsToImage(
   };
 }
 
-export async function getScreenInfo(
-  signal: AbortSignal,
-): Promise<ScreenInfo | null> {
+async function getScreenInfo(signal: AbortSignal): Promise<ScreenInfo | null> {
   try {
     const { stdout } = await exec(
       "osascript",
@@ -256,6 +315,11 @@ export const definition: ToolDefinition = {
           description:
             "Long side of the image in pixels. Larger means more readable and more tokens.",
         },
+        force: {
+          type: "boolean",
+          description:
+            "Skip the unchanged-frame dedup and always attach a fresh image. Use when the capture is your verification step and 'unchanged' would leave you acting on stale state.",
+        },
       },
     },
   },
@@ -293,6 +357,7 @@ export async function execute(
   }
 
   const appQuery = typeof args.app === "string" ? args.app.trim() : "";
+  const force = args.force === true;
 
   if (appQuery.toLowerCase() === "list") {
     const listing = await listOpenApps(ctx.signal);
@@ -383,7 +448,30 @@ export async function execute(
   const hash = sha256(png);
   const key = `${ctx.chatId ?? 0}:${target ? target.app.toLowerCase() : "screen"}`;
 
-  if (rememberFrame(key, hash)) {
+  const screen = await getScreenInfo(ctx.signal);
+  const geometry: CaptureGeometry = target
+    ? {
+        scope: "window",
+        app: target.app,
+        x: target.x,
+        y: target.y,
+        width,
+        height,
+        w: target.width,
+        h: target.height,
+      }
+    : {
+        scope: "screen",
+        width,
+        height,
+        w: screen?.w ?? width,
+        h: screen?.h ?? height,
+      };
+  if (ctx.chatId !== undefined) {
+    rememberGeometry(String(ctx.chatId), geometry);
+  }
+
+  if (!force && rememberFrame(key, hash)) {
     return {
       content: JSON.stringify({
         observed: label,
@@ -396,7 +484,6 @@ export async function execute(
 
   const thumb = await makeThumbnail(png);
 
-  const screen = await getScreenInfo(ctx.signal);
   const scale =
     screen && screen.w > 0 ? Number((screen.w / width).toFixed(4)) : undefined;
 

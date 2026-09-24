@@ -4,8 +4,8 @@ import type { ToolContext } from "./types.js";
 import {
   listWindows,
   pickWindow,
-  getScreenInfo,
-  imageToPoints,
+  getGeometry,
+  imageToScreenPoints,
   type WindowInfo,
 } from "./capture_screen.js";
 
@@ -403,6 +403,56 @@ async function resolveTarget(
   return { target };
 }
 
+export function clickTarget(
+  x: number,
+  y: number,
+  opts: {
+    target: WindowInfo | null;
+    mode: "window" | "absolute";
+    screen?: { w: number; h: number };
+  },
+): { x: number; y: number; error?: string } {
+  if (!opts.target) {
+    const bounds = opts.screen ?? {
+      w: Number.MAX_SAFE_INTEGER,
+      h: Number.MAX_SAFE_INTEGER,
+    };
+    if (x < 0 || y < 0 || x > bounds.w || y > bounds.h) {
+      return {
+        x,
+        y,
+        error: `click (${x},${y}) is outside the screen${opts.screen ? ` (0,0 ${bounds.w}×${bounds.h})` : ""}.`,
+      };
+    }
+    return { x, y };
+  }
+  const t = opts.target;
+  if (opts.mode === "absolute") {
+    const inside =
+      x >= t.x && x <= t.x + t.width && y >= t.y && y <= t.y + t.height;
+    if (!inside) {
+      return {
+        x,
+        y,
+        error:
+          `click (${x},${y}) is outside the ${t.app} window (${t.x},${t.y} ${t.width}×${t.height}). ` +
+          "If these are absolute screen points from a full-screen capture, retry without `app`.",
+      };
+    }
+    return { x, y };
+  }
+  if (x < 0 || y < 0 || x > t.width || y > t.height) {
+    return {
+      x,
+      y,
+      error:
+        `click (${x},${y}) is outside the ${t.app} window (${t.width}×${t.height}). ` +
+        'With `app` set, coordinates are relative to the window\'s top-left corner — pass image-pixel coordinates with space:"image", or window-relative points.',
+    };
+  }
+  return { x: t.x + x, y: t.y + y };
+}
+
 export async function execute(
   args: ToolArgs,
   ctx: ToolContext,
@@ -458,49 +508,52 @@ export async function execute(
 
   const space: CoordinateSpace = args.space === "image" ? "image" : "points";
   const doVerify = args.verify === true;
-  let imageGeom: {
-    width: number;
-    height: number;
-    w: number;
-    h: number;
-  } | null = null;
+  const chatId = ctx.chatId === undefined ? "" : String(ctx.chatId);
+  const lastGeometry = space === "image" ? getGeometry(chatId) : null;
 
-  if (space === "image") {
-    if (!target) {
+  if (space === "image" && !target) {
+    if (!lastGeometry) {
       return {
         content:
-          'Error: space:"image" with absolute coordinates needs screen size, which comes from a capture_screen of the whole screen. Capture first, then pass its reported `screen` and `scale` via a window-scoped call or retry with space:"points".',
+          'Error: space:"image" with absolute coordinates needs a prior capture_screen of the whole screen (it stores the screen size). Capture first, then retry, or use space:"points".',
         activity: {
           status: "error",
           error: "space=image requires a prior full-screen capture",
         },
       };
     }
-    const screen = await getScreenInfo(ctx.signal);
-    if (!screen) {
+    if (lastGeometry.scope !== "screen") {
       return {
         content:
-          'Error: could not read the display size, so image coordinates cannot be converted. Retry with space:"points".',
+          `Error: the last capture was of ${JSON.stringify(lastGeometry.app)}'s window, not the whole screen, ` +
+          "so image coordinates cannot be resolved as absolute screen points. Capture the whole screen first, or pass `app` to click in that window.",
         activity: {
           status: "error",
-          error: "screen size unavailable",
+          error: "space=image screen geometry missing",
         },
       };
     }
-    imageGeom = {
-      width: screen.w,
-      height: screen.h,
-      w: target.width,
-      h: target.height,
-    };
   }
 
-  const toLocal = (x: number, y: number): { x: number; y: number } => {
+  const resolveClick = (
+    action: Extract<ControlAction, { op: "click" }>,
+  ): { x: number; y: number; error?: string } => {
     if (space === "image") {
-      const p = imageToPoints(x, y, imageGeom!);
-      return { x: p.x, y: p.y };
+      if (!lastGeometry) return { x: action.x, y: action.y };
+      const screenPoint = imageToScreenPoints(action.x, action.y, lastGeometry);
+      return clickTarget(screenPoint.x, screenPoint.y, {
+        target,
+        mode: "absolute",
+        screen: { w: lastGeometry.w, h: lastGeometry.h },
+      });
     }
-    return { x, y };
+    return clickTarget(action.x, action.y, {
+      target,
+      mode: target ? "window" : "absolute",
+      screen: lastGeometry
+        ? { w: lastGeometry.w, h: lastGeometry.h }
+        : undefined,
+    });
   };
 
   try {
@@ -514,10 +567,14 @@ export async function execute(
           ctx.signal,
         );
       } else if (action.op === "click") {
-        const local = toLocal(action.x, action.y);
-        const x = target ? target.x + local.x : local.x;
-        const y = target ? target.y + local.y : local.y;
-        await runCliclick([`c:${x},${y}`], ctx.signal);
+        const resolved = resolveClick(action);
+        if (resolved.error) {
+          return {
+            content: `Error: ${resolved.error}`,
+            activity: { status: "error", error: resolved.error },
+          };
+        }
+        await runCliclick([`c:${resolved.x},${resolved.y}`], ctx.signal);
       } else if (action.op === "key" && action.modifiers?.length) {
         const mods = action.modifiers
           .map((m) => MODIFIER_FLAGS[m])
