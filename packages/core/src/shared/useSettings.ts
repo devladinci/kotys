@@ -10,11 +10,15 @@ export function useSettings() {
     omlxApiKeyPresent,
     defaultModel,
     hydrated,
+    webSearchProvider,
+    searxngUrl,
     setApiKey,
     setOmlxEnabled,
     setOmlxHost,
     setOmlxApiKey,
     setDefaultModel,
+    setWebSearchProvider,
+    setSearxngUrl,
     hydrate,
   } = useAppStore();
 
@@ -30,10 +34,14 @@ export function useSettings() {
     omlxApiKeyPresent,
     defaultModel,
     hydrated,
+    webSearchProvider,
+    searxngUrl,
     setApiKey,
     setOmlxEnabled,
     setOmlxHost,
     setOmlxApiKey,
     setDefaultModel,
+    setWebSearchProvider,
+    setSearxngUrl,
   };
 }
