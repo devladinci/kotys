@@ -1,5 +1,10 @@
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
 import type { ToolContext } from "./types.js";
+import {
+  getWebSearchProvider,
+  searchViaSearxng,
+  type NormalizedSearchResult,
+} from "./webSearchProviders.js";
 
 const SEARCH_RESULT_CHARS = 2_000;
 
@@ -24,32 +29,51 @@ export const definition: ToolDefinition = {
   },
 };
 
-export async function execute(
+const toActivity = (results: NormalizedSearchResult[]) =>
+  results.map((r) => ({ title: r.title, url: r.url }));
+
+const searchOllama = async (
   args: ToolArgs,
   ctx: ToolContext,
-): Promise<ToolResult> {
-  const maxResults = Math.min(Math.max(Number(args.max_results) || 5, 1), 8);
+  maxResults: number,
+): Promise<NormalizedSearchResult[]> => {
   // The SDK's WebSearchResult type only declares `content`, but ollama.com
   // returns title and url too — keep them through a looser cast.
   const res = (await ctx.ollama.webSearch({
     query: String(args.query ?? ""),
     maxResults,
   })) as { results?: { title?: string; url?: string; content?: string }[] };
-  const results = (res.results ?? []).slice(0, maxResults);
+  return (res.results ?? []).slice(0, maxResults).map((r) => ({
+    title: r.title ?? "",
+    url: r.url ?? "",
+    content: (r.content ?? "").slice(0, SEARCH_RESULT_CHARS),
+  }));
+};
+
+export async function execute(
+  args: ToolArgs,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const maxResults = Math.min(Math.max(Number(args.max_results) || 5, 1), 8);
+  const query = String(args.query ?? "");
+
+  const provider = getWebSearchProvider();
+  const results =
+    provider === "searxng"
+      ? await searchViaSearxng(query, maxResults, ctx.signal)
+      : await searchOllama(args, ctx, maxResults);
+
   return {
     content: JSON.stringify(
       results.map((r) => ({
         title: r.title,
         url: r.url,
-        content: (r.content ?? "").slice(0, SEARCH_RESULT_CHARS),
+        content: r.content.slice(0, SEARCH_RESULT_CHARS),
       })),
     ),
     activity: {
       query: typeof args.query === "string" ? args.query : undefined,
-      results: results.map((r) => ({
-        title: r.title ?? "",
-        url: r.url ?? "",
-      })),
+      results: toActivity(results),
     },
   };
 }

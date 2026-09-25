@@ -17,6 +17,8 @@ const PINNED_CHATS_SETTING = "pinned_chat_ids";
 const THINKING_EFFORT_SETTING = "thinking_effort";
 const PERMISSION_MODE_SETTING = "permission_mode";
 const STT_MODEL_SETTING = "stt_model";
+const WEB_SEARCH_PROVIDER_SETTING = "web_search_provider";
+const SEARXNG_URL_SETTING = "searxng_url";
 
 export const DEFAULT_MODEL: ModelListing = {
   name: "kimi-k2.7-code",
@@ -100,6 +102,8 @@ interface AppState {
   thinkingEffort: ThinkEffort;
   permissionMode: PermissionMode;
   sttModel: string | null;
+  webSearchProvider: "ollama" | "searxng";
+  searxngUrl: string;
   chatsVersion: number;
   /** Ids present in the last loaded chat list; chatSync consults it. */
   knownChatIds: Set<number>;
@@ -118,6 +122,8 @@ interface AppState {
   setThinkingEffort: (effort: ThinkEffort) => Promise<void>;
   setPermissionMode: (mode: PermissionMode) => Promise<void>;
   setSttModel: (model: string | null) => Promise<void>;
+  setWebSearchProvider: (provider: "ollama" | "searxng") => Promise<void>;
+  setSearxngUrl: (url: string) => Promise<void>;
   hydrate: () => Promise<void>;
   /** Reset after a token was replaced, so a fresh hydrate can run. */
   resetAuth: () => void;
@@ -146,6 +152,8 @@ export const useAppStore = create<AppState>((set) => ({
   thinkingEffort: "medium",
   permissionMode: "copilot",
   sttModel: null,
+  webSearchProvider: "ollama",
+  searxngUrl: "",
   chatsVersion: 0,
   knownChatIds: new Set<number>(),
   settingsOpen: false,
@@ -173,6 +181,19 @@ export const useAppStore = create<AppState>((set) => ({
   setOmlxApiKey: async (key) => {
     set({ omlxApiKey: key, omlxApiKeyPresent: key.length > 0 });
     await getRpc().settings.set({ key: OMLX_API_KEY_SETTING, value: key });
+  },
+
+  setWebSearchProvider: async (provider) => {
+    set({ webSearchProvider: provider });
+    await getRpc().settings.set({
+      key: WEB_SEARCH_PROVIDER_SETTING,
+      value: provider,
+    });
+  },
+
+  setSearxngUrl: async (url) => {
+    set({ searxngUrl: url });
+    await getRpc().settings.set({ key: SEARXNG_URL_SETTING, value: url });
   },
 
   setDefaultModel: async (model) => {
@@ -252,6 +273,8 @@ export const useAppStore = create<AppState>((set) => ({
       Awaited<ReturnType<typeof rpc.settings.get>>,
       { present: boolean },
       Awaited<ReturnType<typeof rpc.settings.get>>,
+      Awaited<ReturnType<typeof rpc.settings.get>>,
+      Awaited<ReturnType<typeof rpc.settings.get>>,
     ];
     try {
       values = await Promise.all([
@@ -266,6 +289,8 @@ export const useAppStore = create<AppState>((set) => ({
         rpc.settings.get({ key: PERMISSION_MODE_SETTING }),
         rpc.settings.hasSecret({ key: API_KEY_SETTING }),
         rpc.settings.get({ key: STT_MODEL_SETTING }),
+        rpc.settings.get({ key: WEB_SEARCH_PROVIDER_SETTING }),
+        rpc.settings.get({ key: SEARXNG_URL_SETTING }),
       ]);
     } catch (error) {
       if (isUnauthorizedError(error)) {
@@ -287,6 +312,8 @@ export const useAppStore = create<AppState>((set) => ({
       modeVal,
       keyPresent,
       sttModelVal,
+      webSearchProviderVal,
+      searxngUrlVal,
     ] = values;
     let defaultModel = DEFAULT_MODEL;
     if (modelJson.value) {
@@ -326,6 +353,9 @@ export const useAppStore = create<AppState>((set) => ({
         ? { permissionMode: modeVal.value }
         : {}),
       sttModel: sttModelVal.value || null,
+      webSearchProvider:
+        webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
+      searxngUrl: searxngUrlVal.value ?? "",
     });
   },
 

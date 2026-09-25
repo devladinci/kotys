@@ -1,5 +1,10 @@
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
 import type { ToolContext } from "./types.js";
+import {
+  getWebSearchProvider,
+  searxngFetchHtml,
+} from "./webSearchProviders.js";
+import { htmlToText, extractLinks } from "./htmlText.js";
 
 const FETCH_CONTENT_CHARS = 8_000;
 
@@ -42,18 +47,40 @@ export async function execute(
   ctx: ToolContext,
 ): Promise<ToolResult> {
   const url = String(args.url ?? "");
-  const res = await ctx.ollama.webFetch({ url }).catch((err: unknown) => {
-    throw new Error(fetchErrorMessage(err, url));
-  });
+  const provider = getWebSearchProvider();
+
+  let title: string;
+  let text: string;
+  let links: string[];
+
+  if (provider === "searxng") {
+    try {
+      const html = await searxngFetchHtml(url, ctx.signal);
+      const parsed = htmlToText(html);
+      title = parsed.title;
+      text = parsed.content;
+      links = extractLinks(html, url);
+    } catch (err: unknown) {
+      throw new Error(fetchErrorMessage(err, url));
+    }
+  } else {
+    const res = await ctx.ollama.webFetch({ url }).catch((err: unknown) => {
+      throw new Error(fetchErrorMessage(err, url));
+    });
+    title = res.title;
+    text = res.content ?? "";
+    links = res.links ?? [];
+  }
+
   return {
     content: JSON.stringify({
-      title: res.title,
-      content: (res.content ?? "").slice(0, FETCH_CONTENT_CHARS),
-      links: (res.links ?? []).slice(0, 20),
+      title,
+      content: text.slice(0, FETCH_CONTENT_CHARS),
+      links: links.slice(0, 20),
     }),
     activity: {
       url,
-      results: [{ title: res.title || url, url }],
+      results: [{ title: title || url, url }],
     },
   };
 }
