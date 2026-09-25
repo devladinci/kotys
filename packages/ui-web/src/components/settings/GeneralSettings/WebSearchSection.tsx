@@ -49,7 +49,9 @@ export function WebSearchSection() {
 
       <div
         className={
-          webSearchProvider === "searxng" ? "" : "opacity-50 pointer-events-none"
+          webSearchProvider === "searxng"
+            ? ""
+            : "opacity-50 pointer-events-none"
         }
       >
         <label

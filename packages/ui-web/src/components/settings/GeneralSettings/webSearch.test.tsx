@@ -34,9 +34,7 @@ describe("GeneralSettings web search provider", () => {
       "http://127.0.0.1:9888",
     );
 
-    const saved = vi
-      .mocked(rpc.settings.set)
-      .mock.calls.map(([arg]) => arg);
+    const saved = vi.mocked(rpc.settings.set).mock.calls.map(([arg]) => arg);
     expect(saved).toContainEqual({
       key: "web_search_provider",
       value: "searxng",

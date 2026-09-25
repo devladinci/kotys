@@ -353,7 +353,8 @@ export const useAppStore = create<AppState>((set) => ({
         ? { permissionMode: modeVal.value }
         : {}),
       sttModel: sttModelVal.value || null,
-      webSearchProvider: webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
+      webSearchProvider:
+        webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
       searxngUrl: searxngUrlVal.value ?? "",
     });
   },

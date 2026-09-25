@@ -1,6 +1,9 @@
 import type { ToolDefinition, ToolArgs, ToolResult } from "@kotys/contracts";
 import type { ToolContext } from "./types.js";
-import { getWebSearchProvider, searxngFetchHtml } from "./webSearchProviders.js";
+import {
+  getWebSearchProvider,
+  searxngFetchHtml,
+} from "./webSearchProviders.js";
 import { htmlToText, extractLinks } from "./htmlText.js";
 
 const FETCH_CONTENT_CHARS = 8_000;

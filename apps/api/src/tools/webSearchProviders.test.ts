@@ -36,7 +36,9 @@ describe("normalizeSearxngResults", () => {
   });
 
   it("slices to maxResults", () => {
-    const payload = { results: Array.from({ length: 10 }, (_, i) => ({ title: String(i) })) };
+    const payload = {
+      results: Array.from({ length: 10 }, (_, i) => ({ title: String(i) })),
+    };
     expect(normalizeSearxngResults(payload, 3)).toHaveLength(3);
   });
 
@@ -83,8 +85,8 @@ describe("searchViaSearxng", () => {
   });
 
   it("hits /search?format=json and normalizes results", async () => {
-    const fetchMock = vi.fn(async (url: string | URL) =>
-      new Response(JSON.stringify(SAMPLE_PAYLOAD), { status: 200 }),
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify(SAMPLE_PAYLOAD), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
