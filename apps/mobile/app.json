@@ -45,7 +45,9 @@
         {
           "microphonePermission": "Used for voice dictation"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
