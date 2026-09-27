@@ -37,6 +37,9 @@ Options:
       --allow-dirty         Proceed with uncommitted changes. Only package.json
                             and pnpm-lock.yaml are staged either way.
       --skip-checks         Skip lint, typecheck, and tests. Not recommended.
+  -p, --pr                   Push to a release branch and open a PR instead of
+                             committing to the current branch. Use this on
+                             main — the branch is protected, PRs only.
   -h, --help                Show this help.
 EOF
 }
@@ -45,6 +48,7 @@ VERSION_PART="patch"
 MESSAGE=""
 ALLOW_DIRTY=0
 SKIP_CHECKS=0
+OPEN_PR=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -57,6 +61,8 @@ while [ $# -gt 0 ]; do
       ALLOW_DIRTY=1; shift ;;
     --skip-checks)
       SKIP_CHECKS=1; shift ;;
+    -p|--pr)
+      OPEN_PR=1; shift ;;
     -h|--help)
       usage; exit 0 ;;
     *)
@@ -120,9 +126,22 @@ fi
 step "Building dmg"
 bin/dist
 
-step "Committing bump"
-git add package.json pnpm-lock.yaml '**/package.json'
-git commit -m "$MESSAGE"
-info "committed: $MESSAGE"
+if [ "$OPEN_PR" -eq 1 ]; then
+  step "Committing bump on release branch"
+  BRANCH="release/v$NEW_VERSION"
+  git checkout -b "$BRANCH"
+  git add package.json pnpm-lock.yaml '**/package.json'
+  git commit -m "$MESSAGE"
+  info "committed on $BRANCH: $MESSAGE"
+  git push -u origin "$BRANCH"
+  gh pr create --base main --head "$BRANCH" --title "$MESSAGE" \
+    --body "Release bump v$NEW_VERSION — dmg built into release/ (not committed)."
+  info "PR opened; merge it (CI must pass), then: git checkout main && git pull"
+else
+  step "Committing bump"
+  git add package.json pnpm-lock.yaml '**/package.json'
+  git commit -m "$MESSAGE"
+  info "committed: $MESSAGE"
+fi
 
 printf '\n%sDone:%s v%s — dmg in release/\n' "$BOLD" "$OFF" "$NEW_VERSION"

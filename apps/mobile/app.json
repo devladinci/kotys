@@ -45,6 +45,16 @@
         {
           "microphonePermission": "Used for voice dictation"
         }
+      ],
+      "expo-font",
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
       ]
     ],
     "experiments": {
