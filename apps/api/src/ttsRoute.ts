@@ -14,6 +14,7 @@ import {
   REFERENCE_TEXT_MAX_CHARS,
   saveReference,
 } from "./services/tts/reference.js";
+import { summarizeForSpeech } from "./services/tts/summary.js";
 
 const TTS_MAX_TEXT = 2_000;
 const FORM_OVERHEAD_BYTES = 64 * 1024;
@@ -52,6 +53,24 @@ export function registerTtsRoute(app: Hono): void {
       if (!c.req.raw.signal.aborted) {
         console.error("[tts] synthesis failed:", (err as Error).message);
       }
+
+      return c.json({ error: (err as Error).message }, 502);
+    }
+  });
+
+  app.post("/tts/summary", requireAuth(), async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      messageId?: unknown;
+    } | null;
+    const messageId = body?.messageId;
+    if (typeof messageId !== "number" || !Number.isInteger(messageId)) {
+      return c.json({ error: "Missing message" }, 400);
+    }
+
+    try {
+      return c.json({ text: await summarizeForSpeech(messageId) });
+    } catch (err) {
+      console.error("[tts] summary failed:", (err as Error).message);
 
       return c.json({ error: (err as Error).message }, 502);
     }

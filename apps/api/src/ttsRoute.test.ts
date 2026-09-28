@@ -6,6 +6,7 @@ import type { ISpeechRequest } from "./services/tts/types.js";
 const mocks = vi.hoisted(() => ({
   settings: new Map<string, string>(),
   synthesize: vi.fn<(req: ISpeechRequest) => Promise<ArrayBuffer>>(),
+  summarize: vi.fn<(messageId: number) => Promise<string | null>>(),
 }));
 
 vi.mock("@kotys/db", async () => {
@@ -29,6 +30,10 @@ vi.mock("./services/tts/registry.js", async (importOriginal) => ({
   }),
 }));
 
+vi.mock("./services/tts/summary.js", () => ({
+  summarizeForSpeech: mocks.summarize,
+}));
+
 const { Hono } = await import("hono");
 const { DB_PATH } = await import("@kotys/db");
 const { registerTtsRoute } = await import("./ttsRoute.js");
@@ -47,8 +52,8 @@ const WAV = new Uint8Array([
   ...new TextEncoder().encode("WAVEfmt "),
 ]);
 
-const speak = (body: unknown, token = TOKEN) =>
-  app.request("/tts/speech", {
+const post = (route: string, body: unknown, token = TOKEN) =>
+  app.request(route, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -56,6 +61,12 @@ const speak = (body: unknown, token = TOKEN) =>
     },
     body: JSON.stringify(body),
   });
+
+const speak = (body: unknown, token = TOKEN) =>
+  post("/tts/speech", body, token);
+
+const summarize = (body: unknown, token = TOKEN) =>
+  post("/tts/summary", body, token);
 
 const upload = (file: Blob | null, text: string | null) => {
   const form = new FormData();
@@ -78,6 +89,8 @@ beforeEach(() => {
   mocks.settings.set("tts_model", "omlx:higgs_audio_v3-tts-4b");
   mocks.synthesize.mockReset();
   mocks.synthesize.mockResolvedValue(new TextEncoder().encode("RIFF").buffer);
+  mocks.summarize.mockReset();
+  mocks.summarize.mockResolvedValue("A short version.");
   rmSync(REFERENCE_FILE, { force: true });
 });
 
@@ -164,6 +177,49 @@ describe("POST /tts/speech", () => {
 
     expect(res.status).toBe(502);
     expect(await errorOf(res)).toBe("speech failed: 500");
+  });
+});
+
+describe("POST /tts/summary", () => {
+  it("rejects requests without the app token", async () => {
+    expect((await summarize({ messageId: 5 }, "wrong")).status).toBe(401);
+    expect(mocks.summarize).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { messageId: "5" }, { messageId: 1.5 }])(
+    "400 without a whole message id: %j",
+    async (body) => {
+      const res = await summarize(body);
+
+      expect(res.status).toBe(400);
+      expect(await errorOf(res)).toBe("Missing message");
+      expect(mocks.summarize).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns the short version of the message", async () => {
+    const res = await summarize({ messageId: 5 });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ text: "A short version." });
+    expect(mocks.summarize).toHaveBeenCalledWith(5);
+  });
+
+  it("returns no text when there is nothing to summarize with", async () => {
+    mocks.summarize.mockResolvedValueOnce(null);
+    const res = await summarize({ messageId: 5 });
+
+    expect(await res.json()).toEqual({ text: null });
+  });
+
+  it("502 with the reason when the summary fails", async () => {
+    mocks.summarize.mockRejectedValueOnce(
+      new Error("The summary model took too long"),
+    );
+    const res = await summarize({ messageId: 5 });
+
+    expect(res.status).toBe(502);
+    expect(await errorOf(res)).toBe("The summary model took too long");
   });
 });
 
