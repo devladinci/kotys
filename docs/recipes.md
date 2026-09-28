@@ -8,6 +8,7 @@ Short how-tos for everyday things in Kotys. If you want the big picture, read
 - [Start on your desk, finish on your phone](#start-on-your-desk-finish-on-your-phone)
 - [Move around fast](#move-around-fast)
 - [Talk instead of typing](#talk-instead-of-typing)
+- [Hear replies aloud](#hear-replies-aloud)
 - [Turn tools on and off](#turn-tools-on-and-off)
 - [Add an MCP server](#add-an-mcp-server)
 - [Write your first skill](#write-your-first-skill)
@@ -397,6 +398,69 @@ configured, so failures show up on release:
 
 Dictation uses the same bearer token as the rest of the API, so a phone that
 is already paired needs nothing extra.
+
+## Hear replies aloud
+
+Kotys can read a reply out loud. Like dictation, it is optional and off
+until you choose a model, and nothing ever plays on its own.
+
+**What you need.** Speech is not built into Kotys either. The daemon sends
+the text to an OpenAI-compatible server that serves `/audio/speech` and plays
+the WAV that comes back. oMLX is the server this is written against. The
+picker lists the models whose `engine_type` in `/models/status` is
+`audio_tts`; a server without that endpoint shows no models.
+
+**Set it up** from the desktop or web app:
+
+1. Turn on oMLX, as in [Talk instead of typing](#talk-instead-of-typing).
+2. Open **Settings → Voice** and choose a model under **Speech output**.
+   Pick **None** to turn it off again.
+3. Add a **reference voice**. It is optional, but without one the model
+   picks a voice at random, so the voice can change from one sentence to the
+   next. Choose a clean WAV recording of 5 to 15 seconds and type the words
+   spoken in it; with a transcription model selected, Kotys fills them in for
+   you. The clip is stored next to the chat database, and **Remove** deletes
+   it.
+
+**On the desktop.** Hover a reply and press the speaker next to Copy. A bar
+above the composer says "Preparing audio…", then shows the text being read,
+with **Stop**. When it ends, the bar offers **Replay**, which plays the same
+audio again without asking the server, and it closes itself after 30
+seconds. Pressing the speaker on another reply stops the current one.
+
+**On the phone.** Long-press a reply and choose **Read aloud**, or double-tap
+it. The same bar appears above the composer, with the same buttons. The
+phone only plays the sound: the text goes to the daemon on your computer,
+and the daemon talks to oMLX.
+
+**What gets read.** Kotys reads the prose. Code blocks, tables, links, and
+images are skipped, and headings and list items become sentences of their
+own. A reply that is only code has nothing to read, and the bar says so.
+Long replies are read in pieces: the first sentence goes to the server on its
+own, so you hear it within a few seconds, and the next piece is prepared
+while the current one plays.
+
+**Higgs Audio v3.** Speech was tested with
+[Higgs Audio v3](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b) on
+oMLX 0.6.4, which serves it only after three changes on the oMLX side:
+
+1. The model folder name must start with `higgs_audio_v3`, for example
+   `higgs_audio_v3-tts-4b`. oMLX picks the model code from the folder name.
+2. The model needs `model_type_override: "audio_tts"` in oMLX's model
+   settings. Without it, oMLX detects an LLM.
+3. The audio codec must sit next to the weights, as
+   `audio_tokenizer/config.json` and a bf16
+   `audio_tokenizer/model.safetensors`. Otherwise the codec loader falls
+   back to PyTorch, which oMLX does not bundle.
+
+Kotys does not ship or download the model. Check its license on the model
+card before you use it.
+
+**When it does not work.** The bar shows the reason and a **Retry** button:
+
+- No model selected: "No text-to-speech model selected".
+- oMLX turned off, or the server unreachable: the error from the server.
+- A reply that is only code: "Nothing to read aloud in this reply".
 
 ## Turn tools on and off
 
