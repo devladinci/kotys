@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asEpochSeconds } from "@kotys/contracts";
-import { bucketFor, relTime } from "./chatBuckets";
+import { bucketFor, collapsedPastBuckets, relTime } from "./chatBuckets";
 
 const NOW = new Date("2026-09-10T12:00:00").getTime();
 const sec = (ms: number) => asEpochSeconds(Math.floor(ms / 1000));
@@ -24,6 +24,36 @@ describe("bucketFor", () => {
     const now = new Date("2026-09-10T00:30:00").getTime();
     const yestEvening = new Date("2026-09-09T23:50:00").getTime();
     expect(bucketFor(sec(yestEvening), now)).toBe("yesterday");
+  });
+});
+
+describe("collapsedPastBuckets", () => {
+  const counts = {
+    today: 3,
+    yesterday: 2,
+    week: 1,
+    month: 0,
+    earlier: 4,
+  };
+
+  it("collapses every past section while today has more than one chat", () => {
+    const collapsed = collapsedPastBuckets(counts, new Set());
+    expect(collapsed.has("yesterday")).toBe(true);
+    expect(collapsed.has("week")).toBe(true);
+    expect(collapsed.has("earlier")).toBe(true);
+  });
+
+  it("keeps a manually expanded section open", () => {
+    const collapsed = collapsedPastBuckets(counts, new Set(["week"]));
+    expect(collapsed.has("week")).toBe(false);
+    expect(collapsed.has("yesterday")).toBe(true);
+  });
+
+  it("expands everything when today has at most one chat", () => {
+    expect(collapsedPastBuckets({ ...counts, today: 1 }, new Set()).size).toBe(
+      0,
+    );
+    expect(collapsedPastBuckets({}, new Set()).size).toBe(0);
   });
 });
 

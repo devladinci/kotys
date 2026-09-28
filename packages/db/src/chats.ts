@@ -164,6 +164,10 @@ const CHAT_SELECT = `
   FROM chats c
   LEFT JOIN models m ON m.id = c.model_id`;
 
+// The user-facing list never shows subagent child chats; getChatById still
+// resolves them so a child stays inspectable by id.
+const CHAT_SELECT_TOP_LEVEL = `${CHAT_SELECT} WHERE c.parent_id IS NULL`;
+
 function topicsOf(blob: string | null): string[] {
   // char(30) (record separator) cannot appear in a normalized topic name.
   return blob ? (blob.split("\u001e") as string[]).filter(Boolean) : [];
@@ -171,7 +175,7 @@ function topicsOf(blob: string | null): string[] {
 
 export function listChatsWithTopics() {
   return getDb()
-    .prepare(`${CHAT_SELECT} ORDER BY c.updated_at DESC`)
+    .prepare(`${CHAT_SELECT_TOP_LEVEL} ORDER BY c.updated_at DESC`)
     .all() as (ChatRow & {
     model_name: string | null;
     model_provider: string | null;
@@ -204,6 +208,26 @@ export function getSubagentChat(parentChatId: number, agentName: string) {
     )
     .get(parentChatId, `subagent:${agentName}`) as { id: number } | undefined;
   return row?.id ?? null;
+}
+
+export type SubagentChatRow = {
+  id: number;
+  parent_id: number;
+  title: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export function listSubagentChats(parentChatId?: number): SubagentChatRow[] {
+  const where = parentChatId === undefined ? "" : "WHERE c.parent_id = ?";
+  const rows = getDb()
+    .prepare(
+      `SELECT c.id, c.parent_id, c.title, c.created_at, c.updated_at
+       FROM chats c ${where}
+       ORDER BY c.updated_at DESC`,
+    )
+    .all(...(parentChatId === undefined ? [] : [parentChatId]));
+  return rows as SubagentChatRow[];
 }
 
 export function getChatById(id: number) {
