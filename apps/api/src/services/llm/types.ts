@@ -25,7 +25,8 @@ export type ConnectorChatRequest = {
   /**
    * Provider-neutral reasoning control (boolean or effort string). Each
    * connector maps it to its own wire format — Ollama's think field, oMLX's
-   * chat_template_kwargs.{enable_thinking,reasoning_effort}; servers without
+   * chat_template_kwargs.{enable_thinking,reasoning_effort} plus the
+   * reasoning_strength mirror for always-thinking templates; servers without
    * a reasoning switch ignore it.
    */
   think?: boolean | "low" | "medium" | "high" | "max";

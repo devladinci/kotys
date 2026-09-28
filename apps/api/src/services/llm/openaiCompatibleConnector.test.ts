@@ -65,18 +65,31 @@ describe("openaiCompatibleConnector think mapping", () => {
     expect(await streamThink("medium")).toEqual({
       enable_thinking: true,
       reasoning_effort: "medium",
+      reasoning_strength: "medium",
     });
     expect(await streamThink(true)).toEqual({ enable_thinking: true });
     // "high" maps onto oMLX's top knob "max".
     expect(await streamThink("high")).toEqual({
       enable_thinking: true,
       reasoning_effort: "max",
+      reasoning_strength: "high",
+    });
+    expect(await streamThink("max")).toEqual({
+      enable_thinking: true,
+      reasoning_effort: "max",
+      reasoning_strength: "high",
     });
   });
 
   it("maps think off/false to enable_thinking:false, which wins over any effort", async () => {
-    expect(await streamThink("off")).toEqual({ enable_thinking: false });
-    expect(await streamThink(false)).toEqual({ enable_thinking: false });
+    expect(await streamThink("off")).toEqual({
+      enable_thinking: false,
+      reasoning_strength: "low",
+    });
+    expect(await streamThink(false)).toEqual({
+      enable_thinking: false,
+      reasoning_strength: "low",
+    });
   });
 
   it("omits the kwargs entirely when think is not set", async () => {

@@ -156,10 +156,11 @@ const toOpenAiMessages = (messages: ConnectorChatMessage[]): OpenAiMessage[] =>
   });
 
 /**
- * Kotys's neutral think control -> the chat template: enable_thinking is the
- * on/off switch and reasoning_effort sets depth while thinking is on. An oMLX
- * model profile that locks these keys (forced_ct_kwargs) silently overrides
- * them. Servers without these knobs ignore the extra body fields.
+ * Kotys's neutral think control -> the chat template. enable_thinking +
+ * reasoning_effort is the Qwen/oMLX contract; reasoning_strength is the
+ * Muse-Glimmer key — its template ignores both other keys, always thinks, and
+ * treats "low" as the floor (there is no off). Templates ignore the key they
+ * don't read, so sending all three is safe.
  */
 const chatTemplateKwargs = (
   think: ConnectorChatRequest["think"],
@@ -168,12 +169,24 @@ const chatTemplateKwargs = (
   // `false` is the normalized off; "off" shouldn't reach a connector (the
   // stream boundary normalizes it), but treat it the same if it does.
   if (think === false || (think as string) === "off")
-    return { chat_template_kwargs: { enable_thinking: false } };
+    return {
+      chat_template_kwargs: {
+        enable_thinking: false,
+        reasoning_strength: "low",
+      },
+    };
   const effort = think === true ? undefined : think === "high" ? "max" : think;
+  const strength =
+    think === true
+      ? undefined
+      : think === "high" || think === "max"
+        ? "high"
+        : (think as string);
   return {
     chat_template_kwargs: {
       enable_thinking: true,
       ...(effort ? { reasoning_effort: effort } : {}),
+      ...(strength ? { reasoning_strength: strength } : {}),
     },
   };
 };
