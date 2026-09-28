@@ -55,6 +55,6 @@ export const mobilePlatform: Platform = {
 
   startVoiceRecording,
   stopVoiceRecording,
-  playSpeech: ({ text }) => playSpeech({ text }),
+  playSpeech: ({ text, language }) => playSpeech({ text, language }),
   stopSpeech,
 };

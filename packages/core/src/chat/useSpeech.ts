@@ -86,7 +86,8 @@ export function useSpeech() {
       }
       setSpeechState({ status: "loading", text, error: null });
       try {
-        await platform.playSpeech({ text });
+        const language = useAppStore.getState().sttLanguage || undefined;
+        await platform.playSpeech({ text, language });
         setSpeechState({
           status: "playing",
           text,

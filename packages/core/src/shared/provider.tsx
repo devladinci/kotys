@@ -45,9 +45,10 @@ export type Platform = {
    * Fetch synthesized speech for the text and play it; hosts without an
    * audio stack throw. The fetch lives platform-side because mobile cannot
    * hand a fetched Blob to its player — it needs a file URI — while core
-   * stays DOM-free.
+   * stays DOM-free. Resolves when playback finishes, so the speech store
+   * can flip to idle on its own.
    */
-  playSpeech?: (req: { text: string }) => Promise<void>;
+  playSpeech?: (req: { text: string; language?: string }) => Promise<void>;
   /** Stop the current playback, if any. */
   stopSpeech?: () => void;
 };

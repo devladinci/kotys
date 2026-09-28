@@ -8,6 +8,7 @@ export * from "./shared/modelListing.js";
 export * from "./shared/todoDates.js";
 export * from "./shared/format.js";
 export * from "./shared/useNow.js";
+export * from "./shared/useLingering.js";
 export * from "./shared/contentWidgets.js";
 
 export * from "./chat/useChat.js";

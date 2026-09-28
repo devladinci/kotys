@@ -6,7 +6,7 @@ const CONDENSE_MAX_CHARS = 4_000;
 
 const CONDENSE_PROMPT = `You convert a chat reply into a short spoken version for text-to-speech.
 Rules:
-- Same language as the original.
+- Reply in {language} — the language of the original.
 - At most 3 short sentences. Keep only what the user needs to hear.
 - Prose only: no markdown, no tables, no lists, no code, no URLs, no emojis.
 - Spell out numbers, symbols and units in words (e.g. "3.5 GB" -> "three and a half gigabytes").
@@ -18,7 +18,10 @@ Reply with the spoken text only.`;
  * model rewrites the reply for listening before synthesis. Best effort: on
  * any failure the caller falls back to the raw text.
  */
-export const condenseForSpeech = async (text: string): Promise<string> => {
+export const condenseForSpeech = async (
+  text: string,
+  language?: string,
+): Promise<string> => {
   const plain = text.replace(/```[\s\S]*?```/g, " ").trim();
   if (!plain) return text;
   const short = plain.slice(0, CONDENSE_MAX_CHARS);
@@ -26,12 +29,16 @@ export const condenseForSpeech = async (text: string): Promise<string> => {
   const model = getSetting("default_model");
   if (!model) return text;
 
+  const prompt = CONDENSE_PROMPT.replace(
+    "{language}",
+    language ? `"${language}"` : "the same",
+  );
   const connector = createOpenAiCompatibleConnector(omlxConfig());
   try {
     const { content } = await connector.chat({
       model,
       messages: [
-        { role: "system", content: CONDENSE_PROMPT },
+        { role: "system", content: prompt },
         { role: "user", content: short },
       ],
       temperature: 0,

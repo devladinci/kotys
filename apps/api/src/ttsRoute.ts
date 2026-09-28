@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { readFileSync } from "node:fs";
 import { getSetting } from "@kotys/db";
 import {
   parseTtsModelSetting,
@@ -10,6 +11,11 @@ import { requireAuth } from "./auth.js";
 
 /** A spoken reply is a few sentences; anything bigger is abuse or a bug. */
 const TTS_MAX_TEXT = 10_000;
+
+const TTS_REF_SETTING = "tts_ref_audio";
+
+/** Pinned sampling so the same text never changes speaker between plays. */
+const TTS_SEED = 42;
 
 /**
  * JSON in, WAV bytes out: oRPC is JSON-only, so TTS audio goes over a plain
@@ -42,14 +48,29 @@ export function registerTtsRoute(app: Hono): void {
         : undefined;
     const condense = body?.condense !== false;
 
+    let refAudio: string | undefined;
+    let refText: string | undefined;
+    const refPath = getSetting(TTS_REF_SETTING);
+    if (refPath) {
+      try {
+        refAudio = readFileSync(refPath).toString("base64");
+        refText = getSetting(`${TTS_REF_SETTING}_text`) || undefined;
+      } catch {
+        console.error("[tts] ref audio unreadable:", refPath);
+      }
+    }
+
     try {
       const connector = resolveTtsConnector(ref);
-      const spoken = condense ? await condenseForSpeech(text) : text;
+      const spoken = condense ? await condenseForSpeech(text, language) : text;
       const audio = await connector.synthesize({
         model: ref.model,
         text: spoken,
         voice,
         language,
+        refAudio,
+        refText,
+        seed: TTS_SEED,
       });
       return new Response(audio, {
         headers: { "Content-Type": "audio/wav" },

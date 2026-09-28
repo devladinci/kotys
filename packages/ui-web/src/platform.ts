@@ -1,5 +1,5 @@
 import type { Platform } from "@kotys/core";
-import { getConfig, useAppStore } from "@kotys/core";
+import { getConfig } from "@kotys/core";
 import { createVoiceRecorder } from "./voiceRecorder.js";
 import { createSpeechPlayer } from "./speechPlayer.js";
 
@@ -27,9 +27,11 @@ const player = () => {
   return speechPlayer;
 };
 
-const requestSpeech = async (text: string): Promise<Blob> => {
+const requestSpeech = async (
+  text: string,
+  language?: string,
+): Promise<Blob> => {
   const config = getConfig();
-  const language = useAppStore.getState().sttLanguage;
   const res = await fetch(`${config.baseUrl}/tts/speech`, {
     method: "POST",
     headers: {
@@ -88,8 +90,8 @@ export const webPlatform: Platform = {
     const { blob, mimeType } = await rec.stop();
     return { blob, mimeType };
   },
-  playSpeech: async ({ text }) => {
-    const audio = await requestSpeech(text);
+  playSpeech: async ({ text, language }) => {
+    const audio = await requestSpeech(text, language);
     await player().play(audio);
   },
   stopSpeech: () => {

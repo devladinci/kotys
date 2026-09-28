@@ -64,11 +64,30 @@ export function createOpenAiCompatibleTtsConnector(config: {
   return {
     listModels: () => listFromStatus().catch(() => listFromModels()),
 
-    async synthesize({ model, text, voice, language }) {
+    async synthesize({
+      model,
+      text,
+      voice,
+      language,
+      refAudio,
+      refText,
+      seed,
+    }) {
       const res = await fetch(`${baseUrl}/audio/speech`, {
         method: "POST",
         headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ model, input: text, voice, language }),
+        body: JSON.stringify({
+          model,
+          input: text,
+          voice,
+          language,
+          ref_audio: refAudio,
+          ref_text: refText,
+          seed,
+          // Sampling noise is what makes the voice drift between plays; at
+          // zero the same text + seed always yields the same speaker.
+          temperature: seed === undefined ? undefined : 0,
+        }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");

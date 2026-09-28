@@ -1,10 +1,11 @@
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import type { AudioPlayer, AudioStatus } from "expo-audio";
 import { File, Paths } from "expo-file-system";
-import { getConfig, useAppStore } from "@kotys/core";
+import { getConfig } from "@kotys/core";
 
 interface SpeechRequest {
   text: string;
+  language?: string;
 }
 
 const SPEECH_FILE = "kotys-speech.wav";
@@ -19,14 +20,13 @@ const requestSpeech = async (
   config: { baseUrl: string; token: string },
   req: SpeechRequest,
 ): Promise<ArrayBuffer> => {
-  const language = useAppStore.getState().sttLanguage;
   const res = await fetch(`${config.baseUrl}/tts/speech`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ...req, language: language ?? undefined }),
+    body: JSON.stringify(req),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as {

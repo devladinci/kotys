@@ -149,9 +149,11 @@ describe("POST /tts/speech", () => {
 
   it("condenses text through the speech rewriter before synthesis", async () => {
     withTtsModel("omlx:higgs_audio_v3-tts-4b");
-    condenseMock.mockImplementation(async (text: string) => `spoken: ${text}`);
+    condenseMock.mockImplementation(
+      async (text: string, _language?: string) => `spoken: ${text}`,
+    );
     await post({ text: "Hello world" });
-    expect(condenseMock).toHaveBeenCalledWith("Hello world");
+    expect(condenseMock).toHaveBeenCalledWith("Hello world", undefined);
     expect(synthesizeMock.mock.calls[0][0].text).toBe("spoken: Hello world");
   });
 
