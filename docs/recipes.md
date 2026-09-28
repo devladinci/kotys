@@ -421,6 +421,12 @@ picker lists the models whose `engine_type` in `/models/status` is
    spoken in it; with a transcription model selected, Kotys fills them in for
    you. The clip is stored next to the chat database, and **Remove** deletes
    it.
+4. Choose a model under **Summaries for long replies** if you want long
+   replies read as a short summary. It is optional; with **None**, every
+   reply is read in full. Any chat model works, and its reasoning is turned
+   off for this. Pick a fast one: in testing, deepseek-v4.1-flash and
+   gemma4:31b wrote a summary in 1 to 3 seconds, while glm-5.3-flash kept
+   reasoning in its answer and took about 10.
 
 **On the desktop.** Hover a reply and press the speaker next to Copy. A bar
 above the composer says "Preparing audio…", then shows the text being read,
@@ -439,6 +445,15 @@ own. A reply that is only code has nothing to read, and the bar says so.
 Long replies are read in pieces: the first sentence goes to the server on its
 own, so you hear it within a few seconds, and the next piece is prepared
 while the current one plays.
+
+**Summaries.** With a summary model chosen, a reply with more than about 600
+characters of prose, or with a table or code, is summarized when you press
+play. The summary model gets the reply and writes about 100 spoken words in
+the reply's own language, saying in a sentence what a table or a code block
+shows instead of skipping it. The bar says "Preparing audio…" while the
+summary is written, then shows the summary as it is read. Shorter replies
+are read word for word. Replay plays the same summary again without asking
+for a new one.
 
 **Higgs Audio v3.** Speech was tested with
 [Higgs Audio v3](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b) on
@@ -461,6 +476,9 @@ card before you use it.
 - No model selected: "No text-to-speech model selected".
 - oMLX turned off, or the server unreachable: the error from the server.
 - A reply that is only code: "Nothing to read aloud in this reply".
+
+If the summary model fails, takes longer than 20 seconds, or answers
+without a summary, the reply is read in full instead.
 
 ## Turn tools on and off
 

@@ -90,7 +90,7 @@ https://github.com/user-attachments/assets/aec0508f-aae0-4a31-b3e6-8a9d89ead042
   depends on nothing but zod. `core` stays free of the DOM so React Native
   can import it.
 - **Voice.** Talk instead of typing, with speech-to-text, and have replies
-  read aloud.
+  read aloud, long ones as a short spoken summary.
 
 ## How it works
 
