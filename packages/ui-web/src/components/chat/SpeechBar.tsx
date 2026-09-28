@@ -1,75 +1,84 @@
-import { useEffect, useState } from "react";
-import { Loader2, PauseCircle, RotateCcw, X } from "lucide-react";
-import { useLingering, useSpeech } from "@kotys/core";
+import { memo } from "react";
+import {
+  AlertCircle,
+  Loader2,
+  RotateCcw,
+  Square,
+  Volume2,
+  X,
+} from "lucide-react";
+import { useSpeechActions, useSpeechBar } from "@kotys/core";
+import type { SpeechPhase } from "@kotys/core";
 
-interface IProps {
-  onSpeak?: () => void;
-}
+const BAR_BUTTON_CLASS =
+  "shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-md text-text-muted hover:text-text hover:bg-border transition";
 
-export default function SpeechBar({ onSpeak }: IProps) {
-  const { status, text, stop } = useSpeech();
-  const isBusy = status === "loading" || status === "playing";
-  const visible = useLingering(isBusy);
-  const [fading, setFading] = useState(false);
+const CLOSE_BUTTON_CLASS =
+  "shrink-0 p-0.5 rounded text-text-muted hover:text-text transition";
 
-  useEffect(() => {
-    if (isBusy) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors external speech store into local fade state */
-      setFading(false);
+const ICON_CLASS: Record<SpeechPhase, string> = {
+  idle: "text-text-muted",
+  loading: "animate-spin text-accent",
+  playing: "text-accent",
+  done: "text-text-muted",
+  error: "text-red-400",
+};
 
-      return;
-    }
-    if (!visible) return;
-    const timer = setTimeout(() => setFading(true), 27_000);
+function SpeechBarBase() {
+  const { phase, text, error } = useSpeechBar();
+  const { replay, stop } = useSpeechActions();
 
-    return () => clearTimeout(timer);
-  }, [isBusy, visible]);
+  if (phase === "idle") return null;
 
-  if (!visible) return null;
+  const isActive = phase === "loading" || phase === "playing";
+  const isError = phase === "error";
+  const Icon = phase === "loading" ? Loader2 : isError ? AlertCircle : Volume2;
+  const label =
+    phase === "loading"
+      ? "Preparing audio…"
+      : isError
+        ? (error ?? "Speech failed")
+        : text;
 
   return (
     <div
-      className={`mx-auto max-w-3xl mb-3 flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-accent/30 bg-accent/10 shadow-sm transition-opacity duration-1000 ${fading ? "opacity-0" : "opacity-100"}`}
+      role="status"
+      aria-live="polite"
+      className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-border text-xs"
     >
-      {status === "loading" ? (
-        <>
-          <Loader2 size={16} className="animate-spin text-accent shrink-0" />
-          <span className="flex-1 truncate text-[13px] text-text">
-            Synthesizing speech…
-          </span>
-        </>
+      <Icon
+        size={13}
+        className={`shrink-0 ${ICON_CLASS[phase]}`}
+        aria-hidden="true"
+      />
+      <span
+        className={`flex-1 min-w-0 truncate ${isError ? "text-red-400" : "text-text-muted"}`}
+      >
+        {label}
+      </span>
+      {isActive ? (
+        <button onClick={stop} className={BAR_BUTTON_CLASS}>
+          <Square size={11} aria-hidden="true" />
+          Stop
+        </button>
       ) : (
         <>
-          <PauseCircle
-            size={18}
-            className="text-accent shrink-0 cursor-pointer"
+          <button onClick={replay} className={BAR_BUTTON_CLASS}>
+            <RotateCcw size={11} aria-hidden="true" />
+            {isError ? "Retry" : "Replay"}
+          </button>
+          <button
             onClick={stop}
-            role="button"
-            aria-label="Stop playback"
-          />
-          <span className="flex-1 truncate text-[13px] text-text">
-            {status === "error" ? "Speech failed" : text}
-          </span>
-          {onSpeak && (
-            <button
-              onClick={onSpeak}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border bg-surface text-[12px] text-text-muted hover:text-text hover:bg-surface-2 transition"
-              title="Replay"
-              aria-label="Replay"
-            >
-              <RotateCcw size={12} />
-              Replay
-            </button>
-          )}
+            className={CLOSE_BUTTON_CLASS}
+            title="Close"
+            aria-label="Close"
+          >
+            <X size={12} />
+          </button>
         </>
       )}
-      <X
-        size={16}
-        className="text-text-muted hover:text-text cursor-pointer shrink-0"
-        onClick={stop}
-        role="button"
-        aria-label="Close"
-      />
     </div>
   );
 }
+
+export const SpeechBar = memo(SpeechBarBase);

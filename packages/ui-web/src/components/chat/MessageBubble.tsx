@@ -2,10 +2,11 @@ import { memo, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
-import { SkillMessage, splitContentByWidgets } from "@kotys/core";
+import { SkillMessage, splitContentByWidgets, useAppStore } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
-import SpeakerButton from "../SpeakerButton";
+import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";
+import { SpeakerButton } from "./SpeakerButton";
 import {
   MarkdownBody,
   StreamingProvider,
@@ -35,9 +36,6 @@ const TIME_FORMAT: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-const ACTION_BUTTON_CLASS =
-  "p-1 rounded text-text-muted hover:text-text transition";
-
 const focusOnMount = (node: HTMLTextAreaElement | null) => node?.focus();
 
 function MessageBubbleBase({
@@ -51,6 +49,9 @@ function MessageBubbleBase({
   isLoading,
 }: IProps) {
   const isUser = message.role === "user";
+  const hasSpeechModel = useAppStore((s) => s.ttsModel !== null);
+  const canReadAloud =
+    !isUser && hasSpeechModel && !isErrorTurn(message.content);
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -124,7 +125,9 @@ function MessageBubbleBase({
               </span>
             )}
             <CopyTextButton text={message.content} />
-            {!isUser && <SpeakerButton text={message.content} />}
+            {canReadAloud && (
+              <SpeakerButton messageId={message.id} content={message.content} />
+            )}
             {isUser && onEditAndResend && !isLoading && (
               <button
                 onClick={handleEditStart}

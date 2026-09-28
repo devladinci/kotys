@@ -219,33 +219,29 @@ export const s = StyleSheet.create({
   speechBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 8,
     marginHorizontal: 12,
-    marginBottom: 8,
-    borderRadius: 14,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  speechBarIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  speechBarBody: {
-    flex: 1,
-  },
   speechBarText: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12,
   },
-  speechBarStop: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  speechBarButton: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  speechBarButtonText: {
+    fontSize: 12,
+    fontWeight: "500",
   },
   editHint: {
     fontSize: 12,
@@ -383,15 +379,15 @@ const createThemedStyles = (mode: ThemeMode) => {
       backgroundColor: t.surface,
       borderTopColor: t.border,
     },
+    dangerText: {
+      color: t.danger,
+    },
     speechBar: {
-      backgroundColor: t.surface,
+      backgroundColor: t.surface2,
       borderColor: t.border,
     },
-    speechBarIconWrap: {
-      backgroundColor: t.accent + "22",
-    },
-    speechBarStop: {
-      backgroundColor: t.surface2,
+    speechBarButton: {
+      backgroundColor: t.surface,
     },
     editCancel: {
       borderColor: t.border,

@@ -10,7 +10,8 @@ import {
   SkillMessage,
   splitContentByWidgets,
   useAppStore,
-  useSpeech,
+  useSpeechActions,
+  useSpeechStore,
 } from "@kotys/core";
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
@@ -36,15 +37,27 @@ const EDIT_RESEND = "Edit & resend";
 const RETRY = "Retry";
 const REGENERATE = "Regenerate";
 const COPY = "Copy";
+const READ_ALOUD = "Read aloud";
+const STOP_READING = "Stop reading";
 const CANCEL = "Cancel";
 const USER_ACTIONS = [EDIT_RESEND, COPY, CANCEL];
 const REPLY_ACTIONS = [REGENERATE, COPY, CANCEL];
 const FAILED_REPLY_ACTIONS = [RETRY, ...REPLY_ACTIONS];
 const DOUBLE_TAP_MS = 300;
 
-const longPressActions = (isUser: boolean, content: string) => {
+const longPressActions = (
+  isUser: boolean,
+  content: string,
+  speechAction: string | null,
+) => {
   if (isUser) return USER_ACTIONS;
-  return isErrorTurn(content) ? FAILED_REPLY_ACTIONS : REPLY_ACTIONS;
+  if (isErrorTurn(content)) return FAILED_REPLY_ACTIONS;
+  return speechAction ? [speechAction, ...REPLY_ACTIONS] : REPLY_ACTIONS;
+};
+
+const isReadingMessage = (messageId: number): boolean => {
+  const { messageId: activeId, phase } = useSpeechStore.getState();
+  return activeId === messageId && (phase === "loading" || phase === "playing");
 };
 
 const displayText = (content: string) =>
@@ -100,44 +113,59 @@ function BubbleBase({
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
   const ttsModel = useAppStore((st) => st.ttsModel);
-  const speech = useSpeech();
+  const { speak, stop } = useSpeechActions();
+  const lastTapAt = useRef(0);
+  const canRead =
+    !isUser && !isStreaming && !!ttsModel && !isErrorTurn(message.content);
 
   const toolCalls = (message.toolCalls ?? []).filter(
     (tc) => !isSteerActivity(tc),
   );
 
-  const lastTapRef = useRef(0);
-
-  const handlePress = useCallback(() => {
-    if (isUser || isStreaming || isBusy) return;
-    if (!ttsModel) return;
-    const now = Date.now();
-    const isDoubleTap = now - lastTapRef.current < DOUBLE_TAP_MS;
-    lastTapRef.current = now;
-    if (!isDoubleTap) return;
-    if (speech.status === "playing") {
-      speech.stop();
+  const toggleReading = useCallback(() => {
+    if (isReadingMessage(message.id)) {
+      stop();
       return;
     }
-    void speech.speak(message.content).catch(() => undefined);
-  }, [isUser, isStreaming, isBusy, ttsModel, speech, message.content]);
+    speak(message.id, message.content);
+  }, [message.id, message.content, speak, stop]);
+
+  const handlePress = useCallback(() => {
+    if (!canRead) return;
+    const now = Date.now();
+    const isDoubleTap = now - lastTapAt.current < DOUBLE_TAP_MS;
+    lastTapAt.current = isDoubleTap ? 0 : now;
+    if (isDoubleTap) toggleReading();
+  }, [canRead, toggleReading]);
 
   const handleLongPress = useCallback(() => {
     if (isStreaming || isBusy) return;
-    const base = longPressActions(isUser, message.content);
+    const speechAction = canRead
+      ? isReadingMessage(message.id)
+        ? STOP_READING
+        : READ_ALOUD
+      : null;
+    const options = longPressActions(isUser, message.content, speechAction);
     ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: base,
-        cancelButtonIndex: base.length - 1,
-      },
+      { options, cancelButtonIndex: options.length - 1 },
       (idx) => {
-        const action = base[idx];
+        const action = options[idx];
         if (action === EDIT_RESEND) onEdit(message);
         if (action === COPY) void setStringAsync(message.content);
         if (action === RETRY || action === REGENERATE) onRegenerate(message.id);
+        if (action === READ_ALOUD || action === STOP_READING) toggleReading();
       },
     );
-  }, [message, isUser, isStreaming, isBusy, onEdit, onRegenerate]);
+  }, [
+    message,
+    isUser,
+    isStreaming,
+    isBusy,
+    canRead,
+    onEdit,
+    onRegenerate,
+    toggleReading,
+  ]);
 
   const handleToggleThinking = () => setThinkOpen((open) => !open);
 

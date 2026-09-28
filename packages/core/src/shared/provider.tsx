@@ -4,16 +4,10 @@ import type { RouterClient } from "@orpc/server";
 import type { AppRouter, ClientMessage, ServerMessage } from "@kotys/api";
 import { setClients, getRpc } from "./clients.js";
 import { useMemoOnce } from "./useMemoOnce.js";
+import type { ISpeechClip } from "../speech/types.js";
 
 export type { ClientMessage, ServerMessage };
 
-/**
- * Capabilities the host app provides.
- *
- * Everything here is something React Native does differently from the DOM.
- * Keeping them in one injected object is what lets every hook below stay
- * platform-free.
- */
 export type VoiceRecording = {
   /** Web: recorded audio blob. */
   blob?: Blob;
@@ -22,6 +16,13 @@ export type VoiceRecording = {
   mimeType: string;
 };
 
+/**
+ * Capabilities the host app provides.
+ *
+ * Everything here is something React Native does differently from the DOM.
+ * Keeping them in one injected object is what lets every hook below stay
+ * platform-free.
+ */
 export type Platform = {
   /** Scroll a message into view. DOM apps query the node; RN uses a list ref. */
   scrollToMessage: (messageId: number) => void;
@@ -41,23 +42,10 @@ export type Platform = {
   /** Hold-to-talk voice input; hosts without a mic throw. */
   startVoiceRecording?: () => Promise<void>;
   stopVoiceRecording?: () => Promise<VoiceRecording>;
-  /**
-   * Fetch synthesized speech for the text and play it; hosts without an
-   * audio stack throw. The fetch lives platform-side because mobile cannot
-   * hand a fetched Blob to its player — it needs a file URI — while core
-   * stays DOM-free. Resolves when playback finishes, so the speech store
-   * can flip to idle on its own.
-   */
-  playSpeech?: (req: { text: string; language?: string }) => Promise<void>;
-  /** Stop the current playback, if any. */
-  stopSpeech?: () => void;
+  unlockSpeech?: () => void;
+  createSpeechClip?: (audio: ArrayBuffer) => Promise<ISpeechClip>;
 };
 
-/**
- * Upload a recording to the API's /stt/transcribe route. Web fetch appends a
- * Blob directly; RN's global fetch (expo/fetch) cannot serialize {uri} file
- * parts, so mobile uploads through XHR, whose native layer streams the file.
- */
 const audioFilename = (mimeType: string | undefined): string => {
   if (mimeType?.includes("wav")) return "audio.wav";
   if (mimeType?.includes("mp4") || mimeType?.includes("aac")) {
@@ -66,6 +54,8 @@ const audioFilename = (mimeType: string | undefined): string => {
   return "audio.webm";
 };
 
+// RN's global fetch (expo/fetch) cannot serialize {uri} file parts, so mobile
+// uploads through XHR, whose native layer streams the file.
 const xhrTranscribe = (
   url: string,
   token: string,
@@ -143,15 +133,17 @@ type KotysContextValue = {
 
 const KotysContext = createContext<KotysContextValue | null>(null);
 
+interface IKotysProviderProps {
+  config: KotysConfig;
+  platform: Platform;
+  children: ReactNode;
+}
+
 export function KotysProvider({
   config,
   platform,
   children,
-}: {
-  config: KotysConfig;
-  platform: Platform;
-  children: ReactNode;
-}) {
+}: IKotysProviderProps) {
   const value = useMemoOnce<KotysContextValue>(() => {
     const socket = setClients(config);
     return { rpc: getRpc(), socket, platform };

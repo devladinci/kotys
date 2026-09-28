@@ -1,7 +1,7 @@
-import { Pressable, Text, View } from "react-native";
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLingering, useSpeech } from "@kotys/core";
+import { useSpeechActions, useSpeechBar } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import { s, themedStyles } from "./styles";
 
@@ -9,51 +9,75 @@ function SpeechBarBase() {
   const mode = useThemeMode();
   const t = theme(mode);
   const ts = themedStyles[mode];
-  const speech = useSpeech();
-  const isBusy = speech.status === "loading" || speech.status === "playing";
-  const visible = useLingering(isBusy);
-  const [fading, setFading] = useState(false);
+  const { phase, text, error } = useSpeechBar();
+  const { replay, stop } = useSpeechActions();
 
-  useEffect(() => {
-    if (isBusy) {
-      /* eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors external speech store into local fade state */
-      setFading(false);
+  if (phase === "idle") return null;
 
-      return;
-    }
-    if (!visible) return;
-    const timer = setTimeout(() => setFading(true), 27_000);
-
-    return () => clearTimeout(timer);
-  }, [isBusy, visible]);
-
-  if (!visible) return null;
-
-  const isLoading = speech.status === "loading";
+  const isActive = phase === "loading" || phase === "playing";
+  const isError = phase === "error";
+  const label =
+    phase === "loading"
+      ? "Preparing audio…"
+      : isError
+        ? (error ?? "Speech failed")
+        : text;
+  const iconColor = isError
+    ? t.danger
+    : phase === "done"
+      ? t.textMuted
+      : t.accent;
 
   return (
-    <View style={[s.speechBar, ts.speechBar, { opacity: fading ? 0 : 1 }]}>
-      <View style={s.speechBarIconWrap}>
-        {isLoading ? (
-          <Ionicons name="hourglass-outline" size={16} color={t.accent} />
-        ) : (
-          <Ionicons name="volume-high" size={16} color={t.accent} />
-        )}
-      </View>
-      <View style={s.speechBarBody}>
-        <Text numberOfLines={1} style={[s.speechBarText, ts.mutedText]}>
-          {isLoading ? "Synthesizing speech…" : speech.text}
-        </Text>
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Stop playback"
-        onPress={speech.stop}
-        style={s.speechBarStop}
-        hitSlop={8}
+    <View style={[s.speechBar, ts.speechBar]} accessibilityLiveRegion="polite">
+      {phase === "loading" ? (
+        <ActivityIndicator size="small" color={t.accent} />
+      ) : (
+        <Ionicons
+          name={isError ? "alert-circle" : "volume-high"}
+          size={15}
+          color={iconColor}
+        />
+      )}
+      <Text
+        numberOfLines={1}
+        style={[s.speechBarText, isError ? ts.dangerText : ts.mutedText]}
       >
-        <Ionicons name="close" size={18} color={t.textMuted} />
-      </Pressable>
+        {label}
+      </Text>
+      {isActive ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={stop}
+          style={[s.speechBarButton, ts.speechBarButton]}
+          hitSlop={8}
+        >
+          <Ionicons name="stop" size={12} color={t.text} />
+          <Text style={[s.speechBarButtonText, ts.text]}>Stop</Text>
+        </Pressable>
+      ) : (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            onPress={replay}
+            style={[s.speechBarButton, ts.speechBarButton]}
+            hitSlop={8}
+          >
+            <Ionicons name="refresh" size={12} color={t.text} />
+            <Text style={[s.speechBarButtonText, ts.text]}>
+              {isError ? "Retry" : "Replay"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={stop}
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={16} color={t.textMuted} />
+          </Pressable>
+        </>
+      )}
     </View>
   );
 }

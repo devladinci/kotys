@@ -4,11 +4,11 @@ import * as Notifications from "expo-notifications";
 import { SchedulableTriggerInputTypes } from "expo-notifications/build/Notifications.types";
 import type { Platform } from "@kotys/core";
 import { startVoiceRecording, stopVoiceRecording } from "./voiceRecorder";
-import { playSpeech, stopSpeech } from "./speechPlayer";
+import { createSpeechClip, unlockSpeech } from "./speechOutput";
 
 /** Set by the message list so scrollToMessage can reach it. */
 let scrollHandler: ((messageId: number) => void) | null = null;
-export function registerScrollHandler(fn: ((id: number) => void) | null) {
+export function registerScrollHandler(fn: ((id: number) => void) | null): void {
   scrollHandler = fn;
 }
 
@@ -55,6 +55,6 @@ export const mobilePlatform: Platform = {
 
   startVoiceRecording,
   stopVoiceRecording,
-  playSpeech: ({ text, language }) => playSpeech({ text, language }),
-  stopSpeech,
+  unlockSpeech,
+  createSpeechClip,
 };

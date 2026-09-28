@@ -17,7 +17,6 @@ const PINNED_CHATS_SETTING = "pinned_chat_ids";
 const THINKING_EFFORT_SETTING = "thinking_effort";
 const PERMISSION_MODE_SETTING = "permission_mode";
 const STT_MODEL_SETTING = "stt_model";
-const STT_LANGUAGE_SETTING = "stt_language";
 const TTS_MODEL_SETTING = "tts_model";
 const WEB_SEARCH_PROVIDER_SETTING = "web_search_provider";
 const SEARXNG_URL_SETTING = "searxng_url";
@@ -36,17 +35,17 @@ export const OMLX_HOST_PLACEHOLDER = "omlx";
 export const providerOf = (m: ModelListing): string => m.provider ?? "ollama";
 
 /**
- * The stt_model setting stores "provider:model" so the API resolver never
- * guesses the provider. These two helpers are the only place that format is
- * decoded/encoded. The tts_model setting reuses the exact same format.
+ * The stt_model and tts_model settings store "provider:model" so the API
+ * resolver never guesses the provider. These two helpers are the only place
+ * that format is decoded/encoded.
  */
-export const sttModelName = (setting: string | null): string | null => {
+export const modelRefName = (setting: string | null): string | null => {
   if (!setting) return null;
   const sep = setting.indexOf(":");
   return sep > 0 ? setting.slice(sep + 1) : setting;
 };
 
-export const sttModelSetting = (provider: string, name: string): string =>
+export const modelRefSetting = (provider: string, name: string): string =>
   `${provider}:${name}`;
 
 export const hostFor = (m: ModelListing): string =>
@@ -105,8 +104,6 @@ interface AppState {
   permissionMode: PermissionMode;
   sttModel: string | null;
   ttsModel: string | null;
-  /** Preferred speech language, e.g. "bg" — passed to STT and TTS. */
-  sttLanguage: string | null;
   webSearchProvider: "ollama" | "searxng";
   searxngUrl: string;
   chatsVersion: number;
@@ -159,7 +156,6 @@ export const useAppStore = create<AppState>((set) => ({
   permissionMode: "copilot",
   sttModel: null,
   ttsModel: null,
-  sttLanguage: null,
   webSearchProvider: "ollama",
   searxngUrl: "",
   chatsVersion: 0,
@@ -292,7 +288,6 @@ export const useAppStore = create<AppState>((set) => ({
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
-      Awaited<ReturnType<typeof rpc.settings.get>>,
     ];
     try {
       values = await Promise.all([
@@ -308,7 +303,6 @@ export const useAppStore = create<AppState>((set) => ({
         rpc.settings.hasSecret({ key: API_KEY_SETTING }),
         rpc.settings.get({ key: STT_MODEL_SETTING }),
         rpc.settings.get({ key: TTS_MODEL_SETTING }),
-        rpc.settings.get({ key: STT_LANGUAGE_SETTING }),
         rpc.settings.get({ key: WEB_SEARCH_PROVIDER_SETTING }),
         rpc.settings.get({ key: SEARXNG_URL_SETTING }),
       ]);
@@ -333,7 +327,6 @@ export const useAppStore = create<AppState>((set) => ({
       keyPresent,
       sttModelVal,
       ttsModelVal,
-      sttLanguageVal,
       webSearchProviderVal,
       searxngUrlVal,
     ] = values;
@@ -376,7 +369,6 @@ export const useAppStore = create<AppState>((set) => ({
         : {}),
       sttModel: sttModelVal.value || null,
       ttsModel: ttsModelVal.value || null,
-      sttLanguage: sttLanguageVal.value || null,
       webSearchProvider:
         webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
       searxngUrl: searxngUrlVal.value ?? "",
