@@ -186,6 +186,12 @@ describe("MessageBubble read aloud", () => {
     expect(readAloud()).toBeNull();
   });
 
+  it("is not offered on a reply that is only code", () => {
+    renderWithProvider(reply("```ts\nconst answer = 42;\n```"));
+
+    expect(readAloud()).toBeNull();
+  });
+
   it("is never offered on your own messages or on a failed reply", () => {
     renderWithProvider(userMessage("Read this back to me."));
     renderWithProvider(reply("Partial\n\n**Error:** model crashed"));

@@ -6,6 +6,7 @@ import type { ASTNode, RenderRules } from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
 import { asDataUriImage, isErrorTurn, isSteerActivity } from "@kotys/contracts";
 import {
+  hasSpeechText,
   SKILL_FENCE_PREFIX,
   SkillMessage,
   splitContentByWidgets,
@@ -116,7 +117,11 @@ function BubbleBase({
   const { speak, stop } = useSpeechActions();
   const lastTapAt = useRef(0);
   const canRead =
-    !isUser && !isStreaming && !!ttsModel && !isErrorTurn(message.content);
+    !isUser &&
+    !isStreaming &&
+    !!ttsModel &&
+    !isErrorTurn(message.content) &&
+    hasSpeechText(message.content);
 
   const toolCalls = (message.toolCalls ?? []).filter(
     (tc) => !isSteerActivity(tc),

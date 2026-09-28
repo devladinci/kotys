@@ -46,6 +46,9 @@ export function toSpeechText(markdown: string): string {
     .join(" ");
 }
 
+export const hasSpeechText = (markdown: string): boolean =>
+  toSpeechText(markdown) !== "";
+
 const sentences = (text: string): string[] =>
   (text.match(SENTENCE) ?? []).map((s) => s.trim()).filter(Boolean);
 

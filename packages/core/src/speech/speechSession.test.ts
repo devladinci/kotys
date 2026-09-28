@@ -226,15 +226,26 @@ describe("speakMessage", () => {
   });
 
   it("reports a code-only reply without calling the server", async () => {
-    const { driver } = createDriver();
+    const { driver, requests, clips } = createDriver();
+    const earlier = speakMessage(driver, 17, "An earlier reply.");
+    requests[0].resolve(audioFor("earlier"));
+    await flush();
+    clips[0].finish();
+    await earlier;
+
     await speakMessage(driver, 5, "```js\nconst x = 1;\n```");
 
-    expect(driver.fetchAudio).not.toHaveBeenCalled();
+    expect(driver.fetchAudio).toHaveBeenCalledTimes(1);
     expect(useSpeechStore.getState()).toMatchObject({
       phase: "error",
       messageId: 5,
       error: "Nothing to read aloud in this reply",
     });
+
+    await replaySpeech(driver);
+
+    expect(clips).toHaveLength(1);
+    expect(useSpeechStore.getState().messageId).toBe(5);
   });
 
   it("hides the bar 30 seconds after playback ends", async () => {

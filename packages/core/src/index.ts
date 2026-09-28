@@ -18,6 +18,7 @@ export * from "./chat/useUserInput.js";
 export * from "./chat/useVoiceInput.js";
 export * from "./speech/speechApi.js";
 export * from "./speech/speechSession.js";
+export { hasSpeechText } from "./speech/speechText.js";
 export * from "./speech/types.js";
 export * from "./speech/useSpeech.js";
 export * from "./chat/useMessages.js";

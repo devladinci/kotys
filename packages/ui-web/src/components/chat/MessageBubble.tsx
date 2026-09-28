@@ -2,7 +2,12 @@ import { memo, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
-import { SkillMessage, splitContentByWidgets, useAppStore } from "@kotys/core";
+import {
+  hasSpeechText,
+  SkillMessage,
+  splitContentByWidgets,
+  useAppStore,
+} from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
 import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";
@@ -51,7 +56,10 @@ function MessageBubbleBase({
   const isUser = message.role === "user";
   const hasSpeechModel = useAppStore((s) => s.ttsModel !== null);
   const canReadAloud =
-    !isUser && hasSpeechModel && !isErrorTurn(message.content);
+    !isUser &&
+    hasSpeechModel &&
+    !isErrorTurn(message.content) &&
+    hasSpeechText(message.content);
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");

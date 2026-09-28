@@ -16,6 +16,9 @@ interface IReferenceStatus {
 
 const LABEL_CLASS = "block text-xs font-medium text-text-muted mb-1";
 
+const FILE_INPUT_CLASS =
+  "block text-xs text-text-muted file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-border file:bg-surface-2 file:text-text file:text-xs file:font-medium file:cursor-pointer hover:file:bg-border file:transition";
+
 const SAVE_BUTTON_CLASS =
   "px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-accent-ink text-xs font-medium transition disabled:opacity-50";
 
@@ -138,7 +141,7 @@ export function ReferenceVoice() {
           type="file"
           accept=".wav,audio/wav,audio/x-wav"
           onChange={handleFileChange}
-          className="block text-xs text-text-muted"
+          className={FILE_INPUT_CLASS}
         />
       </div>
       <div>

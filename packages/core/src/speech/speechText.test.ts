@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { speechChunks, toSpeechText } from "./speechText.js";
+import { hasSpeechText, speechChunks, toSpeechText } from "./speechText.js";
 
 describe("toSpeechText", () => {
   it("keeps plain prose as it is", () => {
@@ -43,6 +43,14 @@ describe("toSpeechText", () => {
 
   it("strips quotes and html tags", () => {
     expect(toSpeechText("> quoted <b>bold</b> line")).toBe("quoted bold line.");
+  });
+});
+
+describe("hasSpeechText", () => {
+  it("is false only when nothing would be read", () => {
+    expect(hasSpeechText("Plain answer.")).toBe(true);
+    expect(hasSpeechText("```ts\nconst a = 1;\n```")).toBe(false);
+    expect(hasSpeechText("| a | b |\n| - | - |")).toBe(false);
   });
 });
 

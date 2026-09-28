@@ -135,6 +135,7 @@ export function speakMessage(
   const text = toSpeechText(markdown);
   if (!text) {
     endSession();
+    last = null;
     useSpeechStore.setState({
       phase: "error",
       messageId,
