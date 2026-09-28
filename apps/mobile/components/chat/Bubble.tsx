@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { ActionSheetIOS, Image, Pressable, Text, View } from "react-native";
 import { setStringAsync } from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
@@ -9,6 +9,8 @@ import {
   SKILL_FENCE_PREFIX,
   SkillMessage,
   splitContentByWidgets,
+  useAppStore,
+  useSpeech,
 } from "@kotys/core";
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
@@ -38,6 +40,7 @@ const CANCEL = "Cancel";
 const USER_ACTIONS = [EDIT_RESEND, COPY, CANCEL];
 const REPLY_ACTIONS = [REGENERATE, COPY, CANCEL];
 const FAILED_REPLY_ACTIONS = [RETRY, ...REPLY_ACTIONS];
+const DOUBLE_TAP_MS = 300;
 
 const longPressActions = (isUser: boolean, content: string) => {
   if (isUser) return USER_ACTIONS;
@@ -96,18 +99,39 @@ function BubbleBase({
   const rules = markdownRules[mode];
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
+  const ttsModel = useAppStore((st) => st.ttsModel);
+  const speech = useSpeech();
 
   const toolCalls = (message.toolCalls ?? []).filter(
     (tc) => !isSteerActivity(tc),
   );
 
+  const lastTapRef = useRef(0);
+
+  const handlePress = useCallback(() => {
+    if (isUser || isStreaming || isBusy) return;
+    if (!ttsModel) return;
+    const now = Date.now();
+    const isDoubleTap = now - lastTapRef.current < DOUBLE_TAP_MS;
+    lastTapRef.current = now;
+    if (!isDoubleTap) return;
+    if (speech.status === "playing") {
+      speech.stop();
+      return;
+    }
+    void speech.speak(message.content).catch(() => undefined);
+  }, [isUser, isStreaming, isBusy, ttsModel, speech, message.content]);
+
   const handleLongPress = useCallback(() => {
     if (isStreaming || isBusy) return;
-    const options = longPressActions(isUser, message.content);
+    const base = longPressActions(isUser, message.content);
     ActionSheetIOS.showActionSheetWithOptions(
-      { options, cancelButtonIndex: options.length - 1 },
+      {
+        options: base,
+        cancelButtonIndex: base.length - 1,
+      },
       (idx) => {
-        const action = options[idx];
+        const action = base[idx];
         if (action === EDIT_RESEND) onEdit(message);
         if (action === COPY) void setStringAsync(message.content);
         if (action === RETRY || action === REGENERATE) onRegenerate(message.id);
@@ -171,7 +195,11 @@ function BubbleBase({
   };
 
   return (
-    <Pressable onLongPress={handleLongPress} delayLongPress={350}>
+    <Pressable
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={350}
+    >
       <View
         style={[
           isUser ? s.bubbleUser : s.bubbleAssistant,

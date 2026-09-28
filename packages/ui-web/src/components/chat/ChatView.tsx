@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { Chat } from "@kotys/core";
 import type { ModelListing, SearchResultRow } from "@kotys/contracts";
-import { useAppStore } from "@kotys/core";
+import { useAppStore, useSpeech } from "@kotys/core";
 import { useTodoStore } from "@kotys/core";
 import { useChat } from "@kotys/core";
 import { useTokenEstimator } from "@kotys/core";
@@ -27,6 +27,7 @@ import { isInputForChat, useUserInputStore } from "@kotys/core";
 import { DEFAULT_CONTEXT } from "@kotys/contracts";
 import PomodoroChip from "../pomodoro/PomodoroChip";
 import MessageList, { type IMessageListHandle } from "./MessageList";
+import SpeechBar from "./SpeechBar";
 import Composer from "../composer";
 import UserInputComposer from "../user-input/UserInputComposer";
 import ModelSelector from "./ModelSelector";
@@ -214,6 +215,22 @@ export default function ChatView({
     },
     [send, navigate, scrollToBottom],
   );
+
+  const { speak } = useSpeech();
+  const lastSpokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant" && m.content);
+    if (lastAssistant) lastSpokenRef.current = lastAssistant.content;
+  }, [messages]);
+
+  const handleReplay = useCallback(() => {
+    const text = lastSpokenRef.current;
+    if (!text) return;
+    void speak(text);
+  }, [speak]);
 
   const handlePickExample = (text: string) => void handleSend(text, []);
 
@@ -403,6 +420,7 @@ export default function ChatView({
 
       <div className="p-3 border-t border-border bg-bg">
         <div className="max-w-3xl mx-auto">
+          <SpeechBar onSpeak={handleReplay} />
           {(isCompacting || compactNotice) && (
             <div
               className="relative mb-2 flex justify-center"

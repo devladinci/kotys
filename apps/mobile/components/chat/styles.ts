@@ -216,6 +216,21 @@ export const s = StyleSheet.create({
     gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  speechBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 12,
+    marginBottom: 6,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  speechBarText: {
+    flex: 1,
+    fontSize: 12,
+  },
   editHint: {
     fontSize: 12,
   },
@@ -351,6 +366,10 @@ const createThemedStyles = (mode: ThemeMode) => {
     editBar: {
       backgroundColor: t.surface,
       borderTopColor: t.border,
+    },
+    speechBar: {
+      backgroundColor: t.surface,
+      borderColor: t.border,
     },
     editCancel: {
       borderColor: t.border,

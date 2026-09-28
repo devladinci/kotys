@@ -1,5 +1,7 @@
 import type { Platform } from "@kotys/core";
 import { createVoiceRecorder } from "./voiceRecorder.js";
+import { createSpeechPlayer } from "./speechPlayer.js";
+import { getConfig } from "@kotys/core";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
@@ -18,6 +20,31 @@ const ensureNotificationPermission = () => {
 };
 
 let recorder: ReturnType<typeof createVoiceRecorder> | null = null;
+let speechPlayer: ReturnType<typeof createSpeechPlayer> | null = null;
+
+const player = () => {
+  if (!speechPlayer) speechPlayer = createSpeechPlayer();
+  return speechPlayer;
+};
+
+const requestSpeech = async (text: string): Promise<Blob> => {
+  const config = getConfig();
+  const res = await fetch(`${config.baseUrl}/tts/speech`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(body?.error ?? `Speech synthesis failed (${res.status})`);
+  }
+  return res.blob();
+};
 
 export const webPlatform: Platform = {
   scrollToMessage: (id) => {
@@ -59,6 +86,13 @@ export const webPlatform: Platform = {
     if (!rec) throw new Error("Not recording");
     const { blob, mimeType } = await rec.stop();
     return { blob, mimeType };
+  },
+  playSpeech: async ({ text }) => {
+    const audio = await requestSpeech(text);
+    await player().play(audio);
+  },
+  stopSpeech: () => {
+    player().stop();
   },
 };
 

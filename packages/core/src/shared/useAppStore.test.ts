@@ -215,4 +215,33 @@ describe("useAppStore", () => {
     await act(() => result.current.hydrate());
     expect(result.current.sttModel).toBe(null);
   });
+
+  it("setTtsModel persists provider-tagged value via RPC", async () => {
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.setTtsModel("omlx:higgs_audio_v3-tts-4b"));
+    expect(result.current.ttsModel).toBe("omlx:higgs_audio_v3-tts-4b");
+    expect(settingsSet).toHaveBeenCalledWith({
+      key: "tts_model",
+      value: "omlx:higgs_audio_v3-tts-4b",
+    });
+  });
+
+  it("setTtsModel(null) clears the selection", async () => {
+    useAppStore.setState({ ttsModel: "omlx:higgs_audio_v3-tts-4b" });
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.setTtsModel(null));
+    expect(result.current.ttsModel).toBe(null);
+    expect(settingsSet).toHaveBeenCalledWith({ key: "tts_model", value: "" });
+  });
+
+  it("hydrate reads tts_model (empty value = null)", async () => {
+    settingsGet.mockImplementation(async (input: { key: string }) => ({
+      value: input.key === "tts_model" ? "omlx:higgs" : null,
+      secret: false as const,
+    }));
+    settingsHasSecret.mockResolvedValue({ present: false });
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.hydrate());
+    expect(result.current.ttsModel).toBe("omlx:higgs");
+  });
 });

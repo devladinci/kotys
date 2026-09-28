@@ -7,6 +7,7 @@ import {
   useRpc,
 } from "@kotys/core";
 import type { ModelListing } from "@kotys/contracts";
+import SpeechOutputSettings from "./SpeechOutputSettings";
 
 export default function VoiceSettings() {
   const rpc = useRpc();
@@ -14,6 +15,7 @@ export default function VoiceSettings() {
   const setSttModel = useAppStore((s) => s.setSttModel);
   const [models, setModels] = useState<ModelListing[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [ttsModels, setTtsModels] = useState<ModelListing[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +25,14 @@ export default function VoiceSettings() {
         if (!cancelled) setModels(list);
       } catch (err) {
         if (!cancelled) setLoadError((err as Error).message);
+      }
+      try {
+        const list = await rpc.tts.models();
+        if (!cancelled) setTtsModels(list);
+      } catch {
+        // Speech output stays hidden on a listing failure; STT errors surface
+        // above — no need to double-report the same oMLX outage.
+        if (!cancelled) setTtsModels([]);
       }
     })();
     return () => {
@@ -97,6 +107,11 @@ export default function VoiceSettings() {
           </select>
         )}
       </section>
+
+      <SpeechOutputSettings
+        models={ttsModels}
+        isLoadingModels={ttsModels === null}
+      />
     </div>
   );
 }

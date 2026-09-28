@@ -15,6 +15,7 @@ export * from "./chat/useChatStream.js";
 export * from "./chat/useToolApproval.js";
 export * from "./chat/useUserInput.js";
 export * from "./chat/useVoiceInput.js";
+export * from "./chat/useSpeech.js";
 export * from "./chat/useMessages.js";
 export * from "./chat/chatSync.js";
 export * from "./chat/echoGuard.js";

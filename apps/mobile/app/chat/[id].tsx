@@ -18,6 +18,7 @@ import type {
 } from "react-native";
 import { Bubble } from "../../components/chat/Bubble";
 import { QueuedMessageRow } from "../../components/chat/QueuedMessageRow";
+import { SpeechBar } from "../../components/chat/SpeechBar";
 import { ON_ACCENT, s, themedStyles } from "../../components/chat/styles";
 import { TurnSeparator } from "../../components/chat/TurnSeparator";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -602,6 +603,8 @@ function ChatScreen() {
           <Ionicons name="arrow-down" size={16} color={t.text} />
         </Pressable>
       ) : null}
+
+      <SpeechBar />
 
       {editing ? (
         <View style={[s.editBar, ts.editBar, panelInset]}>

@@ -41,6 +41,15 @@ export type Platform = {
   /** Hold-to-talk voice input; hosts without a mic throw. */
   startVoiceRecording?: () => Promise<void>;
   stopVoiceRecording?: () => Promise<VoiceRecording>;
+  /**
+   * Fetch synthesized speech for the text and play it; hosts without an
+   * audio stack throw. The fetch lives platform-side because mobile cannot
+   * hand a fetched Blob to its player — it needs a file URI — while core
+   * stays DOM-free.
+   */
+  playSpeech?: (req: { text: string }) => Promise<void>;
+  /** Stop the current playback, if any. */
+  stopSpeech?: () => void;
 };
 
 /**

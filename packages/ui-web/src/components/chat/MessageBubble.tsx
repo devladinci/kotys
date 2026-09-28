@@ -4,6 +4,7 @@ import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
 import { SkillMessage, splitContentByWidgets } from "@kotys/core";
 import CopyTextButton from "../CopyTextButton";
+import SpeakerButton from "../SpeakerButton";
 import { MessageImages } from "./MessageImages";
 import {
   MarkdownBody,
@@ -123,6 +124,7 @@ function MessageBubbleBase({
               </span>
             )}
             <CopyTextButton text={message.content} />
+            {!isUser && <SpeakerButton text={message.content} />}
             {isUser && onEditAndResend && !isLoading && (
               <button
                 onClick={handleEditStart}

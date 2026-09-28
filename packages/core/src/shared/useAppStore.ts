@@ -17,6 +17,7 @@ const PINNED_CHATS_SETTING = "pinned_chat_ids";
 const THINKING_EFFORT_SETTING = "thinking_effort";
 const PERMISSION_MODE_SETTING = "permission_mode";
 const STT_MODEL_SETTING = "stt_model";
+const TTS_MODEL_SETTING = "tts_model";
 const WEB_SEARCH_PROVIDER_SETTING = "web_search_provider";
 const SEARXNG_URL_SETTING = "searxng_url";
 
@@ -36,7 +37,7 @@ export const providerOf = (m: ModelListing): string => m.provider ?? "ollama";
 /**
  * The stt_model setting stores "provider:model" so the API resolver never
  * guesses the provider. These two helpers are the only place that format is
- * decoded/encoded.
+ * decoded/encoded. The tts_model setting reuses the exact same format.
  */
 export const sttModelName = (setting: string | null): string | null => {
   if (!setting) return null;
@@ -102,6 +103,7 @@ interface AppState {
   thinkingEffort: ThinkEffort;
   permissionMode: PermissionMode;
   sttModel: string | null;
+  ttsModel: string | null;
   webSearchProvider: "ollama" | "searxng";
   searxngUrl: string;
   chatsVersion: number;
@@ -122,6 +124,7 @@ interface AppState {
   setThinkingEffort: (effort: ThinkEffort) => Promise<void>;
   setPermissionMode: (mode: PermissionMode) => Promise<void>;
   setSttModel: (model: string | null) => Promise<void>;
+  setTtsModel: (model: string | null) => Promise<void>;
   setWebSearchProvider: (provider: "ollama" | "searxng") => Promise<void>;
   setSearxngUrl: (url: string) => Promise<void>;
   hydrate: () => Promise<void>;
@@ -152,6 +155,7 @@ export const useAppStore = create<AppState>((set) => ({
   thinkingEffort: "medium",
   permissionMode: "copilot",
   sttModel: null,
+  ttsModel: null,
   webSearchProvider: "ollama",
   searxngUrl: "",
   chatsVersion: 0,
@@ -245,6 +249,14 @@ export const useAppStore = create<AppState>((set) => ({
     });
   },
 
+  setTtsModel: async (model) => {
+    set({ ttsModel: model });
+    await getRpc().settings.set({
+      key: TTS_MODEL_SETTING,
+      value: model ?? "",
+    });
+  },
+
   togglePinned: async (id) => {
     let next: Set<number>;
     set((s) => {
@@ -275,6 +287,7 @@ export const useAppStore = create<AppState>((set) => ({
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
+      Awaited<ReturnType<typeof rpc.settings.get>>,
     ];
     try {
       values = await Promise.all([
@@ -289,6 +302,7 @@ export const useAppStore = create<AppState>((set) => ({
         rpc.settings.get({ key: PERMISSION_MODE_SETTING }),
         rpc.settings.hasSecret({ key: API_KEY_SETTING }),
         rpc.settings.get({ key: STT_MODEL_SETTING }),
+        rpc.settings.get({ key: TTS_MODEL_SETTING }),
         rpc.settings.get({ key: WEB_SEARCH_PROVIDER_SETTING }),
         rpc.settings.get({ key: SEARXNG_URL_SETTING }),
       ]);
@@ -312,6 +326,7 @@ export const useAppStore = create<AppState>((set) => ({
       modeVal,
       keyPresent,
       sttModelVal,
+      ttsModelVal,
       webSearchProviderVal,
       searxngUrlVal,
     ] = values;
@@ -353,6 +368,7 @@ export const useAppStore = create<AppState>((set) => ({
         ? { permissionMode: modeVal.value }
         : {}),
       sttModel: sttModelVal.value || null,
+      ttsModel: ttsModelVal.value || null,
       webSearchProvider:
         webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
       searxngUrl: searxngUrlVal.value ?? "",

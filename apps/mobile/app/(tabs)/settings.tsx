@@ -368,6 +368,7 @@ function Voice({
           </Pressable>
         )}
       </View>
+      <SpeechOutput themed={t} rpc={rpc} />
       <Sheet
         isVisible={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -401,6 +402,115 @@ function Voice({
         />
       </Sheet>
     </ScrollView>
+  );
+}
+
+function SpeechOutput({
+  themed,
+  rpc,
+}: {
+  themed: Themed;
+  rpc: ReturnType<typeof useRpc>;
+}) {
+  const t = themed;
+  const ttsModel = useAppStore((st) => st.ttsModel);
+  const setTtsModel = useAppStore((st) => st.setTtsModel);
+  const [models, setModels] = useState<ModelListing[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void rpc.tts
+      .models()
+      .then((list) => {
+        if (!cancelled) setModels(list as ModelListing[]);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setLoadError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rpc]);
+
+  const selectedName = sttModelName(ttsModel);
+
+  const pick = (name: string | null) => {
+    setPickerOpen(false);
+    if (!name) {
+      void setTtsModel(null);
+      return;
+    }
+    const listing = models.find((m) => m.name === name);
+    void setTtsModel(sttModelSetting(listing?.provider ?? "omlx", name));
+  };
+
+  return (
+    <View>
+      <View
+        style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}
+      >
+        <Text style={[s.cardTitle, { color: t.text }]}>Speech output</Text>
+        <Text style={{ color: t.textMuted, fontSize: 12 }}>
+          Adds a Play action on replies — hear a message aloud. Nothing plays
+          automatically.
+        </Text>
+        {loadError ? (
+          <Text style={{ color: t.danger, fontSize: 12 }}>{loadError}</Text>
+        ) : models.length === 0 ? (
+          <Text style={{ color: t.textMuted, fontSize: 12 }}>
+            No text-to-speech models available. Enable oMLX in the desktop app.
+          </Text>
+        ) : (
+          <Pressable
+            onPress={() => setPickerOpen(true)}
+            style={[s.input, { borderColor: t.border, backgroundColor: t.bg }]}
+          >
+            <Text
+              style={{
+                color: selectedName ? t.text : t.textMuted,
+                fontSize: 14,
+              }}
+            >
+              {selectedName ?? "None"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+      <Sheet
+        isVisible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="Speech output model"
+      >
+        <FlatList
+          data={[{ name: null as string | null }, ...models]}
+          keyExtractor={(m) => m.name ?? "none"}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => pick(item.name)}
+              style={[
+                s.rowCard,
+                { backgroundColor: t.surface, borderColor: t.border },
+              ]}
+            >
+              <Text
+                style={{
+                  color:
+                    (item.name ?? null) === selectedName ? t.accent : t.text,
+                  fontWeight:
+                    (item.name ?? null) === selectedName ? "700" : "400",
+                  fontSize: 14,
+                  flex: 1,
+                }}
+              >
+                {item.name ?? "None"}
+              </Text>
+            </Pressable>
+          )}
+        />
+      </Sheet>
+    </View>
   );
 }
 

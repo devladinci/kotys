@@ -86,6 +86,7 @@ function applyCsp(apiBase: string): void {
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
     `connect-src ${connectSrc}`,
   ].join("; ");
 
