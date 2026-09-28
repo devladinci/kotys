@@ -1,7 +1,7 @@
 import type { Platform } from "@kotys/core";
+import { getConfig, useAppStore } from "@kotys/core";
 import { createVoiceRecorder } from "./voiceRecorder.js";
 import { createSpeechPlayer } from "./speechPlayer.js";
-import { getConfig } from "@kotys/core";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
@@ -29,13 +29,14 @@ const player = () => {
 
 const requestSpeech = async (text: string): Promise<Blob> => {
   const config = getConfig();
+  const language = useAppStore.getState().sttLanguage;
   const res = await fetch(`${config.baseUrl}/tts/speech`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, language: language ?? undefined }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as {

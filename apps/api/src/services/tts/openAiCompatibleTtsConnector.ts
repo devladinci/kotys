@@ -64,11 +64,11 @@ export function createOpenAiCompatibleTtsConnector(config: {
   return {
     listModels: () => listFromStatus().catch(() => listFromModels()),
 
-    async synthesize({ model, text, voice }) {
+    async synthesize({ model, text, voice, language }) {
       const res = await fetch(`${baseUrl}/audio/speech`, {
         method: "POST",
         headers: { ...headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ model, input: text, voice }),
+        body: JSON.stringify({ model, input: text, voice, language }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");

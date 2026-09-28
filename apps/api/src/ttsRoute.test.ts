@@ -10,9 +10,20 @@ vi.mock("@kotys/db", () => ({
 }));
 
 const synthesizeMock = vi.fn(
-  async (_req: { model: string; text: string; voice?: string }) =>
-    new TextEncoder().encode("RIFF-fake-wav").buffer,
+  async (_req: {
+    model: string;
+    text: string;
+    voice?: string;
+    language?: string;
+  }) => new TextEncoder().encode("RIFF-fake-wav").buffer,
 );
+
+const condenseMock = vi.fn(async (text: string) => text);
+
+vi.mock("./services/tts/condense.js", () => ({
+  condenseForSpeech: (...args: Parameters<typeof condenseMock>) =>
+    condenseMock(...args),
+}));
 
 vi.mock("./services/tts/registry.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./services/tts/registry.js")>()),
@@ -53,6 +64,8 @@ const post = (body: unknown) =>
 
 beforeEach(() => {
   synthesizeMock.mockClear();
+  condenseMock.mockClear();
+  condenseMock.mockImplementation(async (text: string) => text);
   // Default: valid auth token, no tts_model. Tests override tts_model with
   // mockImplementation so the api_token read survives.
   mocks.getSetting.mockReset();
@@ -126,5 +139,26 @@ describe("POST /tts/speech", () => {
     synthesizeMock.mockRejectedValueOnce(new Error("boom"));
     const res = await post({ text: "Hi" });
     expect(res.status).toBe(502);
+  });
+
+  it("passes language through when provided", async () => {
+    withTtsModel("omlx:higgs_audio_v3-tts-4b");
+    await post({ text: "Hi", language: "bg" });
+    expect(synthesizeMock.mock.calls[0][0].language).toBe("bg");
+  });
+
+  it("condenses text through the speech rewriter before synthesis", async () => {
+    withTtsModel("omlx:higgs_audio_v3-tts-4b");
+    condenseMock.mockImplementation(async (text: string) => `spoken: ${text}`);
+    await post({ text: "Hello world" });
+    expect(condenseMock).toHaveBeenCalledWith("Hello world");
+    expect(synthesizeMock.mock.calls[0][0].text).toBe("spoken: Hello world");
+  });
+
+  it("skips condensation when condense is false", async () => {
+    withTtsModel("omlx:higgs_audio_v3-tts-4b");
+    await post({ text: "Hello world", condense: false });
+    expect(condenseMock).not.toHaveBeenCalled();
+    expect(synthesizeMock.mock.calls[0][0].text).toBe("Hello world");
   });
 });

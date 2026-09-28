@@ -5,6 +5,7 @@ import {
   resolveTtsConnector,
   TTS_MODEL_SETTING,
 } from "./services/tts/registry.js";
+import { condenseForSpeech } from "./services/tts/condense.js";
 import { requireAuth } from "./auth.js";
 
 /** A spoken reply is a few sentences; anything bigger is abuse or a bug. */
@@ -24,6 +25,8 @@ export function registerTtsRoute(app: Hono): void {
     const body = (await c.req.json().catch(() => null)) as {
       text?: unknown;
       voice?: unknown;
+      language?: unknown;
+      condense?: unknown;
     } | null;
     const text = typeof body?.text === "string" ? body.text : "";
     if (!text.trim()) {
@@ -33,12 +36,20 @@ export function registerTtsRoute(app: Hono): void {
       return c.json({ error: "Text is too long" }, 413);
     }
     const voice = typeof body?.voice === "string" ? body.voice : undefined;
+    const language =
+      typeof body?.language === "string" && body.language
+        ? body.language
+        : undefined;
+    const condense = body?.condense !== false;
+
     try {
       const connector = resolveTtsConnector(ref);
+      const spoken = condense ? await condenseForSpeech(text) : text;
       const audio = await connector.synthesize({
         model: ref.model,
-        text,
+        text: spoken,
         voice,
+        language,
       });
       return new Response(audio, {
         headers: { "Content-Type": "audio/wav" },

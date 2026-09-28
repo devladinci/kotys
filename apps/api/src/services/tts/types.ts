@@ -12,5 +12,6 @@ export interface TtsConnector {
     model: string;
     text: string;
     voice?: string;
+    language?: string;
   }): Promise<ArrayBuffer>;
 }
