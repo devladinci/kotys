@@ -158,7 +158,7 @@ export function searchMessages(query: string): MessageSearchHit[] {
       `SELECT m.id, m.chat_id, m.role, m.content, c.title, m.created_at
        FROM messages m
        JOIN chats c ON c.id = m.chat_id
-       WHERE ${where}
+       WHERE c.parent_id IS NULL AND ${where}
        ORDER BY m.created_at DESC
        LIMIT 30`,
     )

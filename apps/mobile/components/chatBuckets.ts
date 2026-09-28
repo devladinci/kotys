@@ -31,5 +31,19 @@ export const CHAT_BUCKET_LABELS: Record<ChatBucket, string> = {
   earlier: "Earlier",
 };
 
+const PAST_BUCKETS = ["yesterday", "week", "month", "earlier"] as const;
+
+/**
+ * Mirrors the desktop sidebar: past sections start collapsed while today's
+ * group has more than one chat, and each header tap flips its own bucket.
+ */
+export function collapsedPastBuckets(
+  counts: Partial<Record<Exclude<ChatBucket, "pinned">, number>>,
+  expanded: ReadonlySet<Exclude<ChatBucket, "pinned">>,
+): Set<Exclude<ChatBucket, "pinned">> {
+  if ((counts.today ?? 0) <= 1) return new Set();
+  return new Set(PAST_BUCKETS.filter((b) => !expanded.has(b)));
+}
+
 export const relTime = (tsSec: number, nowMs: number): string =>
   fmtChatTime(tsSec, nowMs);

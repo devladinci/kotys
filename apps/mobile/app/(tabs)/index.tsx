@@ -32,6 +32,7 @@ import { theme, useThemeMode } from "../../lib/theme";
 import {
   bucketFor,
   CHAT_BUCKET_LABELS,
+  collapsedPastBuckets,
   relTime,
   type ChatBucket,
 } from "../../components/chatBuckets";
@@ -39,8 +40,17 @@ import {
 /** Date labels and Today/Yesterday headers tick on this clock. */
 const DATE_TICK_MS = 60_000;
 
+// The Pinned header is a static label; HeaderRow still wants an onPress.
+const noop = () => {};
+
 type Row =
-  | { kind: "header"; key: string; label: string }
+  | {
+      kind: "header";
+      key: string;
+      label: string;
+      bucket: Exclude<ChatBucket, "pinned"> | null;
+      isCollapsed: boolean;
+    }
   | { kind: "chat"; key: string; chat: Chat }
   | {
       kind: "hit";
@@ -52,13 +62,34 @@ type Row =
     };
 
 // Rows rebuild only on chats/pins/search churn — the 60s clock lives in RelTime.
-const HeaderRow = memo(function HeaderRow({ label }: { label: string }) {
+const HeaderRow = memo(function HeaderRow({
+  label,
+  isCollapsed,
+  onPress,
+}: {
+  label: string;
+  isCollapsed: boolean;
+  onPress: () => void;
+}) {
   const mode = useThemeMode();
   const t = theme(mode);
   return (
-    <Text style={[s.header, { color: t.textMuted }]}>
-      {label.toUpperCase()}
-    </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: !isCollapsed }}
+      onPress={onPress}
+      hitSlop={8}
+      style={s.headerRow}
+    >
+      <Text style={[s.header, { color: t.textMuted }]}>
+        {label.toUpperCase()}
+      </Text>
+      <Ionicons
+        name={isCollapsed ? "chevron-forward" : "chevron-down"}
+        size={12}
+        color={t.textMuted}
+      />
+    </Pressable>
   );
 });
 
@@ -199,6 +230,9 @@ export default function ChatListScreen() {
     useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [expandedPast, setExpandedPast] = useState<
+    Set<Exclude<ChatBucket, "pinned">>
+  >(new Set());
   const [hits, setHits] = useState<
     | {
         id: number;
@@ -316,6 +350,17 @@ export default function ChatListScreen() {
   );
 
   const keyExtractor = useCallback((r: Row) => r.key, []);
+  const handleToggleSection = useCallback(
+    (bucket: Exclude<ChatBucket, "pinned">) => {
+      setExpandedPast((prev) => {
+        const next = new Set(prev);
+        if (next.has(bucket)) next.delete(bucket);
+        else next.add(bucket);
+        return next;
+      });
+    },
+    [],
+  );
   const rows = useMemo<Row[]>(() => {
     if (hits !== null) {
       if (hits.length === 0) return [];
@@ -339,12 +384,24 @@ export default function ChatListScreen() {
       list.push(c);
       groups.set(b, list);
     }
+    const collapsed = collapsedPastBuckets(
+      {
+        today: groups.get("today")?.length ?? 0,
+        yesterday: groups.get("yesterday")?.length ?? 0,
+        week: groups.get("week")?.length ?? 0,
+        month: groups.get("month")?.length ?? 0,
+        earlier: groups.get("earlier")?.length ?? 0,
+      },
+      expandedPast,
+    );
     const out: Row[] = [];
     if (pinned.length > 0) {
       out.push({
         kind: "header",
         key: "h-pinned",
         label: CHAT_BUCKET_LABELS.pinned,
+        bucket: null,
+        isCollapsed: false,
       });
       for (const c of pinned)
         out.push({ kind: "chat", key: `c-${c.id}`, chat: c });
@@ -358,17 +415,36 @@ export default function ChatListScreen() {
     ] as const) {
       const list = groups.get(b);
       if (!list) continue;
-      out.push({ kind: "header", key: `h-${b}`, label: CHAT_BUCKET_LABELS[b] });
+      out.push({
+        kind: "header",
+        key: `h-${b}`,
+        label: CHAT_BUCKET_LABELS[b],
+        bucket: b,
+        isCollapsed: collapsed.has(b),
+      });
+      if (collapsed.has(b)) continue;
       for (const c of list)
         out.push({ kind: "chat", key: `c-${c.id}`, chat: c });
     }
     return out;
-  }, [chats, pinnedChatIds, hits, now]);
+  }, [chats, pinnedChatIds, hits, now, expandedPast]);
 
   const renderItem = useCallback(
     ({ item }: { item: Row }) => {
       if (item.kind === "header") {
-        return <HeaderRow label={item.label} />;
+        const bucket = item.bucket;
+        if (bucket === null) {
+          return (
+            <HeaderRow label={item.label} isCollapsed={false} onPress={noop} />
+          );
+        }
+        return (
+          <HeaderRow
+            label={item.label}
+            isCollapsed={item.isCollapsed}
+            onPress={() => handleToggleSection(bucket)}
+          />
+        );
       }
       if (item.kind === "hit") {
         return <HitRow item={item} onPress={open} />;
@@ -383,7 +459,7 @@ export default function ChatListScreen() {
         />
       );
     },
-    [open, chatActions, pinnedChatIds, now],
+    [open, chatActions, pinnedChatIds, now, handleToggleSection],
   );
 
   return (
@@ -463,11 +539,17 @@ const s = StyleSheet.create({
     marginTop: 24,
     fontSize: 13,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
   header: {
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.6,
-    marginTop: 8,
     paddingHorizontal: 4,
   },
   row: {
