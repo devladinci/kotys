@@ -1,6 +1,6 @@
-const FIRST_CHUNK_CHARS = 120;
+const FIRST_CHUNK_CHARS = 80;
 const MAX_CHUNK_CHARS = 300;
-const CHUNK_GROWTH = 1.5;
+const CHUNK_GROWTH = 1.4;
 
 const CODE_FENCE = /```[\s\S]*?(?:```|$)/g;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;

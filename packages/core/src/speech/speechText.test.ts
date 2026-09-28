@@ -70,7 +70,7 @@ describe("speechChunks", () => {
     const chunks = speechChunks(text);
 
     expect(chunks.length).toBeGreaterThan(3);
-    expect(chunks[0].length).toBeLessThanOrEqual(120);
+    expect(chunks[0].length).toBeLessThanOrEqual(80);
     expect(chunks[1].length).toBeGreaterThan(chunks[0].length);
     expect(chunks.every((c) => c.length <= 300)).toBe(true);
     expect(chunks.join(" ")).toBe(text);
@@ -90,7 +90,7 @@ describe("speechChunks", () => {
     const chunks = speechChunks(text);
 
     expect(chunks[0]).toBe(
-      "Това е изречение на български език. Това е изречение на български език. Това е изречение на български език.",
+      "Това е изречение на български език. Това е изречение на български език.",
     );
     expect(chunks.join(" ")).toBe(text);
   });
