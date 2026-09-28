@@ -7,7 +7,12 @@ import {
   useAppStore,
   useRpc,
 } from "@kotys/core";
-import { FIELD_CLASS } from "./styles";
+import {
+  FIELD_CLASS,
+  SUBSECTION_CLASS,
+  SUBSECTION_TEXT_CLASS,
+  SUBSECTION_TITLE_CLASS,
+} from "./styles";
 
 interface IReferenceStatus {
   isSet: boolean;
@@ -112,10 +117,10 @@ export function ReferenceVoice() {
     !file || !transcript.trim() || isSaving || isTranscribing;
 
   return (
-    <div className="mt-5 pt-4 border-t border-border space-y-3">
+    <div className={SUBSECTION_CLASS}>
       <div>
-        <h4 className="text-sm font-medium text-text">Reference voice</h4>
-        <p className="text-xs text-text-muted">
+        <h4 className={SUBSECTION_TITLE_CLASS}>Reference voice</h4>
+        <p className={SUBSECTION_TEXT_CLASS}>
           {status?.isSet
             ? "Replies are read in the voice of your reference clip."
             : "Without a reference clip the voice can change from one sentence to the next. Add a clean 5 to 15 second WAV recording and the words spoken in it."}

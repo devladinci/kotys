@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { speechChunks, toSpeechText } from "./speechText.js";
+import { needsSummary, speechChunks, toSpeechText } from "./speechText.js";
 import type { ISpeechClip, ISpeechDriver, ISpeechState } from "./types.js";
 
 const LINGER_MS = 30_000;
@@ -20,7 +20,9 @@ interface ISession {
 
 interface IUtterance {
   messageId: number;
+  source: string;
   text: string;
+  shouldSummarize: boolean;
   audio: ArrayBuffer[] | null;
 }
 
@@ -70,6 +72,19 @@ const loadersFor = (
   );
 };
 
+const summaryOf = async (
+  driver: ISpeechDriver,
+  utterance: IUtterance,
+  signal: AbortSignal,
+): Promise<string> => {
+  const summary = await driver
+    .fetchSummary(utterance.messageId, signal)
+    .catch(() => null);
+  const text = summary ? toSpeechText(summary) : "";
+
+  return text || utterance.text;
+};
+
 async function run(
   driver: ISpeechDriver,
   utterance: IUtterance,
@@ -80,7 +95,7 @@ async function run(
   session = current;
   last = utterance;
   const isCurrent = () => session === current;
-  const loaders = loadersFor(driver, utterance, current.controller.signal);
+  const { signal } = current.controller;
   const played: ArrayBuffer[] = [];
   useSpeechStore.setState({
     phase: "loading",
@@ -88,6 +103,15 @@ async function run(
     text: utterance.text,
     error: null,
   });
+
+  const text = utterance.shouldSummarize
+    ? await summaryOf(driver, utterance, signal)
+    : utterance.text;
+  if (!isCurrent()) return;
+  const ready: IUtterance = { ...utterance, text, shouldSummarize: false };
+  last = ready;
+  useSpeechStore.setState({ text });
+  const loaders = loadersFor(driver, ready, signal);
 
   try {
     let pending = loaders[0]();
@@ -121,7 +145,7 @@ async function run(
 
   session = null;
   if (byteLength(played) <= CACHE_MAX_BYTES) {
-    last = { ...utterance, audio: played };
+    last = { ...ready, audio: played };
   }
   useSpeechStore.setState({ phase: "done" });
   hideLater();
@@ -132,8 +156,8 @@ export function speakMessage(
   messageId: number,
   markdown: string,
 ): Promise<void> {
-  const text = toSpeechText(markdown);
-  if (!text) {
+  const source = toSpeechText(markdown);
+  if (!source) {
     endSession();
     last = null;
     useSpeechStore.setState({
@@ -147,9 +171,18 @@ export function speakMessage(
   }
   driver.unlock?.();
   const cached =
-    last?.messageId === messageId && last.text === text ? last : null;
+    last?.messageId === messageId && last.source === source ? last : null;
 
-  return run(driver, cached ?? { messageId, text, audio: null });
+  return run(
+    driver,
+    cached ?? {
+      messageId,
+      source,
+      text: source,
+      shouldSummarize: needsSummary(markdown),
+      audio: null,
+    },
+  );
 }
 
 export function replaySpeech(driver: ISpeechDriver): Promise<void> {

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { getConfig } from "../shared/clients.js";
 import { usePlatform, type Platform } from "../shared/provider.js";
-import { requestSpeechAudio } from "./speechApi.js";
+import { requestSpeechAudio, requestSpeechSummary } from "./speechApi.js";
 import {
   replaySpeech,
   speakMessage,
@@ -29,6 +29,8 @@ const driverFor = (platform: Platform): ISpeechDriver => ({
   unlock: platform.unlockSpeech,
   createClip: platform.createSpeechClip ?? unsupported,
   fetchAudio: (text, signal) => requestSpeechAudio(getConfig(), text, signal),
+  fetchSummary: (messageId, signal) =>
+    requestSpeechSummary(getConfig(), messageId, signal),
 });
 
 export function useSpeechActions(): ISpeechActions {

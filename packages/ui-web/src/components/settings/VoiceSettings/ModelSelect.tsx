@@ -1,15 +1,16 @@
 import type { ChangeEvent } from "react";
 import type { ModelListing } from "@kotys/contracts";
-import { modelRefName, modelRefSetting } from "@kotys/core";
+import type { IModelOption } from "@kotys/core";
 import { FIELD_CLASS } from "./styles";
 
 interface IProps {
   label: string;
   models: ModelListing[] | null;
   loadError: string | null;
-  selected: string | null;
+  selected: IModelOption | null;
   emptyText: string;
-  onChange: (setting: string | null) => void;
+  optionOf: (model: ModelListing) => IModelOption;
+  onChange: (key: string | null) => void;
 }
 
 export function ModelSelect({
@@ -18,27 +19,21 @@ export function ModelSelect({
   loadError,
   selected,
   emptyText,
+  optionOf,
   onChange,
 }: IProps) {
-  const selectedName = modelRefName(selected);
-  const list = models ?? [];
+  const options = (models ?? []).map(optionOf);
   const isUnavailable =
-    selectedName !== null && !list.some((m) => m.name === selectedName);
+    selected !== null && !options.some((o) => o.key === selected.key);
 
   const handleChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const name = event.target.value;
-    if (!name) {
-      onChange(null);
-      return;
-    }
-    const listing = list.find((m) => m.name === name);
-    onChange(modelRefSetting(listing?.provider ?? "omlx", name));
+    onChange(event.target.value || null);
   };
 
   if (!models && !loadError) {
     return <p className="text-sm text-text-muted">Loading…</p>;
   }
-  if (list.length === 0 && !selectedName) {
+  if (options.length === 0 && !selected) {
     return (
       <p
         className={
@@ -55,17 +50,17 @@ export function ModelSelect({
       {loadError && <p className="text-sm text-red-400 mb-2">{loadError}</p>}
       <select
         aria-label={label}
-        value={selectedName ?? ""}
+        value={selected?.key ?? ""}
         onChange={handleChange}
         className={FIELD_CLASS}
       >
         <option value="">None</option>
         {isUnavailable && (
-          <option value={selectedName}>{selectedName} (unavailable)</option>
+          <option value={selected.key}>{selected.label} (unavailable)</option>
         )}
-        {list.map((m) => (
-          <option key={m.name} value={m.name}>
-            {m.name}
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.label}
           </option>
         ))}
       </select>

@@ -9,6 +9,7 @@ export * from "./shared/todoDates.js";
 export * from "./shared/format.js";
 export * from "./shared/useNow.js";
 export * from "./shared/useAudioModels.js";
+export * from "./shared/modelOptions.js";
 export * from "./shared/contentWidgets.js";
 
 export * from "./chat/useChat.js";

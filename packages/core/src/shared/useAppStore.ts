@@ -18,6 +18,7 @@ const THINKING_EFFORT_SETTING = "thinking_effort";
 const PERMISSION_MODE_SETTING = "permission_mode";
 const STT_MODEL_SETTING = "stt_model";
 const TTS_MODEL_SETTING = "tts_model";
+const TTS_SUMMARY_MODEL_SETTING = "tts_summary_model";
 const WEB_SEARCH_PROVIDER_SETTING = "web_search_provider";
 const SEARXNG_URL_SETTING = "searxng_url";
 
@@ -79,6 +80,15 @@ const isThinkEffort = (v: unknown): v is ThinkEffort =>
 const isPermissionMode = (v: unknown): v is PermissionMode =>
   typeof v === "string" && (PERMISSION_MODES as string[]).includes(v);
 
+const parseModelListing = (value: string | null): ModelListing | null => {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as ModelListing;
+  } catch {
+    return null;
+  }
+};
+
 interface AppState {
   apiKey: string;
   /** The key is write-only over the wire; this reports whether one is stored. */
@@ -104,6 +114,7 @@ interface AppState {
   permissionMode: PermissionMode;
   sttModel: string | null;
   ttsModel: string | null;
+  ttsSummaryModel: ModelListing | null;
   webSearchProvider: "ollama" | "searxng";
   searxngUrl: string;
   chatsVersion: number;
@@ -125,6 +136,7 @@ interface AppState {
   setPermissionMode: (mode: PermissionMode) => Promise<void>;
   setSttModel: (model: string | null) => Promise<void>;
   setTtsModel: (model: string | null) => Promise<void>;
+  setTtsSummaryModel: (model: ModelListing | null) => Promise<void>;
   setWebSearchProvider: (provider: "ollama" | "searxng") => Promise<void>;
   setSearxngUrl: (url: string) => Promise<void>;
   hydrate: () => Promise<void>;
@@ -156,6 +168,7 @@ export const useAppStore = create<AppState>((set) => ({
   permissionMode: "copilot",
   sttModel: null,
   ttsModel: null,
+  ttsSummaryModel: null,
   webSearchProvider: "ollama",
   searxngUrl: "",
   chatsVersion: 0,
@@ -257,6 +270,14 @@ export const useAppStore = create<AppState>((set) => ({
     });
   },
 
+  setTtsSummaryModel: async (model) => {
+    set({ ttsSummaryModel: model });
+    await getRpc().settings.set({
+      key: TTS_SUMMARY_MODEL_SETTING,
+      value: model ? JSON.stringify(model) : "",
+    });
+  },
+
   togglePinned: async (id) => {
     let next: Set<number>;
     set((s) => {
@@ -288,6 +309,7 @@ export const useAppStore = create<AppState>((set) => ({
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
       Awaited<ReturnType<typeof rpc.settings.get>>,
+      Awaited<ReturnType<typeof rpc.settings.get>>,
     ];
     try {
       values = await Promise.all([
@@ -303,6 +325,7 @@ export const useAppStore = create<AppState>((set) => ({
         rpc.settings.hasSecret({ key: API_KEY_SETTING }),
         rpc.settings.get({ key: STT_MODEL_SETTING }),
         rpc.settings.get({ key: TTS_MODEL_SETTING }),
+        rpc.settings.get({ key: TTS_SUMMARY_MODEL_SETTING }),
         rpc.settings.get({ key: WEB_SEARCH_PROVIDER_SETTING }),
         rpc.settings.get({ key: SEARXNG_URL_SETTING }),
       ]);
@@ -327,17 +350,10 @@ export const useAppStore = create<AppState>((set) => ({
       keyPresent,
       sttModelVal,
       ttsModelVal,
+      ttsSummaryModelVal,
       webSearchProviderVal,
       searxngUrlVal,
     ] = values;
-    let defaultModel = DEFAULT_MODEL;
-    if (modelJson.value) {
-      try {
-        defaultModel = JSON.parse(modelJson.value) as ModelListing;
-      } catch {
-        // keep default
-      }
-    }
     const theme: ThemeMode =
       themeVal.value === "light" || themeVal.value === "dark"
         ? themeVal.value
@@ -357,7 +373,7 @@ export const useAppStore = create<AppState>((set) => ({
       omlxEnabled: omlxEnabledVal.value === "true",
       omlxHost: omlxHostVal.value ?? "",
       omlxApiKeyPresent: omlxKeyPresent.present,
-      defaultModel,
+      defaultModel: parseModelListing(modelJson.value) ?? DEFAULT_MODEL,
       hydrated: true,
       theme,
       pinnedChatIds,
@@ -369,6 +385,7 @@ export const useAppStore = create<AppState>((set) => ({
         : {}),
       sttModel: sttModelVal.value || null,
       ttsModel: ttsModelVal.value || null,
+      ttsSummaryModel: parseModelListing(ttsSummaryModelVal.value),
       webSearchProvider:
         webSearchProviderVal.value === "searxng" ? "searxng" : "ollama",
       searxngUrl: searxngUrlVal.value ?? "",

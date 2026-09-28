@@ -17,4 +17,8 @@ export interface ISpeechDriver {
   unlock?: () => void;
   createClip: (audio: ArrayBuffer) => Promise<ISpeechClip>;
   fetchAudio: (text: string, signal: AbortSignal) => Promise<ArrayBuffer>;
+  fetchSummary: (
+    messageId: number,
+    signal: AbortSignal,
+  ) => Promise<string | null>;
 }

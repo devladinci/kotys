@@ -1,6 +1,12 @@
-import { useAppStore, useAudioModels } from "@kotys/core";
+import {
+  audioModelChoice,
+  audioModelOption,
+  useAppStore,
+  useAudioModels,
+} from "@kotys/core";
 import { ModelSelect } from "./ModelSelect";
 import { ReferenceVoice } from "./ReferenceVoice";
+import { SummaryModel } from "./SummaryModel";
 import {
   SECTION_CLASS,
   SECTION_TEXT_CLASS,
@@ -27,10 +33,12 @@ export function SpeechOutputSection() {
         label="Speech output model"
         models={models}
         loadError={loadError}
-        selected={ttsModel}
+        selected={audioModelChoice(ttsModel)}
         emptyText="No text-to-speech models available. Load one on the oMLX server."
+        optionOf={audioModelOption}
         onChange={handleChange}
       />
+      {ttsModel && <SummaryModel />}
       {ttsModel && <ReferenceVoice />}
     </section>
   );

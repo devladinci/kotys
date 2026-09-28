@@ -244,4 +244,44 @@ describe("useAppStore", () => {
     await act(() => result.current.hydrate());
     expect(result.current.ttsModel).toBe("omlx:higgs");
   });
+
+  it("setTtsSummaryModel stores the whole listing and clears with null", async () => {
+    const listing = {
+      name: "deepseek-v4.1-flash",
+      capabilities: [],
+      contextLength: null,
+      source: "cloud" as const,
+      provider: "ollama",
+    };
+    const { result } = renderHook(() => useAppStore());
+
+    await act(() => result.current.setTtsSummaryModel(listing));
+    expect(result.current.ttsSummaryModel).toEqual(listing);
+    expect(settingsSet).toHaveBeenCalledWith({
+      key: "tts_summary_model",
+      value: JSON.stringify(listing),
+    });
+
+    await act(() => result.current.setTtsSummaryModel(null));
+    expect(result.current.ttsSummaryModel).toBe(null);
+    expect(settingsSet).toHaveBeenLastCalledWith({
+      key: "tts_summary_model",
+      value: "",
+    });
+  });
+
+  it.each([
+    ["a stored listing", JSON.stringify({ name: "gemma4:31b" }), "gemma4:31b"],
+    ["an empty value", "", null],
+    ["invalid json", "{oops", null],
+  ])("hydrate reads tts_summary_model from %s", async (_, value, name) => {
+    useAppStore.setState({ ttsSummaryModel: null });
+    settingsGet.mockImplementation(async (input: { key: string }) => ({
+      value: input.key === "tts_summary_model" ? value : null,
+      secret: false as const,
+    }));
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.hydrate());
+    expect(result.current.ttsSummaryModel?.name ?? null).toBe(name);
+  });
 });

@@ -1,4 +1,9 @@
-import { useAppStore, useAudioModels } from "@kotys/core";
+import {
+  audioModelChoice,
+  audioModelOption,
+  useAppStore,
+  useAudioModels,
+} from "@kotys/core";
 import { ModelSelect } from "./ModelSelect";
 import {
   SECTION_CLASS,
@@ -26,8 +31,9 @@ export function TranscriptionModelSection() {
         label="Transcription model"
         models={models}
         loadError={loadError}
-        selected={sttModel}
+        selected={audioModelChoice(sttModel)}
         emptyText="No speech-to-text models available. Load one on the oMLX server."
+        optionOf={audioModelOption}
         onChange={handleChange}
       />
     </section>

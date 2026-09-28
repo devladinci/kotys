@@ -1,5 +1,12 @@
 import { ScrollView } from "react-native";
-import { useAppStore, useAudioModels } from "@kotys/core";
+import {
+  audioModelChoice,
+  audioModelOption,
+  chatModelOption,
+  useAppStore,
+  useAudioModels,
+  useModels,
+} from "@kotys/core";
 import { ModelPickerCard } from "./ModelPickerCard";
 import { ReferenceStatus } from "./ReferenceStatus";
 import { s } from "./styles";
@@ -9,8 +16,11 @@ export default function VoiceSection() {
   const setSttModel = useAppStore((st) => st.setSttModel);
   const ttsModel = useAppStore((st) => st.ttsModel);
   const setTtsModel = useAppStore((st) => st.setTtsModel);
+  const ttsSummaryModel = useAppStore((st) => st.ttsSummaryModel);
+  const setTtsSummaryModel = useAppStore((st) => st.setTtsSummaryModel);
   const stt = useAudioModels("stt");
   const tts = useAudioModels("tts");
+  const chatModels = useModels();
 
   const handleSttChange = (setting: string | null) => {
     void setSttModel(setting);
@@ -18,6 +28,11 @@ export default function VoiceSection() {
 
   const handleTtsChange = (setting: string | null) => {
     void setTtsModel(setting);
+  };
+
+  const handleSummaryChange = (key: string | null) => {
+    const model = chatModels.find((m) => chatModelOption(m).key === key);
+    void setTtsSummaryModel(model ?? null);
   };
 
   return (
@@ -28,7 +43,8 @@ export default function VoiceSection() {
         emptyText="No speech-to-text models available. Enable oMLX in the desktop app."
         models={stt.models}
         loadError={stt.loadError}
-        selected={sttModel}
+        selected={audioModelChoice(sttModel)}
+        optionOf={audioModelOption}
         onChange={handleSttChange}
       />
       <ModelPickerCard
@@ -37,11 +53,24 @@ export default function VoiceSection() {
         emptyText="No text-to-speech models available. Enable oMLX in the desktop app."
         models={tts.models}
         loadError={tts.loadError}
-        selected={ttsModel}
+        selected={audioModelChoice(ttsModel)}
+        optionOf={audioModelOption}
         onChange={handleTtsChange}
       >
         {ttsModel ? <ReferenceStatus /> : null}
       </ModelPickerCard>
+      {ttsModel ? (
+        <ModelPickerCard
+          title="Summaries for long replies"
+          description="Long replies, and replies with tables or code, are read as a short summary written by this model when you play them. Pick a fast model; its reasoning is turned off. With None, every reply is read in full."
+          emptyText="No chat models available yet."
+          models={chatModels}
+          loadError={null}
+          selected={ttsSummaryModel ? chatModelOption(ttsSummaryModel) : null}
+          optionOf={chatModelOption}
+          onChange={handleSummaryChange}
+        />
+      ) : null}
     </ScrollView>
   );
 }

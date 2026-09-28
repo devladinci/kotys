@@ -1,6 +1,7 @@
 const FIRST_CHUNK_CHARS = 80;
 const MAX_CHUNK_CHARS = 300;
 const CHUNK_GROWTH = 1.4;
+const SUMMARY_MIN_CHARS = 600;
 
 const CODE_FENCE = /```[\s\S]*?(?:```|$)/g;
 const TABLE_ROW = /^\s*\|.*\|\s*$/;
@@ -48,6 +49,11 @@ export function toSpeechText(markdown: string): string {
 
 export const hasSpeechText = (markdown: string): boolean =>
   toSpeechText(markdown) !== "";
+
+export const needsSummary = (markdown: string): boolean =>
+  markdown.includes("```") ||
+  markdown.split("\n").some((line) => TABLE_ROW.test(line)) ||
+  toSpeechText(markdown).length > SUMMARY_MIN_CHARS;
 
 const sentences = (text: string): string[] =>
   (text.match(SENTENCE) ?? []).map((s) => s.trim()).filter(Boolean);

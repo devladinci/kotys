@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import type { ListRenderItemInfo } from "react-native";
 import type { ModelListing } from "@kotys/contracts";
-import { modelRefName, modelRefSetting } from "@kotys/core";
+import type { IModelOption } from "@kotys/core";
 import { useThemeMode } from "../../../lib/theme";
 import { Sheet } from "../../kit/Sheet";
 import { s, themedStyles } from "./styles";
 
 interface IPickerOption {
-  name: string | null;
+  key: string | null;
   label: string;
 }
 
@@ -19,12 +19,13 @@ interface IProps {
   emptyText: string;
   models: ModelListing[] | null;
   loadError: string | null;
-  selected: string | null;
-  onChange: (setting: string | null) => void;
+  selected: IModelOption | null;
+  optionOf: (model: ModelListing) => IModelOption;
+  onChange: (key: string | null) => void;
   children?: ReactNode;
 }
 
-const optionKey = (option: IPickerOption) => option.name ?? "none";
+const optionKey = (option: IPickerOption) => option.key ?? "none";
 
 export function ModelPickerCard({
   title,
@@ -33,49 +34,46 @@ export function ModelPickerCard({
   models,
   loadError,
   selected,
+  optionOf,
   onChange,
   children,
 }: IProps) {
   const ts = themedStyles[useThemeMode()];
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const selectedName = modelRefName(selected);
-  const list = models ?? [];
+  const list = (models ?? []).map(optionOf);
+  const selectedKey = selected?.key ?? null;
+  const selectedLabel = selected?.label ?? "None";
   const isLoading = !models && !loadError;
-  const isEmpty = list.length === 0 && !selectedName;
+  const isEmpty = list.length === 0 && !selected;
   const isUnavailable =
-    selectedName !== null && !list.some((m) => m.name === selectedName);
+    selected !== null && !list.some((o) => o.key === selected.key);
   const options: IPickerOption[] = [
-    { name: null, label: "None" },
+    { key: null, label: "None" },
     ...(isUnavailable
-      ? [{ name: selectedName, label: `${selectedName} (unavailable)` }]
+      ? [{ key: selected.key, label: `${selected.label} (unavailable)` }]
       : []),
-    ...list.map((m) => ({ name: m.name, label: m.name })),
+    ...list,
   ];
 
   const handleOpen = () => setIsPickerOpen(true);
 
   const handleClose = () => setIsPickerOpen(false);
 
-  const handlePick = (name: string | null) => {
+  const handlePick = (key: string | null) => {
     setIsPickerOpen(false);
-    if (!name) {
-      onChange(null);
-      return;
-    }
-    const listing = list.find((m) => m.name === name);
-    onChange(modelRefSetting(listing?.provider ?? "omlx", name));
+    onChange(key);
   };
 
   const renderOption = ({ item }: ListRenderItemInfo<IPickerOption>) => (
     <Pressable
       accessibilityRole="button"
-      onPress={() => handlePick(item.name)}
+      onPress={() => handlePick(item.key)}
       style={[s.rowCard, ts.rowCard]}
     >
       <Text
         style={[
           s.rowText,
-          item.name === selectedName ? ts.selectedText : ts.text,
+          item.key === selectedKey ? ts.selectedText : ts.text,
         ]}
       >
         {item.label}
@@ -97,12 +95,12 @@ export function ModelPickerCard({
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${title}: ${selectedName ?? "None"}`}
+            accessibilityLabel={`${title}: ${selectedLabel}`}
             onPress={handleOpen}
             style={[s.input, ts.input]}
           >
-            <Text style={[s.inputText, selectedName ? ts.text : ts.mutedText]}>
-              {selectedName ?? "None"}
+            <Text style={[s.inputText, selected ? ts.text : ts.mutedText]}>
+              {selectedLabel}
             </Text>
           </Pressable>
         )}

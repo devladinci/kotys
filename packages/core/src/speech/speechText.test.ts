@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hasSpeechText, speechChunks, toSpeechText } from "./speechText.js";
+import {
+  hasSpeechText,
+  needsSummary,
+  speechChunks,
+  toSpeechText,
+} from "./speechText.js";
 
 describe("toSpeechText", () => {
   it("keeps plain prose as it is", () => {
@@ -51,6 +56,37 @@ describe("hasSpeechText", () => {
     expect(hasSpeechText("Plain answer.")).toBe(true);
     expect(hasSpeechText("```ts\nconst a = 1;\n```")).toBe(false);
     expect(hasSpeechText("| a | b |\n| - | - |")).toBe(false);
+  });
+});
+
+describe("needsSummary", () => {
+  it("leaves a short plain reply to be read as it is", () => {
+    expect(needsSummary("Sure. The meeting is at 3 pm on Friday.")).toBe(false);
+  });
+
+  it("summarizes a reply with a table", () => {
+    expect(needsSummary("Results:\n\n| a | b |\n| - | - |\n| 1 | 2 |")).toBe(
+      true,
+    );
+  });
+
+  it("summarizes a reply with code", () => {
+    expect(needsSummary("Run this:\n```bash\npnpm test\n```")).toBe(true);
+  });
+
+  it("summarizes a reply that takes long to read", () => {
+    expect(needsSummary("Word. ".repeat(90))).toBe(false);
+    expect(needsSummary("Word. ".repeat(120))).toBe(true);
+  });
+
+  it("measures the spoken text, not the markdown around it", () => {
+    const links = Array.from(
+      { length: 15 },
+      (_, i) => `[doc ${i}](https://example.com/a/very/long/path/${i})`,
+    ).join(" ");
+
+    expect(links.length).toBeGreaterThan(600);
+    expect(needsSummary(links)).toBe(false);
   });
 });
 

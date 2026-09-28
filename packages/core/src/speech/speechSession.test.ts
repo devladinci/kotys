@@ -14,6 +14,13 @@ interface IFakeRequest {
   reject: (err: Error) => void;
 }
 
+interface IFakeSummary {
+  messageId: number;
+  signal: AbortSignal;
+  resolve: (text: string | null) => void;
+  reject: (err: Error) => void;
+}
+
 interface IFakeClip extends ISpeechClip {
   audio: ArrayBuffer;
   finish: () => void;
@@ -25,9 +32,16 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const createDriver = () => {
   const requests: IFakeRequest[] = [];
+  const summaries: IFakeSummary[] = [];
   const clips: IFakeClip[] = [];
   const driver: ISpeechDriver = {
     unlock: vi.fn(),
+    fetchSummary: vi.fn(
+      (messageId: number, signal: AbortSignal) =>
+        new Promise<string | null>((resolve, reject) => {
+          summaries.push({ messageId, signal, resolve, reject });
+        }),
+    ),
     fetchAudio: vi.fn(
       (text: string, signal: AbortSignal) =>
         new Promise<ArrayBuffer>((resolve, reject) => {
@@ -52,13 +66,18 @@ const createDriver = () => {
       return clip;
     }),
   };
-  return { driver, requests, clips };
+  return { driver, requests, summaries, clips };
 };
 
 const LONG_REPLY = Array.from(
   { length: 12 },
   (_, i) => `This is sentence number ${i + 1} of the reply.`,
 ).join(" ");
+
+const TABLE_REPLY =
+  "Here is where things stand.\n\n| check | result |\n| - | - |\n| tests | pass |";
+
+const SUMMARY = "All checks pass. Only the live test is left.";
 
 beforeEach(() => {
   stopSpeech();
@@ -265,6 +284,125 @@ describe("speakMessage", () => {
       phase: "idle",
       messageId: null,
     });
+  });
+});
+
+describe("summaries", () => {
+  it("reads short plain replies as they are", async () => {
+    const { driver, requests } = createDriver();
+    void speakMessage(driver, 20, "Hello there.");
+
+    expect(driver.fetchSummary).not.toHaveBeenCalled();
+    expect(requests[0].text).toBe("Hello there.");
+  });
+
+  it("reads the summary of a reply with a table, and shows it in the bar", async () => {
+    const { driver, requests, summaries, clips } = createDriver();
+    const done = speakMessage(driver, 21, TABLE_REPLY);
+
+    expect(driver.fetchSummary).toHaveBeenCalledWith(
+      21,
+      expect.any(AbortSignal),
+    );
+    expect(requests).toHaveLength(0);
+    expect(useSpeechStore.getState().phase).toBe("loading");
+
+    summaries[0].resolve(SUMMARY);
+    await flush();
+
+    expect(requests.map((r) => r.text)).toEqual([SUMMARY]);
+    expect(useSpeechStore.getState().text).toBe(SUMMARY);
+
+    requests[0].resolve(audioFor("summary"));
+    await flush();
+    clips[0].finish();
+    await done;
+
+    expect(useSpeechStore.getState()).toMatchObject({
+      phase: "done",
+      messageId: 21,
+      text: SUMMARY,
+    });
+  });
+
+  it("strips markdown the summary model left in", async () => {
+    const { driver, requests, summaries } = createDriver();
+    void speakMessage(driver, 22, TABLE_REPLY);
+
+    summaries[0].resolve("**All checks pass.** See [the log](https://x.dev).");
+    await flush();
+
+    expect(requests[0].text).toBe("All checks pass. See the log.");
+  });
+
+  it.each([
+    ["there is no summary model", 23, (s: IFakeSummary) => s.resolve(null)],
+    ["the summary is empty", 27, (s: IFakeSummary) => s.resolve("```\n```")],
+    [
+      "the summary fails",
+      28,
+      (s: IFakeSummary) => s.reject(new Error("model not found")),
+    ],
+  ])("reads the full reply when %s", async (_, messageId, settle) => {
+    const { driver, requests, summaries } = createDriver();
+    void speakMessage(driver, messageId, TABLE_REPLY);
+
+    settle(summaries[0]);
+    await flush();
+
+    expect(requests[0].text).toBe("Here is where things stand.");
+    expect(useSpeechStore.getState()).toMatchObject({
+      phase: "loading",
+      text: "Here is where things stand.",
+      error: null,
+    });
+  });
+
+  it("stop while summarizing cancels it and never synthesizes", async () => {
+    const { driver, requests, summaries } = createDriver();
+    void speakMessage(driver, 24, TABLE_REPLY);
+
+    stopSpeech();
+
+    expect(summaries[0].signal.aborted).toBe(true);
+
+    summaries[0].resolve(SUMMARY);
+    await flush();
+
+    expect(requests).toHaveLength(0);
+    expect(useSpeechStore.getState().phase).toBe("idle");
+  });
+
+  it("replay plays the summary audio without summarizing again", async () => {
+    const { driver, requests, summaries, clips } = createDriver();
+    const first = speakMessage(driver, 25, TABLE_REPLY);
+    summaries[0].resolve(SUMMARY);
+    await flush();
+    requests[0].resolve(audioFor("summary"));
+    await flush();
+    clips[0].finish();
+    await first;
+
+    void replaySpeech(driver);
+    await flush();
+
+    expect(driver.fetchSummary).toHaveBeenCalledTimes(1);
+    expect(driver.fetchAudio).toHaveBeenCalledTimes(1);
+    expect(new TextDecoder().decode(clips[1].audio)).toBe("summary");
+  });
+
+  it("retry after a failed chunk reuses the summary", async () => {
+    const { driver, requests, summaries } = createDriver();
+    const first = speakMessage(driver, 26, TABLE_REPLY);
+    summaries[0].resolve(SUMMARY);
+    await flush();
+    requests[0].reject(new Error("speech failed: 500"));
+    await first;
+
+    void replaySpeech(driver);
+
+    expect(driver.fetchSummary).toHaveBeenCalledTimes(1);
+    expect(requests[1].text).toBe(SUMMARY);
   });
 });
 
