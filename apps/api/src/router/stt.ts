@@ -1,5 +1,11 @@
 import type { ModelListing } from "@kotys/contracts";
-import { listEnabledSttConnectors } from "../services/stt/registry.js";
+import { getSetting } from "@kotys/db";
+import {
+  listEnabledSttConnectors,
+  parseSttModelSetting,
+  resolveSttConnector,
+  STT_MODEL_SETTING,
+} from "../services/stt/registry.js";
 import { pub } from "./base.js";
 
 /**
@@ -17,5 +23,19 @@ export const sttRouter = {
       if (result.status === "fulfilled") out.push(...result.value);
     }
     return out;
+  }),
+
+  /** Whether dictation can stream into the composer with the selected model. */
+  capabilities: pub.handler(async () => {
+    const ref = parseSttModelSetting(getSetting(STT_MODEL_SETTING));
+    if (!ref) return { streaming: false };
+    try {
+      const connector = resolveSttConnector(ref);
+      return {
+        streaming: (await connector.supportsStreaming?.(ref.model)) === true,
+      };
+    } catch {
+      return { streaming: false };
+    }
   }),
 };

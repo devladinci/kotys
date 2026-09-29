@@ -363,11 +363,20 @@ the attach-images button. Hold it down to record. The icon becomes a red dot
 while it listens, and the app asks for the microphone the first time. Release
 to send the audio to the daemon; the button pulses while the text comes back.
 
-The transcript is sent as a chat message as soon as it arrives. It does not
-land in the composer for you to edit first, and the composer is cleared. If
-the press is cancelled instead of released, the recording is dropped and
-nothing is uploaded. A press too short to capture any audio is refused before
-the upload, with "Recording was too short".
+With a model that transcribes live, the words appear in the composer while
+you speak, after anything you had typed. On oMLX the Whisper models do this;
+Kotys checks `realtime_stt` in `/models/status` for the selected model.
+Release, and the text stays in the composer for you to edit and send. One
+undo takes the whole dictation back out. The audio streams to the daemon over
+a WebSocket as 16 kHz mono PCM, and the daemon passes it on to oMLX's
+realtime endpoint. If the stream breaks off, the recording is transcribed
+the usual way, and that text lands in the composer instead.
+
+With any other model, the transcript is sent as a chat message as soon as it
+arrives, and whatever you had typed stays in the box. If the press is
+cancelled instead of released, the recording is dropped, along with any words
+it had already written, and nothing is uploaded. A press too short to capture
+any audio is refused before the upload, with "Recording was too short".
 
 **On the phone.** Same gesture: hold the mic in the composer row, and release
 to transcribe. The first use asks for microphone permission, and a refusal

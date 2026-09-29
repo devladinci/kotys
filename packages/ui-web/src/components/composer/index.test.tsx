@@ -2,15 +2,26 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+interface ILive {
+  onText: (text: string) => void;
+  onEnd: (text: string | null) => void;
+}
+
 const voice = vi.hoisted(() => ({
   onTranscript: null as ((text: string) => void) | null,
+  live: undefined as ILive | undefined,
 }));
 
 vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
 vi.mock("@kotys/core", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useVoiceInput: (_platform: unknown, onTranscript: (text: string) => void) => {
+  useVoiceInput: (
+    _platform: unknown,
+    onTranscript: (text: string) => void,
+    live?: ILive,
+  ) => {
     voice.onTranscript = onTranscript;
+    voice.live = live;
     return {
       status: "idle",
       error: null,
@@ -27,6 +38,7 @@ const { KotysProviderForTest } = await import("../../test/platform");
 const Composer = (await import("./index")).default;
 
 const skillsList = rpc.skills.list as ReturnType<typeof vi.fn>;
+const sttCapabilities = rpc.stt.capabilities as ReturnType<typeof vi.fn>;
 
 const listing = {
   name: "create-kotys-pr",
@@ -213,5 +225,70 @@ describe("Composer slash menu", () => {
       .join(" ");
     expect(names).toContain("create-kotys-pr");
     expect(names).not.toContain("internal-only");
+  });
+});
+
+describe("Composer live dictation", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await initTestClients();
+    skillsList.mockResolvedValue([]);
+    sttCapabilities.mockResolvedValue({ streaming: true });
+    voice.live = undefined;
+  });
+
+  const live = async () => {
+    await waitFor(() => expect(voice.live).toBeDefined());
+    return voice.live as ILive;
+  };
+
+  it("writes the words into the draft while they are spoken", async () => {
+    const { onSend } = renderComposer();
+    await type("Note:");
+    const dictation = await live();
+
+    act(() => dictation.onText("Buy milk"));
+    expect(composer()).toHaveTextContent("Note: Buy milk");
+    act(() => dictation.onText("Buy milk and eggs"));
+    expect(composer()).toHaveTextContent("Note: Buy milk and eggs");
+    act(() => dictation.onEnd("Buy milk and eggs."));
+
+    expect(composer()).toHaveTextContent("Note: Buy milk and eggs.");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("takes the words back out when the recording is dropped", async () => {
+    renderComposer();
+    await type("Keep this");
+    const dictation = await live();
+
+    act(() => dictation.onText("not this"));
+    act(() => dictation.onEnd(null));
+
+    expect(composer()).toHaveTextContent(/^Keep this$/);
+  });
+
+  it("undoes a whole dictation in one step", async () => {
+    renderComposer();
+    await type("Draft");
+    const dictation = await live();
+
+    act(() => dictation.onText("one"));
+    act(() => dictation.onText("one two"));
+    act(() => dictation.onEnd("one two three"));
+    expect(composer()).toHaveTextContent("Draft one two three");
+
+    await userEvent.keyboard("{Control>}z{/Control}");
+    expect(composer()).toHaveTextContent(/^Draft$/);
+  });
+
+  it("still sends the transcript when the model does not stream", async () => {
+    sttCapabilities.mockResolvedValue({ streaming: false });
+    const { onSend } = renderComposer();
+    await waitFor(() => expect(sttCapabilities).toHaveBeenCalled());
+
+    expect(voice.live).toBeUndefined();
+    act(() => voice.onTranscript?.("dictated words"));
+    expect(onSend).toHaveBeenCalledWith("dictated words", []);
   });
 });

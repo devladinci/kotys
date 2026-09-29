@@ -16,6 +16,13 @@ export type VoiceRecording = {
   mimeType: string;
 };
 
+/** A dictation transcribed while it is spoken. */
+export type VoiceStream = {
+  /** Resolves with the whole text, or null when the stream could not keep up. */
+  finish: () => Promise<string | null>;
+  cancel: () => void;
+};
+
 /**
  * Capabilities the host app provides.
  *
@@ -42,6 +49,14 @@ export type Platform = {
   /** Hold-to-talk voice input; hosts without a mic throw. */
   startVoiceRecording?: () => Promise<void>;
   stopVoiceRecording?: () => Promise<VoiceRecording>;
+  /**
+   * Live transcription of the recording in progress, for models that can.
+   * Hosts without it transcribe once the press ends.
+   */
+  streamVoice?: (
+    config: { baseUrl: string; token: string },
+    onText: (text: string) => void,
+  ) => VoiceStream;
   unlockSpeech?: () => void;
   createSpeechClip?: (audio: ArrayBuffer) => Promise<ISpeechClip>;
 };

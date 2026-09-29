@@ -1,4 +1,5 @@
 import type { Platform } from "@kotys/core";
+import { createRealtimeDictation, sharedAudioContext } from "@saystack/web";
 import { createVoiceRecorder } from "./voiceRecorder.js";
 
 interface ElectronBridge {
@@ -63,6 +64,14 @@ export const webPlatform: Platform = {
     const { blob, mimeType } = await rec.stop();
     return { blob, mimeType };
   },
+  // Same token-in-query handshake as /ws: browsers can't set WS headers.
+  streamVoice: (config, onText) =>
+    createRealtimeDictation({
+      url: `${config.baseUrl.replace(/^http/, "ws")}/stt/stream?token=${encodeURIComponent(config.token)}`,
+      stream: activeVoiceStream,
+      onText,
+      context: sharedAudioContext(),
+    }),
 };
 
 export const desktopPlatform: Platform = {

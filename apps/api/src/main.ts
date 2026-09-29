@@ -7,6 +7,7 @@ import { initDatabase, DB_PATH } from "@kotys/db";
 import { router } from "./router/index.js";
 import { HOST, isAllowedOrigin, PORT } from "./config.js";
 import { registerSttRoute } from "./sttRoute.js";
+import { registerSttStreamRoute } from "./sttStreamRoute.js";
 import { registerTtsRoute } from "./ttsRoute.js";
 import {
   getOrCreateToken,
@@ -64,6 +65,7 @@ app.get("/health", (c) => c.json({ ok: true }));
 app.use("/rpc/*", requireAuth());
 
 registerSttRoute(app);
+registerSttStreamRoute(app);
 registerTtsRoute(app);
 
 const handler = new RPCHandler(router);

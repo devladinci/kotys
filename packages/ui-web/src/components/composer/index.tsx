@@ -25,8 +25,10 @@ import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
 import { QueuedMessageRow } from "./QueuedMessageRow";
 import { StatusNote } from "./StatusNote";
+import { endDictation, showDictation } from "./dictationExtension";
 import { useComposerEditor } from "./useComposerEditor";
 import { useSlashMenu, applySlashPick } from "./slashExtension";
+import { useSttStreaming } from "./useSttStreaming";
 
 const MAX_IMAGES = 4;
 const IMAGE_MAX_DIM = 1536;
@@ -188,13 +190,29 @@ function ComposerBase({
   });
 
   const platform = usePlatform();
+  const canStreamVoice = useSttStreaming();
 
   // The draft stays: dictation sends its own message beside it.
   const handleTranscript = (text: string) => {
     handleSend(text, effectiveImages);
   };
 
-  const voice = useVoiceInput(platform, handleTranscript);
+  // A model that transcribes live writes into the draft instead.
+  const handleLiveText = (text: string) => {
+    if (editor) showDictation(editor, text);
+  };
+
+  const handleLiveEnd = (text: string | null) => {
+    if (editor) endDictation(editor, text);
+  };
+
+  const voice = useVoiceInput(
+    platform,
+    handleTranscript,
+    canStreamVoice
+      ? { onText: handleLiveText, onEnd: handleLiveEnd }
+      : undefined,
+  );
   const micLevels = useAudioLevels();
   const readMicLevels = useCallback(() => micLevels?.read(), [micLevels]);
 

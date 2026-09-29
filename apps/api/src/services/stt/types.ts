@@ -7,6 +7,21 @@ type TranscriptionResult = {
   duration: number | null;
 };
 
+/** What a live transcription reports while the user speaks. */
+export type SttStreamEvent =
+  | { type: "ready" }
+  | { type: "delta"; text: string }
+  | { type: "done"; text: string }
+  | { type: "error"; message: string };
+
+/** One live transcription: 16 kHz mono PCM16 in, text as it settles out. */
+export interface SttStream {
+  send(pcm: Uint8Array): void;
+  /** No more audio: the provider finishes the text, then reports done. */
+  stop(): void;
+  close(): void;
+}
+
 /**
  * A speech-to-text provider = endpoint + wire protocol. Implementations
  * translate between this provider-neutral shape and the provider's own API —
@@ -21,4 +36,10 @@ export interface SttConnector {
     filename: string;
     language?: string;
   }): Promise<TranscriptionResult>;
+  /** Providers without live transcription leave these out. */
+  supportsStreaming?(model: string): Promise<boolean>;
+  openStream?(
+    req: { model: string; language?: string },
+    onEvent: (event: SttStreamEvent) => void,
+  ): SttStream;
 }

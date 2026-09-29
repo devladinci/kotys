@@ -18,6 +18,7 @@ import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
 import type { SkillListing } from "@kotys/contracts";
 import { composerConfig, setComposerConfig } from "./composerConfig";
+import { DictationExtension } from "./dictationExtension";
 import {
   SlashExtension,
   applySlashPick,
@@ -103,6 +104,7 @@ export function useComposerEditor({
       }),
       Placeholder.configure({ placeholder: () => composerConfig.placeholder }),
       SlashExtension.configure({ items: () => composerConfig.skills }),
+      DictationExtension,
     ],
     editorProps: {
       attributes: {
