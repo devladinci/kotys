@@ -3,6 +3,7 @@
  * (smallest, well-supported); falls back to whatever the browser offers.
  */
 export type VoiceRecorder = {
+  readonly stream: MediaStream | null;
   start: () => Promise<void>;
   stop: () => Promise<{ blob: Blob; mimeType: string }>;
 };
@@ -23,6 +24,9 @@ export function createVoiceRecorder(): VoiceRecorder {
   let starting: Promise<void> | null = null;
 
   return {
+    get stream() {
+      return stream;
+    },
     async start() {
       if (recorder || starting) return;
       starting = (async () => {

@@ -7,6 +7,10 @@ settings:
 overrides:
   react: 19.1.0
   react-dom: 19.1.0
+  '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+  '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz
+  '@saystack/web': file:vendor/saystack/saystack-web-0.0.1.tgz
+  '@saystack/react-web': file:vendor/saystack/saystack-react-web-0.0.1.tgz
 
 importers:
 
@@ -398,6 +402,18 @@ importers:
       '@kotys/core':
         specifier: workspace:*
         version: link:../core
+      '@saystack/core':
+        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
+        version: file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/react':
+        specifier: file:../../vendor/saystack/saystack-react-0.0.1.tgz
+        version: file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
+      '@saystack/react-web':
+        specifier: file:../../vendor/saystack/saystack-react-web-0.0.1.tgz
+        version: file:vendor/saystack/saystack-react-web-0.0.1.tgz(react@19.1.0)
+      '@saystack/web':
+        specifier: file:../../vendor/saystack/saystack-web-0.0.1.tgz
+        version: file:vendor/saystack/saystack-web-0.0.1.tgz
       '@tiptap/core':
         specifier: ^3.31.3
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -2394,6 +2410,30 @@ packages:
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
+
+  '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz':
+    resolution: {integrity: sha512-rZ8LBifaAFgWZDmKRbieyXRGDx/nnfoYKjQFLMqSgM+BkXfD8KAuZGHRnpF2R44X+mfL+7IKQSngOZhNWgaAHw==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
+
+  '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz':
+    resolution: {integrity: sha512-z0gsJ/6A1eCC3Fd+qmhW0b1a8kGlq708G/PQ0uMAY1Tj9Yo5o87SynnmFMk0YU056F2rhrrCkv2LCiPCmkZMJA==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
+    peerDependencies:
+      react: 19.1.0
+
+  '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz':
+    resolution: {integrity: sha512-XmOYCFmnz9o+XcfVzqc0E6S+ILTkv5Xe9PuwRjaXRIpSFbByNXJE7uJr253XIomKGZldB0unido3fS2yfdaMmA==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
+    peerDependencies:
+      react: 19.1.0
+
+  '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
+    resolution: {integrity: sha512-+GOYOExVwJk5aMoUgWJUuDQsOWmS4aKTG3htT2dEnPXA2ZHGgWgR2jI911oUa7Pt0Gsfxg9LKczzDra+suJkJA==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
 
   '@sinclair/typebox@0.27.12':
     resolution: {integrity: sha512-hhyNJ+nbR6ZR7pToHvllEFun9TL0sbL+tk/ON75lo+Xas054uez98qRbsuNt7MBCyZKK4+8Yli/OAGZhmfBZ/g==}
@@ -9401,6 +9441,24 @@ snapshots:
     optional: true
 
   '@rtsao/scc@1.1.0': {}
+
+  '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz': {}
+
+  '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz(react@19.1.0)':
+    dependencies:
+      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
+      '@saystack/web': file:vendor/saystack/saystack-web-0.0.1.tgz
+      react: 19.1.0
+
+  '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)':
+    dependencies:
+      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      react: 19.1.0
+
+  '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
+    dependencies:
+      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
 
   '@sinclair/typebox@0.27.12': {}
 

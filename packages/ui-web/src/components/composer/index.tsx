@@ -11,8 +11,15 @@ import {
   useSkills,
   useVoiceInput,
 } from "@kotys/core";
-import type { QueuedMessage } from "@kotys/core";
+import type { QueuedMessage, VoiceStatus } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
+import {
+  useAudioLevels,
+  useAura,
+  useRecorderLevels,
+} from "@saystack/react-web";
+import { unlockWebAudio, type AuraState } from "@saystack/web";
+import { activeVoiceStream } from "../../platform";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
 import { QueuedMessageRow } from "./QueuedMessageRow";
@@ -22,6 +29,13 @@ import { useSlashMenu, applySlashPick } from "./slashExtension";
 
 const MAX_IMAGES = 4;
 const IMAGE_MAX_DIM = 1536;
+
+const MIC_AURA: Record<VoiceStatus, AuraState> = {
+  idle: "hidden",
+  recording: "active",
+  transcribing: "working",
+  error: "hidden",
+};
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -89,6 +103,7 @@ function ComposerBase({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const { skills } = useSkills();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const nextImageId = useRef(0);
 
@@ -179,8 +194,15 @@ function ComposerBase({
   };
 
   const voice = useVoiceInput(platform, handleTranscript);
+  const micLevels = useAudioLevels();
+  const readMicLevels = useCallback(() => micLevels?.read(), [micLevels]);
+
+  useRecorderLevels(micLevels, voice.status === "recording", activeVoiceStream);
+
+  useAura(boxRef, { state: MIC_AURA[voice.status], levels: readMicLevels });
 
   const handleVoiceStart = () => {
+    unlockWebAudio();
     void voice.start();
   };
 
@@ -213,6 +235,7 @@ function ComposerBase({
         />
       )}
       <div
+        ref={boxRef}
         className={`bg-surface rounded-xl border p-1.5 transition ${
           dragOver
             ? "border-accent ring-2 ring-accent/30 bg-accent/5"

@@ -6,6 +6,7 @@ import type { Message } from "@kotys/contracts";
 import { initTestClients } from "../../test/mocks/rpc";
 import { KotysProviderForTest } from "../../test/platform";
 import { MessageBubble } from "./MessageBubble";
+import { ReadAloudProvider } from "./readAloud/ReadAloudProvider";
 
 vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
 
@@ -157,12 +158,14 @@ describe("MessageBubble read aloud", () => {
   const renderWithProvider = (message: Message) =>
     render(
       <KotysProviderForTest>
-        <MessageBubble
-          message={message}
-          isStreamingThis={false}
-          isHighlighted={false}
-          onImageClick={noop}
-        />
+        <ReadAloudProvider>
+          <MessageBubble
+            message={message}
+            isStreamingThis={false}
+            isHighlighted={false}
+            onImageClick={noop}
+          />
+        </ReadAloudProvider>
       </KotysProviderForTest>,
     );
 

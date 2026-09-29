@@ -1,6 +1,5 @@
 import type { Platform } from "@kotys/core";
 import { createVoiceRecorder } from "./voiceRecorder.js";
-import { createSpeechClip, unlockSpeech } from "./speechOutput.js";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
@@ -19,6 +18,9 @@ const ensureNotificationPermission = () => {
 };
 
 let recorder: ReturnType<typeof createVoiceRecorder> | null = null;
+
+export const activeVoiceStream = (): MediaStream | null =>
+  recorder?.stream ?? null;
 
 export const webPlatform: Platform = {
   scrollToMessage: (id) => {
@@ -61,8 +63,6 @@ export const webPlatform: Platform = {
     const { blob, mimeType } = await rec.stop();
     return { blob, mimeType };
   },
-  unlockSpeech,
-  createSpeechClip,
 };
 
 export const desktopPlatform: Platform = {

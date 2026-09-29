@@ -428,16 +428,22 @@ picker lists the models whose `engine_type` in `/models/status` is
    gemma4:31b wrote a summary in 1 to 3 seconds, while glm-5.3-flash kept
    reasoning in its answer and took about 10.
 
-**On the desktop.** Hover a reply and press the speaker next to Copy. A bar
-above the composer says "Preparing audio…", then shows the text being read,
-with **Stop**. When it ends, the bar offers **Replay**, which plays the same
+**On the desktop.** Hover a reply and press the speaker next to Copy. A
+player appears above the composer. It says "Preparing audio…" while the
+first piece is made, then shows the words being spoken, with a segment for
+each piece of the reply, **Pause**, previous and next piece, the time, a
+button that scrolls back to the reply, and **Close**. In the reply itself
+the word being spoken is marked and the words still to come are dimmed;
+click any word to continue from there. A glow around the reply follows the
+voice, and the same glow rises above the composer while you hold the mic.
+When the reply ends, the player offers **Replay**, which plays the same
 audio again without asking the server, and it closes itself after 30
 seconds. Pressing the speaker on another reply stops the current one.
 
 **On the phone.** Long-press a reply and choose **Read aloud**, or double-tap
-it. The same bar appears above the composer, with the same buttons. The
-phone only plays the sound: the text goes to the daemon on your computer,
-and the daemon talks to oMLX.
+it. A bar appears above the composer with **Stop**, and **Replay** once it
+ends. The phone only plays the sound: the text goes to the daemon on your
+computer, and the daemon talks to oMLX.
 
 **What gets read.** Kotys reads the prose. Code blocks, tables, links, and
 images are skipped, and headings and list items become sentences of their
@@ -450,10 +456,11 @@ while the current one plays.
 characters of prose, or with a table or code, is summarized when you press
 play. The summary model gets the reply and writes about 100 spoken words in
 the reply's own language, saying in a sentence what a table or a code block
-shows instead of skipping it. The bar says "Preparing audio…" while the
-summary is written, then shows the summary as it is read. Shorter replies
-are read word for word. Replay plays the same summary again without asking
-for a new one.
+shows instead of skipping it. The player says "Preparing audio…" while
+the summary is written, then shows the summary as it is read. The words in
+the reply are not marked, because the summary uses other words; only the
+glow follows it. Shorter replies are read word for word. Replay plays the
+same summary again without asking for a new one.
 
 **Higgs Audio v3.** Speech was tested with
 [Higgs Audio v3](https://huggingface.co/bosonai/higgs-audio-v3-tts-4b) on
@@ -471,7 +478,8 @@ oMLX 0.6.4, which serves it only after three changes on the oMLX side:
 Kotys does not ship or download the model. Check its license on the model
 card before you use it.
 
-**When it does not work.** The bar shows the reason and a **Retry** button:
+**When it does not work.** The player, or the bar on the phone, shows the
+reason and a **Retry** button:
 
 - No model selected: "No text-to-speech model selected".
 - oMLX turned off, or the server unreachable: the error from the server.

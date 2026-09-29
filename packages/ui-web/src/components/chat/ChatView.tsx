@@ -27,7 +27,8 @@ import { isInputForChat, useUserInputStore } from "@kotys/core";
 import { DEFAULT_CONTEXT } from "@kotys/contracts";
 import PomodoroChip from "../pomodoro/PomodoroChip";
 import MessageList, { type IMessageListHandle } from "./MessageList";
-import { SpeechBar } from "./SpeechBar";
+import { ReadAloudAura } from "./readAloud/ReadAloudAura";
+import { ReadAloudPlayer } from "./readAloud/ReadAloudPlayer";
 import Composer from "../composer";
 import UserInputComposer from "../user-input/UserInputComposer";
 import ModelSelector from "./ModelSelector";
@@ -126,6 +127,7 @@ export default function ChatView({
   const atBottomRef = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [listArea, setListArea] = useState<HTMLDivElement | null>(null);
   const [compactNotice, setCompactNotice] = useState<
     "compacted" | "nothing" | "error" | null
   >(null);
@@ -374,7 +376,8 @@ export default function ChatView({
           )}
         </button>
       </header>
-      <div className="flex-1 relative min-h-0">
+      <div ref={setListArea} className="flex-1 relative min-h-0">
+        <ReadAloudAura clip={listArea} />
         <MessageList
           ref={listHandle}
           onAtBottomChange={handleAtBottomChange}
@@ -404,7 +407,7 @@ export default function ChatView({
 
       <div className="p-3 border-t border-border bg-bg">
         <div className="max-w-3xl mx-auto">
-          <SpeechBar />
+          <ReadAloudPlayer />
           {(isCompacting || compactNotice) && (
             <div
               className="relative mb-2 flex justify-center"

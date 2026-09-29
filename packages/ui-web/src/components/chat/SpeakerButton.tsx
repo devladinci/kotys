@@ -1,9 +1,9 @@
 import { Loader2, Square, Volume2 } from "lucide-react";
-import { useMessageSpeechPhase, useSpeechActions } from "@kotys/core";
 import {
   ACTION_BUTTON_CLASS,
   ACTIVE_ACTION_BUTTON_CLASS,
 } from "../actionButton";
+import { useReadAloud } from "./readAloud/useReadAloud";
 
 interface IProps {
   messageId: number;
@@ -11,14 +11,15 @@ interface IProps {
 }
 
 export function SpeakerButton({ messageId, content }: IProps) {
-  const phase = useMessageSpeechPhase(messageId);
-  const { speak, stop } = useSpeechActions();
+  const { speech, messageId: readingId, speak } = useReadAloud();
+  const [state, api] = speech;
+  const phase = readingId === messageId ? state.phase : "idle";
   const isLoading = phase === "loading";
-  const isActive = isLoading || phase === "playing";
+  const isActive = isLoading || phase === "playing" || phase === "paused";
 
   const handleClick = () => {
     if (isActive) {
-      stop();
+      api.stop();
       return;
     }
     speak(messageId, content);

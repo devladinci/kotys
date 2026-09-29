@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@saystack/react-web/styles.css";
 @plugin "@tailwindcss/typography";
 
 /*
@@ -316,6 +317,45 @@ body,
 .topic-expand-enter {
   animation: sidebar-topic-expand 180ms cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+}
+
+/* saystack voice UI (aura, read-along, player) in Kotys colors. */
+:root,
+:root[data-theme="dark"] {
+  --saystack-aura-mode: dark;
+}
+
+:root[data-theme="light"] {
+  --saystack-aura-mode: light;
+}
+
+:root {
+  --saystack-unread-color: var(--text-muted);
+  --saystack-word-background: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    transparent
+  );
+  --saystack-word-edge: color-mix(in srgb, var(--accent) 40%, transparent);
+  --saystack-block-edge: color-mix(in srgb, var(--accent) 45%, transparent);
+  --saystack-block-glow: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.saystack-player {
+  --saystack-player-background: var(--surface-2);
+  --saystack-player-border: var(--border);
+  --saystack-player-text: var(--text);
+  --saystack-player-muted: var(--text-muted);
+  --saystack-player-faint: color-mix(
+    in srgb,
+    var(--text-muted) 65%,
+    transparent
+  );
+  --saystack-player-accent: var(--accent);
+  --saystack-player-on-accent: var(--accent-ink);
+  --saystack-player-track: var(--border);
+  --saystack-player-hover: var(--border);
+  --saystack-player-radius: 12px;
 }
 
 /* Brain effort gauge: SVG rect fill transitions when switching levels */

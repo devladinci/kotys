@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
@@ -11,6 +11,7 @@ import {
 import CopyTextButton from "../CopyTextButton";
 import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";
+import { MessageReadAlong } from "./readAloud/MessageReadAlong";
 import { SpeakerButton } from "./SpeakerButton";
 import {
   MarkdownBody,
@@ -63,6 +64,7 @@ function MessageBubbleBase({
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const isEmptyStreaming =
     isStreamingThis &&
@@ -247,17 +249,30 @@ function MessageBubbleBase({
               ) : (
                 <>
                   <StreamingProvider value={isStreamingThis}>
-                    {splitContentByWidgets(
-                      message.content,
-                      message.toolCalls ?? [],
-                    ).map((segment) =>
-                      segment.kind === "text" ? (
-                        <MarkdownBody key={segment.id} content={segment.text} />
-                      ) : (
-                        <WidgetFor key={segment.id} widget={segment.widget} />
-                      ),
-                    )}
+                    <div ref={bodyRef}>
+                      {splitContentByWidgets(
+                        message.content,
+                        message.toolCalls ?? [],
+                      ).map((segment) =>
+                        segment.kind === "text" ? (
+                          <MarkdownBody
+                            key={segment.id}
+                            content={segment.text}
+                          />
+                        ) : (
+                          <div key={segment.id} data-read-along-skip>
+                            <WidgetFor widget={segment.widget} />
+                          </div>
+                        ),
+                      )}
+                    </div>
                   </StreamingProvider>
+                  {canReadAloud && (
+                    <MessageReadAlong
+                      messageId={message.id}
+                      rootRef={bodyRef}
+                    />
+                  )}
                   {isFailed && canRegenerate && (
                     <div className="mt-1.5">
                       <button

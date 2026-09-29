@@ -49,6 +49,9 @@ if (!Range.prototype.getBoundingClientRect) {
 if (!document.elementFromPoint) {
   document.elementFromPoint = () => null;
 }
+// jsdom has no canvas backend; the voice visuals simply draw nothing.
+HTMLCanvasElement.prototype.getContext = (() =>
+  null) as typeof HTMLCanvasElement.prototype.getContext;
 
 afterEach(() => {
   cleanup();
