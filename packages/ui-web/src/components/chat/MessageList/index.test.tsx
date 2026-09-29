@@ -90,4 +90,39 @@ describe("MessageList", () => {
     ref.current?.scrollToBottom(true);
     expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
   });
+
+  it("keeps the newest message in view when the list gets shorter", () => {
+    const observers: (() => void)[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    renderList(3);
+    const scroller = screen.getByText("message 3").closest("div.h-full");
+    if (!scroller) throw new Error("no scroll container");
+    Object.defineProperty(scroller, "scrollHeight", { value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { value: 300 });
+    Object.defineProperty(scroller, "scrollTop", {
+      value: 700,
+      writable: true,
+    });
+    const scrollTo = vi.fn();
+    (scroller as unknown as { scrollTo: unknown }).scrollTo = scrollTo;
+
+    for (const shrink of observers) shrink();
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "instant" });
+
+    scrollTo.mockClear();
+    Object.defineProperty(scroller, "scrollTop", { value: 0 });
+    fireEvent.scroll(scroller);
+    for (const shrink of observers) shrink();
+    expect(scrollTo).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });

@@ -2412,7 +2412,7 @@ packages:
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
   '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz':
-    resolution: {integrity: sha512-rZ8LBifaAFgWZDmKRbieyXRGDx/nnfoYKjQFLMqSgM+BkXfD8KAuZGHRnpF2R44X+mfL+7IKQSngOZhNWgaAHw==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
+    resolution: {integrity: sha512-az1vggPpfLGg8ce/H5BN1DOkXtshiS7n9K9NLiiCAzRkCH2kZVku35Gb33L1M2mijx5pE8XSwGDa6RYf/zHKjQ==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
@@ -2431,7 +2431,7 @@ packages:
       react: 19.1.0
 
   '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
-    resolution: {integrity: sha512-O/F1XSBkGAtNZ3WsEl6dig8ulm8ySvVRrgYC16n5m6WdsvJwgZwF6MEJQJSxuqMo/SD7OJ707n4XdTLl7ca8Gg==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
+    resolution: {integrity: sha512-RanQdfqZIqLw2Hz2M6T04WewnjoGcjZmg914Dt+CpATNBqY3xOgX9px3rNEzQG0c7BHJFfAggCj/l3Rs5ZJB8g==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
