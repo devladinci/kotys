@@ -2431,7 +2431,7 @@ packages:
       react: 19.1.0
 
   '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
-    resolution: {integrity: sha512-+GOYOExVwJk5aMoUgWJUuDQsOWmS4aKTG3htT2dEnPXA2ZHGgWgR2jI911oUa7Pt0Gsfxg9LKczzDra+suJkJA==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
+    resolution: {integrity: sha512-O/F1XSBkGAtNZ3WsEl6dig8ulm8ySvVRrgYC16n5m6WdsvJwgZwF6MEJQJSxuqMo/SD7OJ707n4XdTLl7ca8Gg==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 

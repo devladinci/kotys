@@ -1,6 +1,7 @@
 import type { TtsPhase } from "@saystack/core";
 import { useAura } from "@saystack/react-web";
 import type { AuraState } from "@saystack/web";
+import { AURA_LAYER } from "./auraLayer";
 import { useReadAloud } from "./useReadAloud";
 
 interface IProps {
@@ -28,6 +29,7 @@ export function ReadAloudAura({ clip }: IProps) {
     style: MESSAGE_AURA,
     padding: 12,
     clip,
+    zIndex: AURA_LAYER,
   });
 
   return null;

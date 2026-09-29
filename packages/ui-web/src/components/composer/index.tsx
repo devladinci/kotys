@@ -20,6 +20,7 @@ import {
 } from "@saystack/react-web";
 import { unlockWebAudio, type AuraState } from "@saystack/web";
 import { activeVoiceStream } from "../../platform";
+import { AURA_LAYER } from "../chat/readAloud/auraLayer";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
 import { QueuedMessageRow } from "./QueuedMessageRow";
@@ -199,7 +200,11 @@ function ComposerBase({
 
   useRecorderLevels(micLevels, voice.status === "recording", activeVoiceStream);
 
-  useAura(boxRef, { state: MIC_AURA[voice.status], levels: readMicLevels });
+  useAura(boxRef, {
+    state: MIC_AURA[voice.status],
+    levels: readMicLevels,
+    zIndex: AURA_LAYER,
+  });
 
   const handleVoiceStart = () => {
     unlockWebAudio();
