@@ -8,6 +8,9 @@ import type { SttConnector } from "./types.js";
  * /audio/transcriptions tomorrow). Listing prefers /models/status
  * (engine_type === "audio_stt"); servers without it fall back to /models
  * with the audio-name heuristic.
+ *
+ * The status listing sits under /v1 even when the host does not (oMLX 404s
+ * /models/status), so both forms are probed.
  */
 export function createOpenAiCompatibleSttConnector(config: {
   baseUrl: string;
@@ -26,11 +29,45 @@ export function createOpenAiCompatibleSttConnector(config: {
     realtime_stt?: boolean;
   };
 
+  const statusUrls = (): string[] => {
+    const base = baseUrl.replace(/\/+$/, "");
+    const urls = [`${base}/models/status`];
+
+    if (!/\/v1$/.test(base)) {
+      urls.push(`${base}/v1/models/status`);
+    }
+
+    return urls;
+  };
+
+  const readStatus = async (): Promise<ModelStatus[] | null> => {
+    for (const url of statusUrls()) {
+      const res = await fetch(url, { headers: headers() }).catch(() => null);
+
+      if (!res?.ok) {
+        continue;
+      }
+
+      const body = (await res.json().catch(() => null)) as {
+        models?: ModelStatus[];
+      } | null;
+
+      if (body !== null) {
+        return body.models ?? [];
+      }
+    }
+
+    return null;
+  };
+
   const listFromStatus = async (): Promise<ModelListing[]> => {
-    const res = await fetch(`${baseUrl}/models/status`, { headers: headers() });
-    if (!res.ok) throw new Error(`models/status failed: ${res.status}`);
-    const body = (await res.json()) as { models?: ModelStatus[] };
-    return (body.models ?? [])
+    const status = await readStatus();
+
+    if (status === null) {
+      throw new Error("models/status is unavailable");
+    }
+
+    return status
       .filter(
         (m): m is ModelStatus & { id: string } =>
           typeof m.id === "string" &&
@@ -69,16 +106,10 @@ export function createOpenAiCompatibleSttConnector(config: {
 
     // Only /models/status says which models decode while audio arrives.
     async supportsStreaming(model) {
-      const res = await fetch(`${baseUrl}/models/status`, {
-        headers: headers(),
-      }).catch(() => null);
-      if (!res?.ok) return false;
-      const body = (await res.json().catch(() => ({}))) as {
-        models?: ModelStatus[];
-      };
+      const status = await readStatus();
+
       return (
-        body.models?.some((m) => m.id === model && m.realtime_stt === true) ??
-        false
+        status?.some((m) => m.id === model && m.realtime_stt === true) ?? false
       );
     },
 

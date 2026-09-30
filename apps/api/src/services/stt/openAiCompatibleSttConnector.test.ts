@@ -300,3 +300,45 @@ describe("openAiCompatibleSttConnector openRealtime", () => {
     ).resolves.toMatchObject({ ok: false, errorCode: "BAD_TOKEN" });
   });
 });
+
+describe("openAiCompatibleSttConnector endpoint discovery", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
+
+  const connector = (baseUrl: string) =>
+    createOpenAiCompatibleSttConnector({ baseUrl, apiKey: "k", provider: "omlx" });
+
+  it("finds the status listing when the host has no /v1 suffix", async () => {
+    fetchMock.mockImplementation(async (url: string | URL | Request) => {
+      if (String(url) === "http://x/v1/models/status") {
+        return statusBody([{ id: "whisper-large-v3-turbo", engine_type: "audio_stt", realtime_stt: true }]);
+      }
+      return new Response("nope", { status: 404 });
+    });
+    const models = await connector("http://x").listModels();
+    expect(models.map((m) => m.name)).toEqual(["whisper-large-v3-turbo"]);
+    await expect(connector("http://x").supportsStreaming?.("whisper-large-v3-turbo")).resolves.toBe(true);
+  });
+
+  it("does not double up /v1 when the host already carries it", async () => {
+    fetchMock.mockImplementation(async (url: string | URL | Request) => {
+      if (String(url) === "http://x/v1/models/status") {
+        return statusBody([{ id: "whisper-large-v3-turbo", engine_type: "audio_stt", realtime_stt: true }]);
+      }
+      return new Response("nope", { status: 404 });
+    });
+    await expect(connector("http://x/v1").supportsStreaming?.("whisper-large-v3-turbo")).resolves.toBe(true);
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).not.toContain("http://x/v1/v1/models/status");
+  });
+
+  it("keeps supportsStreaming working when only the /v1 baseURL form is served", async () => {
+    fetchMock.mockImplementation(async (url: string | URL | Request) => {
+      if (String(url) === "http://x/base/v1/models/status") {
+        return statusBody([{ id: "whisper-large-v3-turbo", engine_type: "audio_stt", realtime_stt: true }]);
+      }
+      return new Response("nope", { status: 404 });
+    });
+    await expect(connector("http://x/base").supportsStreaming?.("whisper-large-v3-turbo")).resolves.toBe(true);
+  });
+});
