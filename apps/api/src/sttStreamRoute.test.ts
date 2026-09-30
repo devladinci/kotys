@@ -8,7 +8,7 @@ import {
   vi,
 } from "vitest";
 import type { AddressInfo } from "node:net";
-import type { SttStreamEvent } from "./services/stt/types.js";
+import type { ISttRealtimeSession, ISttTranscribeResult } from "@saystack/core";
 
 const mocks = vi.hoisted(() => ({
   getSetting: vi.fn<(key: string) => string | null>(() => null),
@@ -21,36 +21,43 @@ vi.mock("@kotys/db", () => ({
   setSetting: mocks.setSetting,
 }));
 
-type OpenStreamArgs = [
-  { model: string; language?: string },
-  (event: SttStreamEvent) => void,
-];
-
-const upstream = {
+const engine = {
   audio: [] as number[],
-  stopped: false,
-  closed: false,
-  report: (_event: SttStreamEvent) => {},
+  isReleased: false,
+  delta: (_text: string) => {},
+  stopWith: (_result: ISttTranscribeResult) => {},
 };
 
-const openStreamMock = vi.fn((...[, onEvent]: OpenStreamArgs) => {
-  upstream.report = onEvent;
-  return {
-    send: (pcm: Uint8Array) => upstream.audio.push(pcm.byteLength),
-    stop: () => {
-      upstream.stopped = true;
-    },
-    close: () => {
-      upstream.closed = true;
-    },
-  };
-});
+const session: ISttRealtimeSession = {
+  capabilities: {
+    streaming: true,
+    interimResults: true,
+    wordTimings: false,
+    languages: [],
+  },
+  feedPcm16: (pcm) => engine.audio.push(pcm.byteLength),
+  onDelta: (handler) => {
+    engine.delta = (text) => handler(text, text);
+  },
+  onError: () => {},
+  stop: () =>
+    new Promise((resolve) => {
+      engine.stopWith = resolve;
+    }),
+  release: () => {
+    engine.isReleased = true;
+  },
+};
 
 const connector = {
   listModels: vi.fn(),
-  transcribe: vi.fn(),
-  openStream: openStreamMock as
-    ((...args: OpenStreamArgs) => unknown) | undefined,
+  supportsStreaming: vi.fn(async () => true),
+  openRealtime: vi.fn(async () => ({ ok: true as const, session })),
+  transcribe: vi.fn(async (_req: { file: Blob; filename: string }) => ({
+    text: "Buy milk and eggs.",
+    language: null,
+    duration: null,
+  })),
 };
 
 vi.mock("./services/stt/registry.js", async (importOriginal) => ({
@@ -98,26 +105,23 @@ beforeEach(() => {
         ? "omlx:whisper-large-v3-turbo"
         : null,
   );
-  openStreamMock.mockClear();
-  connector.openStream = openStreamMock;
-  upstream.audio = [];
-  upstream.stopped = false;
-  upstream.closed = false;
+  vi.clearAllMocks();
+  connector.supportsStreaming.mockResolvedValue(true);
+  engine.audio = [];
+  engine.isReleased = false;
 });
-
-type Heard = { messages: Record<string, unknown>[]; closed: Promise<number> };
 
 const connect = async (token = APP_TOKEN) => {
   const ws = new WebSocket(`${base}/stt/stream?token=${token}`);
-  const heard: Heard = {
-    messages: [],
-    closed: new Promise((resolve) => ws.on("close", (code) => resolve(code))),
-  };
+  const messages: Record<string, unknown>[] = [];
+  const closed = new Promise<number>((resolve) =>
+    ws.on("close", (code) => resolve(code)),
+  );
   ws.on("message", (data) => {
-    heard.messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+    messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
   });
   await new Promise((resolve) => ws.on("open", resolve));
-  return { ws, heard };
+  return { ws, messages, closed };
 };
 
 const until = async (check: () => boolean) => {
@@ -128,90 +132,77 @@ const until = async (check: () => boolean) => {
 
 describe("/stt/stream", () => {
   it("rejects a connection without the app token", async () => {
-    const { heard } = await connect("nope");
-    expect(await heard.closed).toBe(4001);
-    expect(openStreamMock).not.toHaveBeenCalled();
+    const { closed } = await connect("nope");
+    expect(await closed).toBe(4001);
+    expect(connector.openRealtime).not.toHaveBeenCalled();
   });
 
-  it("relays audio up and the transcript down, on the selected model", async () => {
-    const { ws, heard } = await connect();
+  it("streams on the selected model and ends with one pass over the recording", async () => {
+    const { ws, messages, closed } = await connect();
     ws.send(JSON.stringify({ type: "start", language: "en" }));
-    await until(() => openStreamMock.mock.calls.length > 0);
-    expect(openStreamMock.mock.calls[0]?.[0]).toEqual({
+    await until(() => messages.length > 0);
+    expect(connector.openRealtime).toHaveBeenCalledWith({
       model: "whisper-large-v3-turbo",
       language: "en",
     });
 
-    upstream.report({ type: "ready" });
     ws.send(new Uint8Array(3200));
-    ws.send(new Uint8Array(1600));
-    upstream.report({ type: "delta", text: " Hello" });
-    await until(
-      () => upstream.audio.length === 2 && heard.messages.length === 2,
-    );
+    engine.delta(" Buy milk");
+    await until(() => engine.audio.length === 1 && messages.length === 2);
     ws.send(JSON.stringify({ type: "stop" }));
-    await until(() => upstream.stopped);
-    upstream.report({ type: "done", text: " Hello" });
+    await until(() => connector.transcribe.mock.calls.length > 0);
+    engine.stopWith({ ok: true, text: " Buy milk. milk." });
 
-    expect(await heard.closed).toBe(1000);
-    expect(upstream.audio).toEqual([3200, 1600]);
-    expect(heard.messages).toEqual([
+    expect(await closed).toBe(1000);
+    expect(messages).toEqual([
       { type: "ready" },
-      { type: "transcript.delta", delta: " Hello" },
-      { type: "transcript.done", text: " Hello" },
+      { type: "transcript.delta", delta: " Buy milk" },
+      { type: "transcript.done", text: "Buy milk and eggs." },
     ]);
-    await until(() => upstream.closed);
-    expect(upstream.closed).toBe(true);
+    const file = connector.transcribe.mock.calls[0]?.[0].file;
+    expect(file?.type).toBe("audio/wav");
+    expect(file?.size).toBe(44 + 3200);
+    await until(() => engine.isReleased);
+    expect(engine.isReleased).toBe(true);
   });
 
-  it("passes the provider's refusal on, so the app can transcribe afterwards", async () => {
-    const { ws, heard } = await connect();
+  it("refuses at once when the model cannot stream, so the app transcribes instead", async () => {
+    connector.supportsStreaming.mockResolvedValue(false);
+    const { ws, messages, closed } = await connect();
     ws.send(JSON.stringify({ type: "start" }));
-    await until(() => openStreamMock.mock.calls.length > 0);
-    upstream.report({
-      type: "error",
-      message: "Model 'parakeet' does not support realtime transcription.",
-    });
 
-    expect(await heard.closed).toBe(1011);
-    expect(heard.messages).toEqual([
+    expect(await closed).toBe(1011);
+    expect(messages).toEqual([
       {
         type: "error",
-        detail: "Model 'parakeet' does not support realtime transcription.",
+        errorCode: "MODEL_NOT_FOUND",
+        detail: "The selected speech-to-text model cannot transcribe live",
       },
     ]);
-  });
-
-  it("says so when the provider cannot stream at all", async () => {
-    connector.openStream = undefined;
-    const { ws, heard } = await connect();
-    ws.send(JSON.stringify({ type: "start" }));
-
-    expect(await heard.closed).toBe(1011);
-    expect(heard.messages[0]).toMatchObject({ type: "error" });
+    expect(connector.openRealtime).not.toHaveBeenCalled();
   });
 
   it("needs a selected model", async () => {
     mocks.getSetting.mockImplementation((key) =>
       key === "api_token" ? APP_TOKEN : null,
     );
-    const { ws, heard } = await connect();
+    const { ws, messages, closed } = await connect();
     ws.send(JSON.stringify({ type: "start" }));
 
-    expect(await heard.closed).toBe(1011);
-    expect(heard.messages).toEqual([
-      { type: "error", detail: "No speech-to-text model selected" },
-    ]);
-    expect(openStreamMock).not.toHaveBeenCalled();
+    expect(await closed).toBe(1011);
+    expect(messages[0]).toMatchObject({
+      type: "error",
+      detail: "No speech-to-text model selected",
+    });
   });
 
-  it("closes the provider's stream when the app hangs up", async () => {
-    const { ws } = await connect();
+  it("releases the engine when the app hangs up", async () => {
+    const { ws, messages } = await connect();
     ws.send(JSON.stringify({ type: "start" }));
-    await until(() => openStreamMock.mock.calls.length > 0);
+    await until(() => messages.length > 0);
     ws.close();
-    await until(() => upstream.closed);
+    await until(() => engine.isReleased);
 
-    expect(upstream.closed).toBe(true);
+    expect(engine.isReleased).toBe(true);
   });
 });

@@ -1,41 +1,48 @@
+import type { RefObject } from "react";
 import { Loader2, Square, Volume2 } from "lucide-react";
+import { useReadAloudMessage } from "@saystack/react-web";
 import {
   ACTION_BUTTON_CLASS,
   ACTIVE_ACTION_BUTTON_CLASS,
 } from "../actionButton";
-import { useReadAloud } from "./readAloud/useReadAloud";
 
 interface IProps {
   messageId: number;
   content: string;
+  bodyRef: RefObject<HTMLElement | null>;
 }
 
-export function SpeakerButton({ messageId, content }: IProps) {
-  const { speech, messageId: readingId, speak } = useReadAloud();
-  const [state, api] = speech;
-  const phase = readingId === messageId ? state.phase : "idle";
-  const isLoading = phase === "loading";
-  const isActive = isLoading || phase === "playing" || phase === "paused";
+export function SpeakerButton({ messageId, content, bodyRef }: IProps) {
+  const readAloud = useReadAloudMessage(messageId, bodyRef);
 
   const handleClick = () => {
-    if (isActive) {
-      api.stop();
+    if (readAloud.isActive) {
+      readAloud.stop();
       return;
     }
-    speak(messageId, content);
+    readAloud.speak(content);
   };
 
-  const Icon = isLoading ? Loader2 : isActive ? Square : Volume2;
-  const label = isActive ? "Stop reading" : "Read aloud";
+  const Icon = readAloud.isLoading
+    ? Loader2
+    : readAloud.isActive
+      ? Square
+      : Volume2;
+  const label = readAloud.isActive ? "Stop reading" : "Read aloud";
 
   return (
     <button
       onClick={handleClick}
-      className={isActive ? ACTIVE_ACTION_BUTTON_CLASS : ACTION_BUTTON_CLASS}
+      className={
+        readAloud.isActive ? ACTIVE_ACTION_BUTTON_CLASS : ACTION_BUTTON_CLASS
+      }
       title={label}
       aria-label={label}
     >
-      <Icon size={13} className={isLoading ? "animate-spin" : undefined} />
+      <Icon
+        size={13}
+        className={readAloud.isLoading ? "animate-spin" : undefined}
+      />
     </button>
   );
 }

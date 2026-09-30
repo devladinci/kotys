@@ -1,6 +1,4 @@
 import type { Platform } from "@kotys/core";
-import { createRealtimeDictation, sharedAudioContext } from "@saystack/web";
-import { createVoiceRecorder } from "./voiceRecorder.js";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
@@ -17,11 +15,6 @@ const ensureNotificationPermission = () => {
     void Notification.requestPermission();
   }
 };
-
-let recorder: ReturnType<typeof createVoiceRecorder> | null = null;
-
-export const activeVoiceStream = (): MediaStream | null =>
-  recorder?.stream ?? null;
 
 export const webPlatform: Platform = {
   scrollToMessage: (id) => {
@@ -53,25 +46,6 @@ export const webPlatform: Platform = {
     if (Notification.permission === "granted")
       new Notification(title, { body });
   },
-  startVoiceRecording: async () => {
-    recorder = createVoiceRecorder();
-    await recorder.start();
-  },
-  stopVoiceRecording: async () => {
-    const rec = recorder;
-    recorder = null;
-    if (!rec) throw new Error("Not recording");
-    const { blob, mimeType } = await rec.stop();
-    return { blob, mimeType };
-  },
-  // Same token-in-query handshake as /ws: browsers can't set WS headers.
-  streamVoice: (config, onText) =>
-    createRealtimeDictation({
-      url: `${config.baseUrl.replace(/^http/, "ws")}/stt/stream?token=${encodeURIComponent(config.token)}`,
-      stream: activeVoiceStream,
-      onText,
-      context: sharedAudioContext(),
-    }),
 };
 
 export const desktopPlatform: Platform = {

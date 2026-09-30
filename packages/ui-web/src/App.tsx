@@ -25,7 +25,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/chat/Sidebar";
 import ApprovalPrompt from "./components/chat/ApprovalPrompt";
 import CommandPalette from "./components/chat/CommandPalette";
-import { ReadAloudProvider } from "./components/chat/readAloud/ReadAloudProvider";
+import { SpeechProvider } from "./components/chat/SpeechProvider";
 import TodoSidebar from "./components/todos/TodoSidebar";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import AnalyticsPage from "./components/analytics";
@@ -169,7 +169,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <ReadAloudProvider>
+      <SpeechProvider>
         <div className="flex h-screen bg-bg text-text overflow-hidden">
           {!sidebarHidden && (
             <Sidebar
@@ -215,7 +215,7 @@ export default function App() {
             />
           )}
         </div>
-      </ReadAloudProvider>
+      </SpeechProvider>
     </ErrorBoundary>
   );
 }

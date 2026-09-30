@@ -1,44 +1,29 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DragEvent as ReactDragEvent,
   ChangeEvent as ReactChangeEvent,
 } from "react";
 import { EditorContent } from "@tiptap/react";
 import { ImagePlus, ListPlus, Send, Square, X } from "lucide-react";
-import {
-  queueCaption,
-  usePlatform,
-  useSkills,
-  useVoiceInput,
-} from "@kotys/core";
-import type { QueuedMessage, VoiceStatus } from "@kotys/core";
+import { queueCaption, useSkills } from "@kotys/core";
+import type { QueuedMessage } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
-import {
-  useAudioLevels,
-  useAura,
-  useRecorderLevels,
-} from "@saystack/react-web";
-import { unlockWebAudio, type AuraState } from "@saystack/web";
-import { activeVoiceStream } from "../../platform";
-import { AURA_LAYER } from "../chat/readAloud/auraLayer";
+import { useDictationAura, useWebDictation } from "@saystack/react-web";
+import { unlockWebAudio } from "@saystack/web";
+import { authHeaders, daemonUrl, dictationStreamUrl } from "../../voiceConfig";
+import { AURA_LAYER } from "../chat/auraLayer";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
 import { QueuedMessageRow } from "./QueuedMessageRow";
 import { StatusNote } from "./StatusNote";
-import { endDictation, showDictation } from "./dictationExtension";
+import { createTiptapInput } from "./dictationExtension";
 import { useComposerEditor } from "./useComposerEditor";
 import { useSlashMenu, applySlashPick } from "./slashExtension";
-import { useSttStreaming } from "./useSttStreaming";
 
 const MAX_IMAGES = 4;
 const IMAGE_MAX_DIM = 1536;
 
-const MIC_AURA: Record<VoiceStatus, AuraState> = {
-  idle: "hidden",
-  recording: "active",
-  transcribing: "working",
-  error: "hidden",
-};
+const REALTIME = { url: dictationStreamUrl };
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -189,53 +174,39 @@ function ComposerBase({
     getImages: () => effectiveImages,
   });
 
-  const platform = usePlatform();
-  const canStreamVoice = useSttStreaming();
+  const dictationInput = useMemo(
+    () => (editor ? createTiptapInput(editor) : undefined),
+    [editor],
+  );
 
-  // The draft stays: dictation sends its own message beside it.
+  // Models that stream write into the draft; with the others the draft
+  // stays and dictation sends its own message beside it.
   const handleTranscript = (text: string) => {
     handleSend(text, effectiveImages);
   };
 
-  // A model that transcribes live writes into the draft instead.
-  const handleLiveText = (text: string) => {
-    if (editor) showDictation(editor, text);
-  };
-
-  const handleLiveEnd = (text: string | null) => {
-    if (editor) endDictation(editor, text);
-  };
-
-  const voice = useVoiceInput(
-    platform,
-    handleTranscript,
-    canStreamVoice
-      ? { onText: handleLiveText, onEnd: handleLiveEnd }
-      : undefined,
-  );
-  const micLevels = useAudioLevels();
-  const readMicLevels = useCallback(() => micLevels?.read(), [micLevels]);
-
-  useRecorderLevels(micLevels, voice.status === "recording", activeVoiceStream);
-
-  useAura(boxRef, {
-    state: MIC_AURA[voice.status],
-    levels: readMicLevels,
-    zIndex: AURA_LAYER,
+  const dictation = useWebDictation({
+    endpoint: daemonUrl("/stt/transcribe"),
+    headers: authHeaders,
+    realtime: REALTIME,
+    input: dictationInput,
+    onText: handleTranscript,
   });
+
+  useDictationAura(boxRef, dictation, { zIndex: AURA_LAYER });
 
   const handleVoiceStart = () => {
     unlockWebAudio();
-    void voice.start();
+    dictation.handlePressStart();
   };
 
   useEffect(() => {
-    if (voice.status !== "error") return;
+    if (dictation.state !== "error") return;
     /* eslint-disable react-hooks/set-state-in-effect -- transient note, mirrors the rejected-image strip */
-    setVoiceError(voice.error ?? "Voice input failed");
+    setVoiceError(dictation.errorMessage ?? "Voice input failed");
     noteTimer.current = setTimeout(() => setVoiceError(null), 4000);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [voice.status, voice.error]);
+  }, [dictation.state, dictation.errorMessage]);
 
   const menu = useSlashMenu();
 
@@ -336,10 +307,10 @@ function ComposerBase({
             onChange={handleFileInput}
           />
           <MicButton
-            status={voice.status}
+            status={dictation.state}
             onStart={handleVoiceStart}
-            onStop={voice.stop}
-            onCancel={voice.cancel}
+            onStop={dictation.handlePressEnd}
+            onCancel={dictation.handleCancel}
           />
           <button
             onClick={handleAttachClick}

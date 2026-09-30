@@ -80,7 +80,6 @@ export const rpcMock = {
   },
   stt: {
     models: fn([]),
-    capabilities: fn({ streaming: false }),
   },
   tts: {
     models: fn([]),

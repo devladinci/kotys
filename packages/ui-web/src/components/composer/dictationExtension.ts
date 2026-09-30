@@ -1,4 +1,5 @@
 import { Extension, type Editor } from "@tiptap/core";
+import type { IDictationInput } from "@saystack/core";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, PluginKey, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -23,9 +24,7 @@ interface IDictationMeta {
 // Matches the entrance animation of saystack's streaming words.
 const ENTER_MS = 520;
 
-const dictationPluginKey = new PluginKey<IDictation | null>(
-  "kotys-dictation",
-);
+const dictationPluginKey = new PluginKey<IDictation | null>("kotys-dictation");
 
 const stateOf = (editor: Editor): IDictation | null =>
   dictationPluginKey.getState(editor.state) ?? null;
@@ -44,7 +43,6 @@ export const DictationExtension = Extension.create({
               IDictationMeta | undefined;
             if (meta) return meta.next;
             if (!value || !tr.docChanged) return value;
-            // Typing around the dictation moves it; the words it wrote stay its own.
             const from = tr.mapping.map(value.from, 1);
             const to = Math.max(from, tr.mapping.map(value.to, -1));
             return { ...value, from, to, words: [] };
@@ -87,8 +85,7 @@ const begin = (editor: Editor): IDictation => {
   };
 };
 
-/** Shows what has been heard so far at the end of the draft. */
-export function showDictation(editor: Editor, text: string): void {
+function showDictation(editor: Editor, text: string): void {
   const current = stateOf(editor) ?? begin(editor);
   const { state } = editor;
   const shown = state.doc.textBetween(current.from, current.to);
@@ -114,11 +111,7 @@ export function showDictation(editor: Editor, text: string): void {
   editor.view.dispatch(tr);
 }
 
-/**
- * Settles the dictation: the final text stays as one undo step, and the
- * caret moves after it. Null takes the dictated words back out.
- */
-export function endDictation(editor: Editor, text: string | null): void {
+function endDictation(editor: Editor, text: string | null): void {
   // A stream that never showed anything can still end with the recording's text.
   const current = stateOf(editor) ?? (text ? begin(editor) : null);
   if (!current) return;
@@ -136,4 +129,11 @@ export function endDictation(editor: Editor, text: string | null): void {
   );
   editor.view.dispatch(insert);
   editor.commands.focus();
+}
+
+export function createTiptapInput(editor: Editor): IDictationInput {
+  return {
+    show: (text) => showDictation(editor, text),
+    end: (text) => endDictation(editor, text),
+  };
 }

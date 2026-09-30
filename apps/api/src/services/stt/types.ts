@@ -1,4 +1,5 @@
 import type { ModelListing } from "@kotys/contracts";
+import type { ISttRealtimeResult } from "@saystack/core";
 
 /** A single transcription: text plus whatever metadata came back. */
 type TranscriptionResult = {
@@ -6,21 +7,6 @@ type TranscriptionResult = {
   language: string | null;
   duration: number | null;
 };
-
-/** What a live transcription reports while the user speaks. */
-export type SttStreamEvent =
-  | { type: "ready" }
-  | { type: "delta"; text: string }
-  | { type: "done"; text: string }
-  | { type: "error"; message: string };
-
-/** One live transcription: 16 kHz mono PCM16 in, text as it settles out. */
-export interface SttStream {
-  send(pcm: Uint8Array): void;
-  /** No more audio: the provider finishes the text, then reports done. */
-  stop(): void;
-  close(): void;
-}
 
 /**
  * A speech-to-text provider = endpoint + wire protocol. Implementations
@@ -38,8 +24,8 @@ export interface SttConnector {
   }): Promise<TranscriptionResult>;
   /** Providers without live transcription leave these out. */
   supportsStreaming?(model: string): Promise<boolean>;
-  openStream?(
-    req: { model: string; language?: string },
-    onEvent: (event: SttStreamEvent) => void,
-  ): SttStream;
+  openRealtime?(req: {
+    model: string;
+    language?: string;
+  }): Promise<ISttRealtimeResult>;
 }

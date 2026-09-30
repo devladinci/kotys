@@ -2,33 +2,27 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-interface ILive {
-  onText: (text: string) => void;
-  onEnd: (text: string | null) => void;
-}
+import type { IDictationInput } from "@saystack/core";
+import type { IUseWebDictationOptions } from "@saystack/react-web";
 
 const voice = vi.hoisted(() => ({
-  onTranscript: null as ((text: string) => void) | null,
-  live: undefined as ILive | undefined,
+  options: null as IUseWebDictationOptions | null,
 }));
 
 vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
-vi.mock("@kotys/core", async (importOriginal) => ({
+vi.mock("@saystack/react-web", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useVoiceInput: (
-    _platform: unknown,
-    onTranscript: (text: string) => void,
-    live?: ILive,
-  ) => {
-    voice.onTranscript = onTranscript;
-    voice.live = live;
+  useDictationAura: () => {},
+  useWebDictation: (options: IUseWebDictationOptions) => {
+    voice.options = options;
     return {
-      status: "idle",
-      error: null,
-      start: async () => {},
-      stop: () => {},
-      cancel: () => {},
-      clearError: () => {},
+      state: "idle",
+      isSupported: true,
+      text: "",
+      handlePressStart: () => {},
+      handlePressEnd: () => {},
+      handleCancel: () => {},
+      readLevels: () => undefined,
     };
   },
 }));
@@ -38,7 +32,6 @@ const { KotysProviderForTest } = await import("../../test/platform");
 const Composer = (await import("./index")).default;
 
 const skillsList = rpc.skills.list as ReturnType<typeof vi.fn>;
-const sttCapabilities = rpc.stt.capabilities as ReturnType<typeof vi.fn>;
 
 const listing = {
   name: "create-kotys-pr",
@@ -204,7 +197,7 @@ describe("Composer slash menu", () => {
   it("sends a dictated message and keeps the typed draft", async () => {
     const { onSend } = renderComposer();
     await type("draft to keep");
-    act(() => voice.onTranscript?.("dictated words"));
+    act(() => voice.options?.onText?.("dictated words"));
     expect(onSend).toHaveBeenCalledWith("dictated words", []);
     expect(composer()).toHaveTextContent("draft to keep");
   });
@@ -228,30 +221,46 @@ describe("Composer slash menu", () => {
   });
 });
 
-describe("Composer live dictation", () => {
+describe("Composer dictation", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await initTestClients();
     skillsList.mockResolvedValue([]);
-    sttCapabilities.mockResolvedValue({ streaming: true });
-    voice.live = undefined;
+    voice.options = null;
   });
 
-  const live = async () => {
-    await waitFor(() => expect(voice.live).toBeDefined());
-    return voice.live as ILive;
+  const input = async () => {
+    await waitFor(() => expect(voice.options?.input).toBeDefined());
+    return voice.options?.input as IDictationInput;
   };
 
-  it("writes the words into the draft while they are spoken", async () => {
+  it("streams to the daemon with the app token and sends a transcript that did not stream", async () => {
+    const { onSend } = renderComposer();
+    await input();
+    const realtimeUrl = voice.options?.realtime?.url;
+
+    expect(voice.options?.endpoint).toBe("http://test/stt/transcribe");
+    expect(
+      typeof realtimeUrl === "function" ? realtimeUrl() : realtimeUrl,
+    ).toBe("ws://test/stt/stream?token=");
+    const headers = voice.options?.headers;
+    expect(typeof headers === "function" ? headers() : headers).toEqual({
+      Authorization: "Bearer ",
+    });
+    act(() => voice.options?.onText?.("dictated words"));
+    expect(onSend).toHaveBeenCalledWith("dictated words", []);
+  });
+
+  it("writes live words into the draft while they are spoken", async () => {
     const { onSend } = renderComposer();
     await type("Note:");
-    const dictation = await live();
+    const dictation = await input();
 
-    act(() => dictation.onText("Buy milk"));
+    act(() => dictation.show("Buy milk"));
     expect(composer()).toHaveTextContent("Note: Buy milk");
-    act(() => dictation.onText("Buy milk and eggs"));
+    act(() => dictation.show("Buy milk and eggs"));
     expect(composer()).toHaveTextContent("Note: Buy milk and eggs");
-    act(() => dictation.onEnd("Buy milk and eggs."));
+    act(() => dictation.end("Buy milk and eggs."));
 
     expect(composer()).toHaveTextContent("Note: Buy milk and eggs.");
     expect(onSend).not.toHaveBeenCalled();
@@ -260,10 +269,10 @@ describe("Composer live dictation", () => {
   it("takes the words back out when the recording is dropped", async () => {
     renderComposer();
     await type("Keep this");
-    const dictation = await live();
+    const dictation = await input();
 
-    act(() => dictation.onText("not this"));
-    act(() => dictation.onEnd(null));
+    act(() => dictation.show("not this"));
+    act(() => dictation.end(null));
 
     expect(composer()).toHaveTextContent(/^Keep this$/);
   });
@@ -271,24 +280,14 @@ describe("Composer live dictation", () => {
   it("undoes a whole dictation in one step", async () => {
     renderComposer();
     await type("Draft");
-    const dictation = await live();
+    const dictation = await input();
 
-    act(() => dictation.onText("one"));
-    act(() => dictation.onText("one two"));
-    act(() => dictation.onEnd("one two three"));
+    act(() => dictation.show("one"));
+    act(() => dictation.show("one two"));
+    act(() => dictation.end("one two three"));
     expect(composer()).toHaveTextContent("Draft one two three");
 
     await userEvent.keyboard("{Control>}z{/Control}");
     expect(composer()).toHaveTextContent(/^Draft$/);
-  });
-
-  it("still sends the transcript when the model does not stream", async () => {
-    sttCapabilities.mockResolvedValue({ streaming: false });
-    const { onSend } = renderComposer();
-    await waitFor(() => expect(sttCapabilities).toHaveBeenCalled());
-
-    expect(voice.live).toBeUndefined();
-    act(() => voice.onTranscript?.("dictated words"));
-    expect(onSend).toHaveBeenCalledWith("dictated words", []);
   });
 });

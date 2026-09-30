@@ -1,25 +1,7 @@
 import type { ModelListing } from "@kotys/contracts";
-import { WebSocket } from "ws";
+import { createOmlxRealtimeSttAdapter } from "@saystack/engine-openai-compatible";
 import { isAudioModelName } from "../llm/openaiCompatibleConnector.js";
-import type { SttConnector, SttStreamEvent } from "./types.js";
-
-type RealtimeMessage = {
-  type?: unknown;
-  delta?: unknown;
-  text?: unknown;
-  detail?: unknown;
-};
-
-const readRealtimeMessage = (raw: string): RealtimeMessage => {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as RealtimeMessage)
-      : {};
-  } catch {
-    return {};
-  }
-};
+import type { SttConnector } from "./types.js";
 
 /**
  * OpenAI-compatible STT (oMLX today, any /v1 server with
@@ -100,79 +82,11 @@ export function createOpenAiCompatibleSttConnector(config: {
       );
     },
 
-    openStream({ model, language }, onEvent) {
-      const socket = new WebSocket(
-        `${baseUrl.replace(/^http/, "ws")}/audio/transcriptions/realtime`,
-      );
-      let isOver = false;
-      const report = (event: SttStreamEvent) => {
-        if (isOver) return;
-        if (event.type === "done" || event.type === "error") isOver = true;
-        onEvent(event);
-      };
-
-      // A WebSocket handshake carries no Authorization header, so the key
-      // goes in the start message.
-      socket.on("open", () => {
-        socket.send(
-          JSON.stringify({
-            type: "start",
-            model,
-            api_key: apiKey,
-            ...(language ? { language } : {}),
-          }),
-        );
-      });
-      socket.on("message", (data, isBinary) => {
-        if (isBinary) return;
-        const message = readRealtimeMessage(data.toString());
-        if (message.type === "ready") {
-          report({ type: "ready" });
-        } else if (
-          message.type === "transcript.delta" &&
-          typeof message.delta === "string"
-        ) {
-          report({ type: "delta", text: message.delta });
-        } else if (message.type === "transcript.done") {
-          report({
-            type: "done",
-            text: typeof message.text === "string" ? message.text : "",
-          });
-        } else if (message.type === "error") {
-          report({
-            type: "error",
-            message:
-              typeof message.detail === "string"
-                ? message.detail
-                : "Live transcription failed",
-          });
-        }
-      });
-      socket.on("error", (err) => {
-        report({
-          type: "error",
-          message: `live transcription failed: ${err.message}`,
-        });
-      });
-      socket.on("close", () => {
-        report({ type: "error", message: "The transcription stream ended" });
-      });
-
-      return {
-        send: (pcm) => {
-          if (socket.readyState === WebSocket.OPEN) socket.send(pcm);
-        },
-        stop: () => {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "stop" }));
-          }
-        },
-        close: () => {
-          isOver = true;
-          socket.close();
-        },
-      };
-    },
+    openRealtime: ({ model, language }) =>
+      createOmlxRealtimeSttAdapter({
+        url: baseUrl,
+        token: apiKey,
+      }).openRealtime({ model, ...(language ? { language } : {}) }),
 
     async transcribe({ model, file, filename, language }) {
       const form = new FormData();

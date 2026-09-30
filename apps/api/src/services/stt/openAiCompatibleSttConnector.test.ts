@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
 import type { AddressInfo } from "node:net";
 import { WebSocketServer } from "ws";
-import type { SttStreamEvent } from "./types.js";
 
 vi.stubGlobal(
   "fetch",
@@ -226,13 +225,11 @@ describe("openAiCompatibleSttConnector supportsStreaming", () => {
   });
 });
 
-describe("openAiCompatibleSttConnector openStream", () => {
+describe("openAiCompatibleSttConnector openRealtime", () => {
   let wss: WebSocketServer;
   let baseUrl = "";
-  let seen: { text: string[]; audio: number[] };
 
   beforeEach(async () => {
-    seen = { text: [], audio: [] };
     wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await new Promise((resolve) => wss.on("listening", resolve));
     baseUrl = `http://127.0.0.1:${(wss.address() as AddressInfo).port}/v1`;
@@ -242,94 +239,64 @@ describe("openAiCompatibleSttConnector openStream", () => {
     await new Promise((resolve) => wss.close(resolve));
   });
 
-  const until = async (check: () => boolean) => {
-    for (let i = 0; i < 100 && !check(); i++) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-  };
+  const connector = (apiKey: string) =>
+    createOpenAiCompatibleSttConnector({ baseUrl, apiKey, provider: "omlx" });
 
-  it("sends the key in the start message and maps oMLX events", async () => {
-    let path = "";
-    wss.on("connection", (ws, req) => {
-      path = req.url ?? "";
+  it("streams through the oMLX realtime endpoint with the key in the start message", async () => {
+    let start: unknown = null;
+    wss.on("connection", (ws) => {
       ws.on("message", (data, isBinary) => {
         if (isBinary) {
-          seen.audio.push((data as Buffer).byteLength);
           ws.send(JSON.stringify({ type: "transcript.delta", delta: " Hi" }));
           return;
         }
         const message = JSON.parse(data.toString()) as { type: string };
-        seen.text.push(data.toString());
-        if (message.type === "start")
+        if (message.type === "start") {
+          start = message;
           ws.send(JSON.stringify({ type: "ready" }));
+        }
         if (message.type === "stop") {
           ws.send(JSON.stringify({ type: "transcript.done", text: " Hi" }));
           ws.close(1000);
         }
       });
     });
-    const events: SttStreamEvent[] = [];
-    const stream = createOpenAiCompatibleSttConnector({
-      baseUrl,
-      apiKey: "secret",
-      provider: "omlx",
-    }).openStream?.({ model: "whisper", language: "en" }, (event) =>
-      events.push(event),
-    );
-    await until(() => events.length > 0);
-    stream?.send(new Uint8Array(3200));
-    await until(() => events.length > 1);
-    stream?.stop();
-    await until(() => events.length > 2);
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(path).toBe("/v1/audio/transcriptions/realtime");
-    expect(JSON.parse(seen.text[0] ?? "{}")).toEqual({
+    const result = await connector("secret").openRealtime?.({
+      model: "whisper",
+      language: "en",
+    });
+    if (!result?.ok) throw new Error("expected the stream to open");
+    const deltas: string[] = [];
+    result.session.onDelta((delta) => deltas.push(delta));
+    result.session.feedPcm16(new Uint8Array(3200));
+    for (let i = 0; i < 100 && deltas.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    await expect(result.session.stop()).resolves.toEqual({
+      ok: true,
+      text: " Hi",
+    });
+    expect(deltas).toEqual([" Hi"]);
+    expect(start).toEqual({
       type: "start",
       model: "whisper",
       api_key: "secret",
       language: "en",
     });
-    expect(seen.audio).toEqual([3200]);
-    expect(events).toEqual([
-      { type: "ready" },
-      { type: "delta", text: " Hi" },
-      { type: "done", text: " Hi" },
-    ]);
   });
 
-  it("reports a refusal once, even as the socket closes", async () => {
+  it("hands an engine refusal back", async () => {
     wss.on("connection", (ws) => {
       ws.on("message", () => {
         ws.send(JSON.stringify({ type: "error", detail: "Invalid API key" }));
         ws.close(1008);
       });
     });
-    const events: SttStreamEvent[] = [];
-    createOpenAiCompatibleSttConnector({
-      baseUrl,
-      apiKey: "wrong",
-      provider: "omlx",
-    }).openStream?.({ model: "whisper" }, (event) => events.push(event));
-    await until(() => events.length > 0);
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(events).toEqual([{ type: "error", message: "Invalid API key" }]);
-  });
-
-  it("reports an unreachable server", async () => {
-    const port = (wss.address() as AddressInfo).port;
-    await new Promise((resolve) => wss.close(resolve));
-    wss = new WebSocketServer({ noServer: true });
-    const events: SttStreamEvent[] = [];
-    createOpenAiCompatibleSttConnector({
-      baseUrl: `http://127.0.0.1:${port}/v1`,
-      apiKey: "",
-      provider: "omlx",
-    }).openStream?.({ model: "whisper" }, (event) => events.push(event));
-    await until(() => events.length > 0);
-
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: "error" });
+    await expect(
+      connector("wrong").openRealtime?.({ model: "whisper" }),
+    ).resolves.toMatchObject({ ok: false, errorCode: "BAD_TOKEN" });
   });
 });

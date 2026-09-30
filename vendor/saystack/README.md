@@ -2,8 +2,9 @@
 
 The desktop and web apps read replies aloud with saystack: the player above
 the composer, the word marked in the reply, and the glow that follows the
-voice (and the microphone while you dictate). Live dictation streams the
-microphone to the daemon through saystack too.
+voice (and the microphone while you dictate). Dictation streams the
+microphone through saystack too, and the daemon forwards it to oMLX with
+saystack's server packages.
 
 saystack is not on npm yet, so its packages install from the tarballs in this
 folder. The `overrides` in `pnpm-workspace.yaml` point every `@saystack/*`
@@ -13,7 +14,7 @@ To pick up a newer saystack from a checkout next to this repository:
 
 ```bash
 dest="$PWD/vendor/saystack"
-for p in core react web react-web; do
+for p in core react web react-web server engine-openai-compatible; do
   (cd ../saystack/packages/$p && pnpm build && pnpm pack --pack-destination "$dest")
 done
 pnpm install

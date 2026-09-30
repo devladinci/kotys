@@ -369,8 +369,10 @@ Kotys checks `realtime_stt` in `/models/status` for the selected model.
 Release, and the text stays in the composer for you to edit and send. One
 undo takes the whole dictation back out. The audio streams to the daemon over
 a WebSocket as 16 kHz mono PCM, and the daemon passes it on to oMLX's
-realtime endpoint. If the stream breaks off, the recording is transcribed
-the usual way, and that text lands in the composer instead.
+realtime endpoint. On release the daemon also transcribes the whole recording
+once, and that text replaces the live words: when oMLX closes a stream it can
+repeat the last words it heard. If the stream breaks off, the recording is
+transcribed the usual way, and that text lands in the composer instead.
 
 With any other model, the transcript is sent as a chat message as soon as it
 arrives, and whatever you had typed stays in the box. If the press is

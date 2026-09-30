@@ -11,6 +11,8 @@ overrides:
   '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz
   '@saystack/web': file:vendor/saystack/saystack-web-0.0.1.tgz
   '@saystack/react-web': file:vendor/saystack/saystack-react-web-0.0.1.tgz
+  '@saystack/server': file:vendor/saystack/saystack-server-0.0.1.tgz
+  '@saystack/engine-openai-compatible': file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
 
 importers:
 
@@ -70,6 +72,15 @@ importers:
       '@orpc/server':
         specifier: ^1.15.0
         version: 1.15.0(ws@8.21.3)
+      '@saystack/core':
+        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
+        version: file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/engine-openai-compatible':
+        specifier: file:../../vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
+        version: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
+      '@saystack/server':
+        specifier: file:../../vendor/saystack/saystack-server-0.0.1.tgz
+        version: file:vendor/saystack/saystack-server-0.0.1.tgz
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -2412,26 +2423,36 @@ packages:
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
   '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz':
-    resolution: {integrity: sha512-az1vggPpfLGg8ce/H5BN1DOkXtshiS7n9K9NLiiCAzRkCH2kZVku35Gb33L1M2mijx5pE8XSwGDa6RYf/zHKjQ==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
+    resolution: {integrity: sha512-R4ld/OoIS9W4l9bvjG+bLldCdw7d3QCngY/bEeaRUHfcrnRtoCpw2l8Lkiuhw4TL5d7Y+7udSzlsGHjqy35qVA==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
+
+  '@saystack/engine-openai-compatible@file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz':
+    resolution: {integrity: sha512-9uYYbsze/bRWsjgIxeB/9YLzmeZ+iazHXxJle3RKdr2SIMJqaPhyTaTsDF3s9WVtPjZuWmEqSk9+BJzoMs1LVQ==, tarball: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
   '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz':
-    resolution: {integrity: sha512-z0gsJ/6A1eCC3Fd+qmhW0b1a8kGlq708G/PQ0uMAY1Tj9Yo5o87SynnmFMk0YU056F2rhrrCkv2LCiPCmkZMJA==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
+    resolution: {integrity: sha512-yn0W0lknPfkUMyAm9fGzIlSHCi34VEv2dIc2t2ZSvuogIf5o0qZjg1lBW4ZhEdhiKmZ0Eo1YP/dazyNWv5mgew==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
   '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz':
-    resolution: {integrity: sha512-XmOYCFmnz9o+XcfVzqc0E6S+ILTkv5Xe9PuwRjaXRIpSFbByNXJE7uJr253XIomKGZldB0unido3fS2yfdaMmA==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
+    resolution: {integrity: sha512-uC31/p//sw3BxKReXw4KJivSZ3XdPzk2jcsSSv5dOESWvOLpWsxT5NLX2NHltigPO8MA3nOCbq+vGW79fmjmWg==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
+  '@saystack/server@file:vendor/saystack/saystack-server-0.0.1.tgz':
+    resolution: {integrity: sha512-0PfWTYQoGHi3V43XZ4vdJzOAlIHSUol3MDQKML5RrjMuPhC8h20X0OJrDGa4EsKEXstTxBAck0QYMhJChywRBQ==, tarball: file:vendor/saystack/saystack-server-0.0.1.tgz}
+    version: 0.0.1
+    engines: {node: '>=22'}
+
   '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
-    resolution: {integrity: sha512-RanQdfqZIqLw2Hz2M6T04WewnjoGcjZmg914Dt+CpATNBqY3xOgX9px3rNEzQG0c7BHJFfAggCj/l3Rs5ZJB8g==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
+    resolution: {integrity: sha512-9vdY23g23UyqNQVY1S16rzWmDo90fsb1q3OiMKrzCWf8mS6oLZOK1oCyprDY7huOJvQUsZFOpaUJXRVvIcomjA==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
@@ -7312,6 +7333,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xcode@3.0.1:
     resolution: {integrity: sha512-kCz5k7J7XbJtjABOvkc5lJmkiDh8VhjVCGNiqdKCscmVpdVUpEAyXv1xmCLkQJ5dsHqx3IPO4XW+NTDhU/fatA==}
     engines: {node: '>=10.0.0'}
@@ -9444,6 +9477,14 @@ snapshots:
 
   '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz': {}
 
+  '@saystack/engine-openai-compatible@file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz':
+    dependencies:
+      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz(react@19.1.0)':
     dependencies:
       '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
@@ -9455,6 +9496,11 @@ snapshots:
     dependencies:
       '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
       react: 19.1.0
+
+  '@saystack/server@file:vendor/saystack/saystack-server-0.0.1.tgz':
+    dependencies:
+      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      hono: 4.13.5
 
   '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
     dependencies:
@@ -15405,6 +15451,8 @@ snapshots:
   ws@7.5.13: {}
 
   ws@8.21.3: {}
+
+  ws@8.22.0: {}
 
   xcode@3.0.1:
     dependencies:

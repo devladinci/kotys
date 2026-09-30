@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
 const { initTestClients } = await import("../../test/mocks/rpc");
 const { KotysProviderForTest } = await import("../../test/platform");
-const { ReadAloudProvider } = await import("./readAloud/ReadAloudProvider");
+const { SpeechProvider } = await import("./SpeechProvider");
 const { SpeakerButton } = await import("./SpeakerButton");
 
 const TABLE_REPLY = [
@@ -18,13 +18,15 @@ const TABLE_REPLY = [
 
 let fetchMock: Mock;
 
+const noBody = { current: null };
+
 const renderButtons = (second = "Second reply.") =>
   render(
     <KotysProviderForTest>
-      <ReadAloudProvider>
-        <SpeakerButton messageId={1} content="First reply." />
-        <SpeakerButton messageId={2} content={second} />
-      </ReadAloudProvider>
+      <SpeechProvider>
+        <SpeakerButton messageId={1} content="First reply." bodyRef={noBody} />
+        <SpeakerButton messageId={2} content={second} bodyRef={noBody} />
+      </SpeechProvider>
     </KotysProviderForTest>,
   );
 

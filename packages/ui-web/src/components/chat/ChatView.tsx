@@ -26,9 +26,9 @@ import { useTokenEstimator } from "@kotys/core";
 import { isInputForChat, useUserInputStore } from "@kotys/core";
 import { DEFAULT_CONTEXT } from "@kotys/contracts";
 import PomodoroChip from "../pomodoro/PomodoroChip";
+import { ReadAloudAura, ReadAloudPlayer } from "@saystack/react-web";
+import { AURA_LAYER } from "./auraLayer";
 import MessageList, { type IMessageListHandle } from "./MessageList";
-import { ReadAloudAura } from "./readAloud/ReadAloudAura";
-import { ReadAloudPlayer } from "./readAloud/ReadAloudPlayer";
 import Composer from "../composer";
 import UserInputComposer from "../user-input/UserInputComposer";
 import ModelSelector from "./ModelSelector";
@@ -377,7 +377,7 @@ export default function ChatView({
         </button>
       </header>
       <div ref={setListArea} className="flex-1 relative min-h-0">
-        <ReadAloudAura clip={listArea} />
+        <ReadAloudAura clip={listArea} zIndex={AURA_LAYER} />
         <MessageList
           ref={listHandle}
           onAtBottomChange={handleAtBottomChange}
@@ -407,7 +407,7 @@ export default function ChatView({
 
       <div className="p-3 border-t border-border bg-bg">
         <div className="max-w-3xl mx-auto">
-          <ReadAloudPlayer />
+          <ReadAloudPlayer className="mb-2" />
           {(isCompacting || compactNotice) && (
             <div
               className="relative mb-2 flex justify-center"

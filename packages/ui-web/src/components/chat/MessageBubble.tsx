@@ -11,7 +11,6 @@ import {
 import CopyTextButton from "../CopyTextButton";
 import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";
-import { MessageReadAlong } from "./readAloud/MessageReadAlong";
 import { SpeakerButton } from "./SpeakerButton";
 import {
   MarkdownBody,
@@ -136,7 +135,11 @@ function MessageBubbleBase({
             )}
             <CopyTextButton text={message.content} />
             {canReadAloud && (
-              <SpeakerButton messageId={message.id} content={message.content} />
+              <SpeakerButton
+                messageId={message.id}
+                content={message.content}
+                bodyRef={bodyRef}
+              />
             )}
             {isUser && onEditAndResend && !isLoading && (
               <button
@@ -267,12 +270,6 @@ function MessageBubbleBase({
                       )}
                     </div>
                   </StreamingProvider>
-                  {canReadAloud && (
-                    <MessageReadAlong
-                      messageId={message.id}
-                      rootRef={bodyRef}
-                    />
-                  )}
                   {isFailed && canRegenerate && (
                     <div className="mt-1.5">
                       <button

@@ -1,9 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Mic } from "lucide-react";
-import type { VoiceStatus } from "@kotys/core";
+import type { DictationState } from "@saystack/react";
 
 interface IProps {
-  status: VoiceStatus;
+  status: DictationState;
   onStart: () => void;
   onStop: () => void;
   onCancel: () => void;
