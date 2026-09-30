@@ -11,9 +11,8 @@ import {
   SkillMessage,
   splitContentByWidgets,
   useAppStore,
-  useSpeechActions,
-  useSpeechStore,
 } from "@kotys/core";
+import { useReadAloudMessage } from "@saystack/react-native";
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import type { ThemeMode } from "../../lib/theme";
@@ -54,11 +53,6 @@ const longPressActions = (
   if (isUser) return USER_ACTIONS;
   if (isErrorTurn(content)) return FAILED_REPLY_ACTIONS;
   return speechAction ? [speechAction, ...REPLY_ACTIONS] : REPLY_ACTIONS;
-};
-
-const isReadingMessage = (messageId: number): boolean => {
-  const { messageId: activeId, phase } = useSpeechStore.getState();
-  return activeId === messageId && (phase === "loading" || phase === "playing");
 };
 
 const displayText = (content: string) =>
@@ -114,7 +108,8 @@ function BubbleBase({
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
   const ttsModel = useAppStore((st) => st.ttsModel);
-  const { speak, stop } = useSpeechActions();
+  const bodyRef = useRef<View>(null);
+  const readAloud = useReadAloudMessage(message.id, bodyRef);
   const lastTapAt = useRef(0);
   const canRead =
     !isUser &&
@@ -127,13 +122,15 @@ function BubbleBase({
     (tc) => !isSteerActivity(tc),
   );
 
+  const { isActive: isReading, speak, stop } = readAloud;
+
   const toggleReading = useCallback(() => {
-    if (isReadingMessage(message.id)) {
+    if (isReading) {
       stop();
       return;
     }
-    speak(message.id, message.content);
-  }, [message.id, message.content, speak, stop]);
+    speak(message.content);
+  }, [isReading, message.content, speak, stop]);
 
   const handlePress = useCallback(() => {
     if (!canRead) return;
@@ -146,7 +143,7 @@ function BubbleBase({
   const handleLongPress = useCallback(() => {
     if (isStreaming || isBusy) return;
     const speechAction = canRead
-      ? isReadingMessage(message.id)
+      ? isReading
         ? STOP_READING
         : READ_ALOUD
       : null;
@@ -167,6 +164,7 @@ function BubbleBase({
     isStreaming,
     isBusy,
     canRead,
+    isReading,
     onEdit,
     onRegenerate,
     toggleReading,
@@ -234,6 +232,7 @@ function BubbleBase({
       delayLongPress={350}
     >
       <View
+        ref={bodyRef}
         style={[
           isUser ? s.bubbleUser : s.bubbleAssistant,
           isUser ? ts.userBubble : null,

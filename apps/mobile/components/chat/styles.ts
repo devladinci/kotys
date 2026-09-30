@@ -216,32 +216,12 @@ export const s = StyleSheet.create({
     gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  speechBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginHorizontal: 12,
-    marginBottom: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+  micHot: {
+    transform: [{ scale: 1.14 }],
   },
-  speechBarText: {
-    flex: 1,
-    fontSize: 12,
-  },
-  speechBarButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  speechBarButtonText: {
-    fontSize: 12,
-    fontWeight: "500",
+  readAlong: {
+    fontSize: 15,
+    lineHeight: 22,
   },
   editHint: {
     fontSize: 12,
@@ -382,12 +362,11 @@ const createThemedStyles = (mode: ThemeMode) => {
     dangerText: {
       color: t.danger,
     },
-    speechBar: {
-      backgroundColor: t.surface2,
-      borderColor: t.border,
+    micHot: {
+      backgroundColor: t.accent,
     },
-    speechBarButton: {
-      backgroundColor: t.surface,
+    micCancel: {
+      backgroundColor: t.danger,
     },
     editCancel: {
       borderColor: t.border,
