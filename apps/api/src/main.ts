@@ -6,9 +6,8 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { initDatabase, DB_PATH } from "@kotys/db";
 import { router } from "./router/index.js";
 import { HOST, isAllowedOrigin, PORT } from "./config.js";
-import { registerSttRoute } from "./sttRoute.js";
-import { registerSttStreamRoute } from "./sttStreamRoute.js";
 import { registerTtsRoute } from "./ttsRoute.js";
+import { registerVoiceRoutes } from "./voiceRoute.js";
 import {
   getOrCreateToken,
   isValidToken,
@@ -64,8 +63,7 @@ app.get("/health", (c) => c.json({ ok: true }));
 
 app.use("/rpc/*", requireAuth());
 
-registerSttRoute(app);
-registerSttStreamRoute(app);
+registerVoiceRoutes(app);
 registerTtsRoute(app);
 
 const handler = new RPCHandler(router);

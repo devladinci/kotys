@@ -1,5 +1,6 @@
 import { Extension, type Editor } from "@tiptap/core";
 import type { IDictationInput } from "@saystack/core";
+import { wordEntrance } from "@saystack/web";
 import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, PluginKey, Selection, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -20,9 +21,6 @@ interface IDictation {
 interface IDictationMeta {
   next: IDictation | null;
 }
-
-// Matches the entrance animation of saystack's streaming words.
-const ENTER_MS = 520;
 
 const dictationPluginKey = new PluginKey<IDictation | null>("kotys-dictation");
 
@@ -53,19 +51,19 @@ export const DictationExtension = Extension.create({
             const dictation = dictationPluginKey.getState(state);
             if (!dictation) return null;
             const now = performance.now();
-            const fresh = dictation.words.filter(
-              (word) => now - word.at < ENTER_MS,
-            );
-            return DecorationSet.create(
-              state.doc,
-              fresh.map((word) =>
-                Decoration.inline(word.from, word.to, {
-                  class: "saystack-streaming-new",
-                  // Re-rendered spans pick the animation up where it was.
-                  style: `animation-delay: -${Math.round(now - word.at)}ms`,
-                }),
-              ),
-            );
+            // Re-rendered spans pick saystack's entrance up where it was.
+            const fresh = dictation.words.flatMap((word) => {
+              const entrance = wordEntrance(now - word.at);
+              return entrance
+                ? [
+                    Decoration.inline(word.from, word.to, {
+                      class: entrance.className,
+                      style: `animation-delay: ${entrance.animationDelay}`,
+                    }),
+                  ]
+                : [];
+            });
+            return DecorationSet.create(state.doc, fresh);
           },
         },
       }),

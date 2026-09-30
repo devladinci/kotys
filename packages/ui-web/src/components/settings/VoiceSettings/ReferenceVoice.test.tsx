@@ -56,7 +56,7 @@ describe("ReferenceVoice", () => {
     expect(
       await screen.findByDisplayValue("Words from the clip."),
     ).toBeInTheDocument();
-    expect(requestTo("/stt/transcribe")).toBeDefined();
+    expect(requestTo("/voice/audio/transcriptions")).toBeDefined();
   });
 
   it("uploads the clip with its transcript and shows it as set", async () => {

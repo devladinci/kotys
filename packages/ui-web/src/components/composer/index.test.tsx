@@ -239,10 +239,12 @@ describe("Composer dictation", () => {
     await input();
     const realtimeUrl = voice.options?.realtime?.url;
 
-    expect(voice.options?.endpoint).toBe("http://test/stt/transcribe");
+    expect(voice.options?.endpoint).toBe(
+      "http://test/voice/audio/transcriptions",
+    );
     expect(
       typeof realtimeUrl === "function" ? realtimeUrl() : realtimeUrl,
-    ).toBe("ws://test/stt/stream?token=");
+    ).toBe("ws://test/voice/audio/transcriptions/realtime?token=");
     const headers = voice.options?.headers;
     expect(typeof headers === "function" ? headers() : headers).toEqual({
       Authorization: "Bearer ",

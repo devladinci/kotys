@@ -4,17 +4,8 @@ import type { RouterClient } from "@orpc/server";
 import type { AppRouter, ClientMessage, ServerMessage } from "@kotys/api";
 import { setClients, getRpc } from "./clients.js";
 import { useMemoOnce } from "./useMemoOnce.js";
-import type { ISpeechClip } from "../speech/types.js";
 
 export type { ClientMessage, ServerMessage };
-
-export type VoiceRecording = {
-  /** Web: recorded audio blob. */
-  blob?: Blob;
-  /** Mobile: file URI of the recording. */
-  uri?: string;
-  mimeType: string;
-};
 
 /**
  * Capabilities the host app provides.
@@ -39,90 +30,6 @@ export type Platform = {
   onAppForeground?: (cb: () => void) => () => void;
   /** Show or schedule a notification. */
   notify: (n: { title: string; body: string; at?: number }) => void;
-  /** Hold-to-talk voice input; hosts without a mic throw. */
-  startVoiceRecording?: () => Promise<void>;
-  stopVoiceRecording?: () => Promise<VoiceRecording>;
-  unlockSpeech?: () => void;
-  createSpeechClip?: (audio: ArrayBuffer) => Promise<ISpeechClip>;
-};
-
-const audioFilename = (mimeType: string | undefined): string => {
-  if (mimeType?.includes("wav")) return "audio.wav";
-  if (mimeType?.includes("mp4") || mimeType?.includes("aac")) {
-    return "audio.mp4";
-  }
-  return "audio.webm";
-};
-
-// RN's global fetch (expo/fetch) cannot serialize {uri} file parts, so mobile
-// uploads through XHR, whose native layer streams the file.
-const xhrTranscribe = (
-  url: string,
-  token: string,
-  file: { uri: string; name: string; type: string },
-): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const XhrCtor = (globalThis as Record<string, unknown>)[
-      "XMLHttpRequest"
-    ] as new () => {
-      open: (method: string, url: string) => void;
-      setRequestHeader: (name: string, value: string) => void;
-      onload: (() => void) | null;
-      onerror: (() => void) | null;
-      status: number;
-      responseText: string;
-      send: (body: unknown) => void;
-    };
-    const xhr = new XhrCtor();
-    xhr.open("POST", url);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.onload = () => {
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`Transcription failed (${xhr.status})`));
-        return;
-      }
-      try {
-        resolve((JSON.parse(xhr.responseText) as { text?: string }).text ?? "");
-      } catch {
-        reject(new Error("Transcription returned invalid JSON"));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Transcription request failed"));
-    const form = new FormData();
-    form.append("file", file);
-    xhr.send(form);
-  });
-
-export const transcribeVoice = async (
-  config: { baseUrl: string; token: string },
-  recording: VoiceRecording,
-): Promise<string> => {
-  const filename = audioFilename(recording.mimeType);
-  if (recording.blob) {
-    const form = new FormData();
-    form.append("file", recording.blob, filename);
-    const res = await fetch(`${config.baseUrl}/stt/transcribe`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.token}` },
-      body: form,
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      throw new Error(body?.error ?? `Transcription failed (${res.status})`);
-    }
-    const body = (await res.json()) as { text?: string };
-    return body.text ?? "";
-  }
-  if (recording.uri) {
-    return xhrTranscribe(`${config.baseUrl}/stt/transcribe`, config.token, {
-      uri: recording.uri,
-      name: filename,
-      type: recording.mimeType,
-    });
-  }
-  throw new Error("Empty recording");
 };
 
 type KotysContextValue = {

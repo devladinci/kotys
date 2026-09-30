@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ReadAloudProvider } from "@saystack/react-web";
-import { authHeaders, daemonUrl, summarizeReply } from "../../voiceConfig";
+import { authHeaders, speechUrl, summarizeReply } from "../../voiceConfig";
 
 interface IProps {
   children: ReactNode;
@@ -9,7 +9,7 @@ interface IProps {
 export function SpeechProvider({ children }: IProps) {
   return (
     <ReadAloudProvider
-      endpoint={daemonUrl("/tts/speech")}
+      endpoint={speechUrl()}
       headers={authHeaders}
       summarize={summarizeReply}
     >

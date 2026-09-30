@@ -14,7 +14,7 @@ To pick up a newer saystack from a checkout next to this repository:
 
 ```bash
 dest="$PWD/vendor/saystack"
-for p in core react web react-web server engine-openai-compatible; do
+for p in core react web react-web react-native server engine-openai-compatible; do
   (cd ../saystack/packages/$p && pnpm build && pnpm pack --pack-destination "$dest")
 done
 pnpm install

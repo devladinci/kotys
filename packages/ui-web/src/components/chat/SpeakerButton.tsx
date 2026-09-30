@@ -5,6 +5,7 @@ import {
   ACTION_BUTTON_CLASS,
   ACTIVE_ACTION_BUTTON_CLASS,
 } from "../actionButton";
+import { READ_ALONG_LAYER } from "./auraLayer";
 
 interface IProps {
   messageId: number;
@@ -13,7 +14,9 @@ interface IProps {
 }
 
 export function SpeakerButton({ messageId, content, bodyRef }: IProps) {
-  const readAloud = useReadAloudMessage(messageId, bodyRef);
+  const readAloud = useReadAloudMessage(messageId, bodyRef, {
+    zIndex: READ_ALONG_LAYER,
+  });
 
   const handleClick = () => {
     if (readAloud.isActive) {

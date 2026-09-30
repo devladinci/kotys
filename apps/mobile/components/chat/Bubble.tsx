@@ -6,12 +6,12 @@ import type { ASTNode, RenderRules } from "react-native-markdown-display";
 import { Ionicons } from "@expo/vector-icons";
 import { asDataUriImage, isErrorTurn, isSteerActivity } from "@kotys/contracts";
 import {
-  hasSpeechText,
   SKILL_FENCE_PREFIX,
   SkillMessage,
   splitContentByWidgets,
   useAppStore,
 } from "@kotys/core";
+import { hasSpeechText } from "@saystack/core";
 import { useReadAloudMessage } from "@saystack/react-native";
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";

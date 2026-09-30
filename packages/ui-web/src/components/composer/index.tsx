@@ -10,7 +10,11 @@ import type { QueuedMessage } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
 import { useDictationAura, useWebDictation } from "@saystack/react-web";
 import { unlockWebAudio } from "@saystack/web";
-import { authHeaders, daemonUrl, dictationStreamUrl } from "../../voiceConfig";
+import {
+  authHeaders,
+  dictationStreamUrl,
+  dictationUrl,
+} from "../../voiceConfig";
 import { AURA_LAYER } from "../chat/auraLayer";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
@@ -186,7 +190,7 @@ function ComposerBase({
   };
 
   const dictation = useWebDictation({
-    endpoint: daemonUrl("/stt/transcribe"),
+    endpoint: dictationUrl(),
     headers: authHeaders,
     realtime: REALTIME,
     input: dictationInput,

@@ -54,7 +54,7 @@ import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
 import {
   authHeaders,
-  daemonUrl,
+  dictationUrl,
   dictationStreamUrl,
 } from "../../lib/voiceConfig";
 import { useVoiceTheme } from "../../lib/voiceTheme";
@@ -419,7 +419,7 @@ function ChatScreen() {
   );
 
   const dictation = useNativeDictation({
-    endpoint: daemonUrl("/stt/transcribe"),
+    endpoint: dictationUrl(),
     headers: authHeaders,
     realtime: DICTATION_STREAM,
     onText: handleTranscript,

@@ -2,12 +2,8 @@ import { memo, useRef, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
-import {
-  hasSpeechText,
-  SkillMessage,
-  splitContentByWidgets,
-  useAppStore,
-} from "@kotys/core";
+import { SkillMessage, splitContentByWidgets, useAppStore } from "@kotys/core";
+import { hasSpeechText } from "@saystack/core";
 import CopyTextButton from "../CopyTextButton";
 import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";

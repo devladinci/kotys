@@ -27,17 +27,6 @@ const postJson = (
     signal,
   });
 
-export async function requestSpeechAudio(
-  config: IApiConfig,
-  text: string,
-  signal: AbortSignal,
-): Promise<ArrayBuffer> {
-  const res = await postJson(config, "/tts/speech", { text }, signal);
-  if (!res.ok) throw await errorFrom(res, "Speech failed");
-
-  return res.arrayBuffer();
-}
-
 export async function requestSpeechSummary(
   config: IApiConfig,
   messageId: number,

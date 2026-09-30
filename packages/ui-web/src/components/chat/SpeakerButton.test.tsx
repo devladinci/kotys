@@ -35,7 +35,7 @@ const labels = () =>
 
 const spoken = () =>
   fetchMock.mock.calls
-    .filter(([url]) => String(url).endsWith("/tts/speech"))
+    .filter(([url]) => String(url).endsWith("/voice/speech"))
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)).text);
 
 beforeEach(async () => {

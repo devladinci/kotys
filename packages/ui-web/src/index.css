@@ -341,12 +341,6 @@ body,
   --saystack-block-glow: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* Under the message toolbar (z-10), popovers and dialogs. */
-.saystack-read-along-word,
-.saystack-read-along-block {
-  z-index: 5;
-}
-
 .saystack-player {
   --saystack-player-background: var(--surface-2);
   --saystack-player-border: var(--border);

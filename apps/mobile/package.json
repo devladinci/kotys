@@ -17,6 +17,7 @@
     "@kotys/contracts": "workspace:*",
     "@kotys/core": "workspace:*",
     "@kotys/ui-tokens": "workspace:*",
+    "@saystack/core": "0.0.1",
     "@saystack/react": "0.0.1",
     "@saystack/react-native": "0.0.1",
     "expo": "~57.0.25",

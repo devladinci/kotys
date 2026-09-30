@@ -1,11 +1,9 @@
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ISpeechRequest } from "./services/tts/types.js";
 
 const mocks = vi.hoisted(() => ({
   settings: new Map<string, string>(),
-  synthesize: vi.fn<(req: ISpeechRequest) => Promise<ArrayBuffer>>(),
   summarize: vi.fn<(messageId: number) => Promise<string | null>>(),
 }));
 
@@ -21,14 +19,6 @@ vi.mock("@kotys/db", async () => {
     setSetting: (key: string, value: string) => mocks.settings.set(key, value),
   };
 });
-
-vi.mock("./services/tts/registry.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./services/tts/registry.js")>()),
-  resolveTtsConnector: () => ({
-    listModels: vi.fn(),
-    synthesize: mocks.synthesize,
-  }),
-}));
 
 vi.mock("./services/tts/summary.js", () => ({
   summarizeForSpeech: mocks.summarize,
@@ -62,9 +52,6 @@ const post = (route: string, body: unknown, token = TOKEN) =>
     body: JSON.stringify(body),
   });
 
-const speak = (body: unknown, token = TOKEN) =>
-  post("/tts/speech", body, token);
-
 const summarize = (body: unknown, token = TOKEN) =>
   post("/tts/summary", body, token);
 
@@ -86,9 +73,6 @@ const errorOf = async (res: Response) =>
 beforeEach(() => {
   mocks.settings.clear();
   mocks.settings.set("api_token", TOKEN);
-  mocks.settings.set("tts_model", "omlx:higgs_audio_v3-tts-4b");
-  mocks.synthesize.mockReset();
-  mocks.synthesize.mockResolvedValue(new TextEncoder().encode("RIFF").buffer);
   mocks.summarize.mockReset();
   mocks.summarize.mockResolvedValue("A short version.");
   rmSync(REFERENCE_FILE, { force: true });
@@ -96,88 +80,6 @@ beforeEach(() => {
 
 afterAll(() => {
   rmSync(path.dirname(DB_PATH), { recursive: true, force: true });
-});
-
-describe("POST /tts/speech", () => {
-  it("rejects requests without the app token", async () => {
-    expect((await speak({ text: "Hi." }, "wrong")).status).toBe(401);
-  });
-
-  it("400 when no text-to-speech model is selected", async () => {
-    mocks.settings.delete("tts_model");
-    const res = await speak({ text: "Hi." });
-
-    expect(res.status).toBe(400);
-    expect(await errorOf(res)).toBe("No text-to-speech model selected");
-    expect(mocks.synthesize).not.toHaveBeenCalled();
-  });
-
-  it("400 when the text is missing or blank", async () => {
-    expect((await speak({})).status).toBe(400);
-    expect((await speak({ text: "   " })).status).toBe(400);
-    expect((await speak({ text: 42 })).status).toBe(400);
-  });
-
-  it("413 when one request carries too much text", async () => {
-    expect((await speak({ text: "a".repeat(2_001) })).status).toBe(413);
-  });
-
-  it("returns the synthesized wav for the trimmed text", async () => {
-    const res = await speak({ text: "  Здравей.  " });
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("audio/wav");
-    expect(await res.text()).toBe("RIFF");
-    expect(mocks.synthesize).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "higgs_audio_v3-tts-4b",
-        text: "Здравей.",
-        refAudio: undefined,
-        refText: undefined,
-      }),
-    );
-    expect(mocks.synthesize.mock.calls[0][0].signal).toBeInstanceOf(
-      AbortSignal,
-    );
-  });
-
-  it("ignores extra fields such as a client-chosen voice or language", async () => {
-    await speak({ text: "Hi.", voice: "/etc/hosts", language: "bg" });
-
-    expect(Object.keys(mocks.synthesize.mock.calls[0][0]).sort()).toEqual([
-      "model",
-      "refAudio",
-      "refText",
-      "signal",
-      "text",
-    ]);
-  });
-
-  it("never reads a file path taken from settings", async () => {
-    mocks.settings.set("tts_ref_audio", "/etc/hosts");
-    mocks.settings.set("tts_ref_audio_text", "hosts");
-    await speak({ text: "Hi." });
-
-    expect(mocks.synthesize.mock.calls[0][0].refAudio).toBeUndefined();
-  });
-
-  it("uses the uploaded reference clip and its transcript", async () => {
-    await upload(new Blob([WAV]), "Reference words.");
-    await speak({ text: "Hi." });
-
-    expect(mocks.synthesize.mock.calls[0][0]).toMatchObject({
-      refAudio: Buffer.from(WAV).toString("base64"),
-      refText: "Reference words.",
-    });
-  });
-
-  it("502 with the upstream message when synthesis fails", async () => {
-    mocks.synthesize.mockRejectedValueOnce(new Error("speech failed: 500"));
-    const res = await speak({ text: "Hi." });
-
-    expect(res.status).toBe(502);
-    expect(await errorOf(res)).toBe("speech failed: 500");
-  });
 });
 
 describe("POST /tts/summary", () => {

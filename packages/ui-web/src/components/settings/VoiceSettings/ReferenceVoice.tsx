@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
   getConfig,
-  transcribeVoice,
   uploadSpeechReference,
   useAppStore,
   useRpc,
 } from "@kotys/core";
+import { sendDictation } from "@saystack/react";
+import { authHeaders, dictationUrl } from "../../../voiceConfig";
 import {
   FIELD_CLASS,
   SUBSECTION_CLASS,
@@ -60,10 +61,12 @@ export function ReferenceVoice() {
   const transcribe = async (picked: File) => {
     setIsTranscribing(true);
     try {
-      const recording = { blob: picked, mimeType: picked.type || "audio/wav" };
-      setTranscript(await transcribeVoice(getConfig(), recording));
-    } catch {
-      setTranscript("");
+      const result = await sendDictation(
+        dictationUrl(),
+        { blob: picked },
+        { headers: authHeaders },
+      );
+      setTranscript(result.ok ? result.text : "");
     } finally {
       setIsTranscribing(false);
     }

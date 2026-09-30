@@ -195,6 +195,9 @@ importers:
       '@kotys/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
+      '@saystack/core':
+        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
+        version: file:vendor/saystack/saystack-core-0.0.1.tgz
       '@saystack/react':
         specifier: file:../../vendor/saystack/saystack-react-0.0.1.tgz
         version: file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
@@ -2370,17 +2373,17 @@ packages:
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
   '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz':
-    resolution: {integrity: sha512-eZwwrpXrX8L7s9kbyVjFr2aabQA+Q4FSa03b8GtAo+pH5LGN7ORCRSGwrIOQfC+Rf0cPv/MPt528gdH8uqtb9Q==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
+    resolution: {integrity: sha512-myMiDoYQKD6eaxkQ+8VZxcCBDtwPz9pTVgqrD0OZDd7pTcSkHmuvlxagDWtFf7r4viEwC0BXieIMREbaeiKFNg==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
   '@saystack/engine-openai-compatible@file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz':
-    resolution: {integrity: sha512-9uYYbsze/bRWsjgIxeB/9YLzmeZ+iazHXxJle3RKdr2SIMJqaPhyTaTsDF3s9WVtPjZuWmEqSk9+BJzoMs1LVQ==, tarball: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz}
+    resolution: {integrity: sha512-KpneT82+IxX1G9ZCgztdrE9sEMivDpjT3bUpS6jxSx5eC5U6PBhDT0E2IT9OzNTX8QY+iChLvgp3SAveRweICA==, tarball: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
   '@saystack/react-native@file:vendor/saystack/saystack-react-native-0.0.1.tgz':
-    resolution: {integrity: sha512-ed8JDcO5WgSaapo4MFcuyIkqKMY5X2oraJ9EtG4/J4FSDse21OyXj3UPLjdcFcSdB4SN0sRlKZd3AZAl4i/MNg==, tarball: file:vendor/saystack/saystack-react-native-0.0.1.tgz}
+    resolution: {integrity: sha512-o+Kpb66PRqet6MDn1+xd10CMgyAL5wNAyO4rz6lS/IaiO8h2Nm2tgjwGM62EJnkCQ85P5A3b/TtHy5ewfN0XyA==, tarball: file:vendor/saystack/saystack-react-native-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
     peerDependencies:
@@ -2398,26 +2401,26 @@ packages:
         optional: true
 
   '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz':
-    resolution: {integrity: sha512-Zm3j1IkXj9V4CH756VGLLn11JQLAWywwiX4EmeIYKIlmV3UoJRAQfMnI7WeYE33WkCG8yilTd1opoCqDKCcEFg==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
+    resolution: {integrity: sha512-df62CveFnPoRKBLwewueW1LL9YKi6yYOHTLTyGv+4s30hIdArLAG3oYpd5XAg7/YfOJS5MsCr8zq3epg0r8qxg==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
   '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz':
-    resolution: {integrity: sha512-pQh5NUFZwH4auqW75x3MINCh6TL356raQMr2MAMfLTN3jGh/KMdBvY9oa97pal13tI9d2C4ARrKiVGPV3/dCng==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
+    resolution: {integrity: sha512-IGWBtwCi+Ut9ABKaK15lqCy5DPp3oaUMvhO8eoj3+IPNm+rESMH7gMVJX6REx+XE7zfuCG/CJeeQwVdpBrV87g==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
   '@saystack/server@file:vendor/saystack/saystack-server-0.0.1.tgz':
-    resolution: {integrity: sha512-UfAGUkUxTLcLN1EwsYl9ylUjOwc+61JTXmcLXPT+e0uCaOuNRkUb+1NHmYKEyV6gUN25L3e14E711oqE0e8h1A==, tarball: file:vendor/saystack/saystack-server-0.0.1.tgz}
+    resolution: {integrity: sha512-GvdyuMe6UnFlHKnBK92Cw/AncIugfyG03wJkEXaeWcQLi0rR6jxOmk3K4i9NQI/yk6Nrf0dYUxeKr5YZVG3F2w==, tarball: file:vendor/saystack/saystack-server-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 
   '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
-    resolution: {integrity: sha512-vnWwB0U3uXl6Op7VZ2P9NuLHvTj/7J0g0MUzw4/N3GOF27loTDOmVotRFKPfg5iRi5BLYGfCO+kvIBzatCb/Sg==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
+    resolution: {integrity: sha512-ztGaXlO6QkN551IVixawmCzzXCGNZO8c6mP5kgM/f17COzrZFxlMSIJy9BkrPcLM66b8LbtIsTsWpS9wkGebow==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
     version: 0.0.1
     engines: {node: '>=22'}
 

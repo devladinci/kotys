@@ -1,17 +1,9 @@
 import { referenceStatus, removeReference } from "../services/tts/reference.js";
-import { listEnabledTtsConnectors } from "../services/tts/registry.js";
+import { listSpeechModelsOf } from "../services/speech.js";
 import { pub } from "./base.js";
 
 export const ttsRouter = {
-  models: pub.handler(async () => {
-    const settled = await Promise.allSettled(
-      listEnabledTtsConnectors().map(({ connector }) => connector.listModels()),
-    );
-
-    return settled.flatMap((result) =>
-      result.status === "fulfilled" ? result.value : [],
-    );
-  }),
+  models: pub.handler(() => listSpeechModelsOf("tts")),
 
   reference: pub.handler(() => referenceStatus()),
 
