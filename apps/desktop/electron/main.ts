@@ -5,7 +5,6 @@ import {
   ipcMain,
   nativeTheme,
   net,
-  Notification,
   protocol,
   session,
   shell,
@@ -15,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DB_PATH } from "@kotys/db/config";
 import { ensureDaemon, stopDaemon } from "./daemon";
+import { plausibleNotify, showNotification } from "./notify";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let win: BrowserWindow | null = null;
@@ -149,30 +149,8 @@ app.setName("Kotys");
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = "system";
-  ipcMain.on("notify", (_e, n: { title: string; body: string }) => {
-    // The payload crosses the trust boundary from the renderer: shape-check
-    // and cap it before it reaches the OS notification.
-    if (
-      !n ||
-      typeof n.title !== "string" ||
-      typeof n.body !== "string" ||
-      n.title.length > 200 ||
-      n.body.length > 2000
-    ) {
-      return;
-    }
-    if (Notification.isSupported()) {
-      // macOS already stamps notifications with the app bundle icon; passing
-      // `icon` as well makes it render a second time as a large attachment on
-      // the banner. Only non-Mac platforms need the explicit icon.
-      new Notification({
-        title: n.title,
-        body: n.body,
-        ...(process.platform === "darwin"
-          ? {}
-          : { icon: path.join(__dirname, "../build/icon.png") }),
-      }).show();
-    }
+  ipcMain.on("notify", (_e, n: unknown) => {
+    if (plausibleNotify(n)) showNotification(n, win);
   });
   if (!process.env.VITE_DEV_SERVER_URL) {
     protocol.handle("app", serveRenderer);

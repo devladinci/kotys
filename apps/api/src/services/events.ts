@@ -41,7 +41,15 @@ type ServerEvents = {
 
   "open-url": [{ url: string }];
 
-  notify: [{ title: string; body: string; at?: number; todoId?: number }];
+  notify: [
+    {
+      title: string;
+      body: string;
+      chatId?: number;
+      at?: number;
+      todoId?: number;
+    },
+  ];
 };
 
 class TypedEmitter extends EventEmitter {

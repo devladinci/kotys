@@ -231,9 +231,14 @@ waiting in your list rather than a notification.
    shows the finished reply. Past the 10-minute buffer window it loads the
    saved message instead. Either way you read the same answer.
 
-When a turn takes more than two seconds, the daemon also sends a notification
-carrying the first 120 characters of the reply. So an unlocked Mac tells you
-the answer is ready while you are doing something else.
+When a turn takes more than two seconds, the daemon also sends a notification:
+a short sentence written by the model — what the reply is about, not its first
+words — so an unlocked Mac tells you the answer is ready while you are doing
+something else. Replies shorter than a banner use their own text instead.
+
+Nothing is sent while you are looking at Kotys — a visible window you are
+using suppresses the notification — and reminders and finished timers always
+arrive, focused window or not.
 
 **Honest limits:**
 

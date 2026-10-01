@@ -27,6 +27,10 @@ const h = vi.hoisted(() => ({
     abortedRounds: 0,
     clients: [] as Array<{ host: string; headers: Record<string, string> }>,
     toolsEnabled: {} as Record<string, boolean>,
+    notificationSummary:
+      vi.fn<
+        (content: string, chatId: number | null) => Promise<string | null>
+      >(),
   },
   reset() {
     h.state.scripts.length = 0;
@@ -34,7 +38,15 @@ const h = vi.hoisted(() => ({
     h.state.abortedRounds = 0;
     h.state.clients.length = 0;
     h.state.toolsEnabled = {};
+    h.state.notificationSummary.mockReset();
+    h.state.notificationSummary.mockResolvedValue(
+      "Notifications now summarize the reply instead of echoing it.",
+    );
   },
+}));
+
+vi.mock("./notifyText.js", () => ({
+  notificationSummary: h.state.notificationSummary,
 }));
 
 vi.mock("ollama", () => ({
@@ -527,6 +539,53 @@ describe("streamChat request shaping", () => {
     );
     expect(result.content).toBe("quick answer");
     expect(notifies).toHaveLength(0);
+  });
+
+  it("notifies a long turn with the summarizer's sentence and its chat", async () => {
+    const summary =
+      "Notifications now summarize the reply instead of echoing it.";
+    const turnStart = 1_000;
+    let now = turnStart;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const long = `${"the daemon keeps writing to the database ".repeat(8)}`;
+    state.scripts.push([doneText(long)]);
+    const notifies: { title: string; body: string; chatId?: number }[] = [];
+    events.onEvent("notify", (n) => void notifies.push(n));
+
+    let resolveSummary: (text: string) => void = () => {};
+    const pending = new Promise<string>((resolve) => {
+      resolveSummary = resolve;
+    });
+    h.state.notificationSummary.mockReturnValue(pending);
+
+    // The turn runs past the two-second guard while it streams.
+    const result = await streamChat(
+      baseReq(),
+      {
+        onChunk: () => {
+          now = turnStart + 60_000;
+        },
+        onToolActivity: () => undefined,
+      } as never,
+      new AbortController().signal,
+    );
+
+    // The turn is over and its result is in hand while the summary is still
+    // pending: `chat:done` must never wait for a banner.
+    expect(result.content).toBe(long);
+    expect(notifies).toHaveLength(0);
+    expect(h.state.notificationSummary).toHaveBeenCalledWith(long, 42);
+
+    resolveSummary(summary);
+    await vi.waitFor(() => {
+      expect(notifies).toHaveLength(1);
+    });
+
+    expect(notifies[0]).toEqual({
+      title: "Kotys",
+      body: summary,
+      chatId: 42,
+    });
   });
 
   it("falls back to a char-based prompt estimate when the server reports no counts", async () => {

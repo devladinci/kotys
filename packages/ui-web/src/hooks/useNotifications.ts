@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSocket, usePlatform } from "@kotys/core";
+import { shouldShowNotification, useSocket, usePlatform } from "@kotys/core";
 
 export function useNotifications(): void {
   const socket = useSocket();
@@ -7,9 +7,18 @@ export function useNotifications(): void {
 
   useEffect(() => {
     return socket.on((msg) => {
-      if (msg.type === "notify") {
-        platform.notify({ title: msg.payload.title, body: msg.payload.body });
+      if (msg.type !== "notify") return;
+      const { title, body, chatId } = msg.payload;
+      const isVisible = document.visibilityState === "visible";
+      if (
+        !shouldShowNotification(
+          { chatId },
+          { isVisible, hasFocus: document.hasFocus() },
+        )
+      ) {
+        return;
       }
+      platform.notify({ title, body });
     });
   }, [socket, platform]);
 }
