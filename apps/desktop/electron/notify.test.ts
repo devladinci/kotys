@@ -18,13 +18,6 @@ vi.mock("electron", () => ({
 
 const { plausibleNotify, showNotification } = await import("./notify");
 
-// macOS stamps the bundle icon on its own; only other platforms get one
-// passed explicitly, so the expected options differ per platform.
-const bannerIcon =
-  process.platform === "darwin"
-    ? {}
-    : { icon: expect.stringContaining("icon.png") };
-
 const windowFocused = { isFocused: () => true };
 const windowAway = { isFocused: () => false };
 
@@ -72,7 +65,9 @@ describe("showNotification", () => {
     expect(
       showNotification({ title: "Kotys", body: "Done." }, windowAway),
     ).toBe(true);
-    expect(shown).toEqual([{ title: "Kotys", body: "Done.", ...bannerIcon }]);
+    expect(shown).toEqual([
+      expect.objectContaining({ title: "Kotys", body: "Done." }),
+    ]);
   });
 
   it("shows nothing while the user is looking at a reply", () => {
@@ -92,7 +87,32 @@ describe("showNotification", () => {
         windowFocused,
       ),
     ).toBe(true);
-    expect(shown).toEqual([{ title: "Task reminder", body: "Pay invoice" }]);
+    expect(shown).toEqual([
+      expect.objectContaining({ title: "Task reminder", body: "Pay invoice" }),
+    ]);
+  });
+
+  it("passes no icon on macOS, where the bundle already supplies one", () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("darwin" as never);
+
+    showNotification({ title: "Kotys", body: "Done." }, windowAway);
+
+    // Exact: an icon here would render twice on the banner.
+    expect(shown).toEqual([{ title: "Kotys", body: "Done." }]);
+  });
+
+  it("passes the app icon everywhere else", () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("linux" as never);
+
+    showNotification({ title: "Kotys", body: "Done." }, windowAway);
+
+    expect(shown).toEqual([
+      {
+        title: "Kotys",
+        body: "Done.",
+        icon: expect.stringContaining("icon.png"),
+      },
+    ]);
   });
 
   it("shows a banner on a platform that cannot, well, show banners", () => {

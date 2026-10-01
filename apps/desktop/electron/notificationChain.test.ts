@@ -29,13 +29,6 @@ type IBridgePayload = { title: string; body: string; chatId?: number };
 const sentOverIpc: unknown[] = [];
 let pending: unknown;
 
-// macOS stamps the bundle icon on its own; only other platforms get one passed
-// explicitly, so the expected options differ per platform.
-const bannerIcon =
-  process.platform === "darwin"
-    ? {}
-    : { icon: expect.stringContaining("icon.png") };
-
 const windowFocused = { isFocused: () => true };
 const windowAway = { isFocused: () => false };
 
@@ -76,7 +69,7 @@ it("carries a reminder all the way to the banner while the user is looking at Ko
   );
 
   expect(banners).toEqual([
-    { title: "Task reminder", body: "Pay invoice", ...bannerIcon },
+    expect.objectContaining({ title: "Task reminder", body: "Pay invoice" }),
   ]);
 });
 
@@ -88,7 +81,7 @@ it("carries a finished reply to the banner while the window is behind another ap
   );
 
   expect(banners).toEqual([
-    { title: "Kotys", body: "Deploy done.", ...bannerIcon },
+    expect.objectContaining({ title: "Kotys", body: "Deploy done." }),
   ]);
 });
 
