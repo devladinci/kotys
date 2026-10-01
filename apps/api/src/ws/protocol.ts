@@ -96,5 +96,11 @@ export type ServerMessage =
   | { type: "open-url"; payload: { url: string } }
   | {
       type: "notify";
-      payload: { title: string; body: string; at?: number; todoId?: number };
+      payload: {
+        title: string;
+        body: string;
+        chatId?: number;
+        at?: number;
+        todoId?: number;
+      };
     };

@@ -11,6 +11,7 @@ export * from "./shared/useNow.js";
 export * from "./shared/useAudioModels.js";
 export * from "./shared/modelOptions.js";
 export * from "./shared/contentWidgets.js";
+export * from "./shared/notifyFocus.js";
 
 export * from "./chat/useChat.js";
 export * from "./chat/useChatStream.js";

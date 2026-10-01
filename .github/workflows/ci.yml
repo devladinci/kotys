@@ -54,6 +54,8 @@ jobs:
           - "@kotys/db"
           - "@kotys/core"
           - "@kotys/api"
+          - "@kotys/ui-web"
+          - "@kotys/desktop"
     steps:
       - uses: actions/checkout@v5
 

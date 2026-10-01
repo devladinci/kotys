@@ -1,7 +1,7 @@
 import type { Platform } from "@kotys/core";
 
 interface ElectronBridge {
-  notify: (n: { title: string; body: string }) => void;
+  notify: (n: { title: string; body: string; chatId?: number }) => void;
 }
 
 const electron = (): ElectronBridge | undefined =>
@@ -52,5 +52,6 @@ export const desktopPlatform: Platform = {
   ...webPlatform,
   // Main-process notifications: renderer HTML5 notifications have no
   // permission store for the app://kotys origin.
-  notify: ({ title, body }) => electron()?.notify({ title, body }),
+  notify: ({ title, body, chatId }) =>
+    electron()?.notify({ title, body, chatId }),
 };

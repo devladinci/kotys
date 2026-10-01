@@ -28,8 +28,16 @@ export type Platform = {
    * on desktop/web, where the app is always visible.
    */
   onAppForeground?: (cb: () => void) => () => void;
-  /** Show or schedule a notification. */
-  notify: (n: { title: string; body: string; at?: number }) => void;
+  /**
+   * Show or schedule a notification. `chatId` marks a finished turn, which the
+   * host may suppress while that reply is on screen.
+   */
+  notify: (n: {
+    title: string;
+    body: string;
+    at?: number;
+    chatId?: number;
+  }) => void;
 };
 
 type KotysContextValue = {
