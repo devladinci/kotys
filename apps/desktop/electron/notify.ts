@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 export interface INotifyRequest {
   title: string;
   body: string;
+  /** Present on a finished chat turn; reminders and pomodoro carry no chat. */
+  chatId?: number;
 }
 
 export interface INotifyWindow {
@@ -23,25 +25,28 @@ const ICON_PATH = path.join(
  */
 export const plausibleNotify = (n: unknown): n is INotifyRequest => {
   if (typeof n !== "object" || n === null) return false;
-  const { title, body } = n as Partial<INotifyRequest>;
+  const { title, body, chatId } = n as Partial<INotifyRequest>;
 
   return (
     typeof title === "string" &&
     typeof body === "string" &&
+    (chatId === undefined || typeof chatId === "number") &&
     title.length <= 200 &&
     body.length <= 2_000
   );
 };
 
 /**
- * A focused window means the reply is on screen in front of the user, so a
- * banner is noise. Returns whether one was shown.
+ * The second line of defence for `win.isFocused()` drifting from
+ * `document.hasFocus()`; it may only drop notifications that carry a chatId,
+ * since reminders and pomodoro must arrive either way. Returns whether a banner
+ * was shown.
  */
 export const showNotification = (
   request: INotifyRequest,
   window: INotifyWindow | null,
 ): boolean => {
-  if (window?.isFocused()) return false;
+  if (request.chatId !== undefined && window?.isFocused()) return false;
   if (!Notification.isSupported()) return false;
 
   // macOS already stamps notifications with the app bundle icon; passing

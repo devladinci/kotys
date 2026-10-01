@@ -41,6 +41,15 @@ describe("plausibleNotify", () => {
     );
   });
 
+  it("accepts a chatId and rejects one that is not a number", () => {
+    expect(plausibleNotify({ title: "Kotys", body: "Done.", chatId: 7 })).toBe(
+      true,
+    );
+    expect(
+      plausibleNotify({ title: "Kotys", body: "Done.", chatId: "7" }),
+    ).toBe(false);
+  });
+
   it("rejects a payload too big for a banner", () => {
     expect(plausibleNotify({ title: "t".repeat(201), body: "Done." })).toBe(
       false,
@@ -59,11 +68,24 @@ describe("showNotification", () => {
     expect(shown).toEqual([{ title: "Kotys", body: "Done." }]);
   });
 
-  it("shows nothing while the user is looking at the window", () => {
+  it("shows nothing while the user is looking at a reply", () => {
     expect(
-      showNotification({ title: "Kotys", body: "Done." }, windowFocused),
+      showNotification(
+        { title: "Kotys", body: "Done.", chatId: 7 },
+        windowFocused,
+      ),
     ).toBe(false);
     expect(shown).toHaveLength(0);
+  });
+
+  it("still shows a reminder while the user is looking at the window", () => {
+    expect(
+      showNotification(
+        { title: "Task reminder", body: "Pay invoice" },
+        windowFocused,
+      ),
+    ).toBe(true);
+    expect(shown).toEqual([{ title: "Task reminder", body: "Pay invoice" }]);
   });
 
   it("shows a banner on a platform that cannot, well, show banners", () => {

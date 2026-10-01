@@ -7,7 +7,7 @@ const SUMMARY_INPUT_MAX_CHARS = 4_000;
 const SUMMARY_MAX_TOKENS = 80;
 const NOTIFY_PART = /<notify>([\s\S]*?)(?:<\/notify>|$)/;
 
-/** Reached only when the chat row is gone; the app's own default model. */
+/** Used only when the chat row is gone. */
 export const DEFAULT_NOTIFY_MODEL: ModelListing = {
   name: "kimi-k2.7-code",
   capabilities: [],

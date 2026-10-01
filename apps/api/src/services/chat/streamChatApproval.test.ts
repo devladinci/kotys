@@ -588,6 +588,48 @@ describe("streamChat request shaping", () => {
     });
   });
 
+  it("survives a notification that throws after the turn already succeeded", async () => {
+    // An unhandled rejection here would take the daemon down after the user
+    // already got their answer.
+    const turnStart = 1_000;
+    let now = turnStart;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const long = `${"the daemon keeps writing to the database ".repeat(8)}`;
+    state.scripts.push([doneText(long)]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rejections: unknown[] = [];
+    const onRejection = (err: unknown) => void rejections.push(err);
+    process.on("unhandledRejection", onRejection);
+    events.onEvent("notify", () => {
+      throw new Error("socket layer is gone");
+    });
+
+    try {
+      const result = await streamChat(
+        baseReq(),
+        {
+          onChunk: () => {
+            now = turnStart + 60_000;
+          },
+          onToolActivity: () => undefined,
+        } as never,
+        new AbortController().signal,
+      );
+
+      await vi.waitFor(() => {
+        expect(warn).toHaveBeenCalledWith(
+          "[notify] dropped:",
+          "socket layer is gone",
+        );
+      });
+      expect(result.content).toBe(long);
+      expect(rejections).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+      warn.mockRestore();
+    }
+  });
+
   it("falls back to a char-based prompt estimate when the server reports no counts", async () => {
     state.scripts.push([{ message: { content: "hey" }, done: true }]);
     const result = await streamChat(

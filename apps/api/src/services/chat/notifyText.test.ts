@@ -103,6 +103,20 @@ describe("notificationSummary", () => {
     });
   });
 
+  it("falls back to the ollama connector for a chat with no provider stored", async () => {
+    mocks.chats.set(9, {
+      model: "qwen-local",
+      model_provider: null,
+      model_source: null,
+      model_context_length: null,
+    });
+
+    await notificationSummary(REPLY, 9);
+
+    expect(mocks.resolveConnector).not.toHaveBeenCalled();
+    expect(mocks.resolveOllamaConnector).toHaveBeenCalledWith("cloud");
+  });
+
   it("returns nothing when the model answered without the tagged sentence", async () => {
     mocks.chat.mockResolvedValue({ content: "Sure! Here you go:" });
 

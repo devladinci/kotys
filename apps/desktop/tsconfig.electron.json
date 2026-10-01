@@ -5,5 +5,8 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["electron"]
+  // notificationChain.test.ts drives the renderer, whose sources need
+  // the DOM lib, so it belongs to tsconfig.json instead.
+  "include": ["electron"],
+  "exclude": ["electron/notificationChain.test.ts"]
 }

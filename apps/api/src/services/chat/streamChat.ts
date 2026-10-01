@@ -397,12 +397,16 @@ export async function streamChat(
   if (streamChatId !== null && persist.length > 0) {
     insertToolResults(requestId, persist);
   }
-  // Not awaited: the client's `chat:done` frame must not wait on a summary.
-  void maybeNotify({
+  // Not awaited: the client's `chat:done` frame must not wait on a summary. The
+  // catch keeps a throwing `emit` from killing the daemon after the turn
+  // already succeeded.
+  maybeNotify({
     startedAt,
     content: streamer.content,
     chatId: streamChatId,
     emit: (payload) => events.emitEvent("notify", payload),
+  }).catch((err: unknown) => {
+    console.warn("[notify] dropped:", err instanceof Error ? err.message : err);
   });
 
   tick();

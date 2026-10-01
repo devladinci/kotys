@@ -56,6 +56,7 @@ describe("useNotifications", () => {
     expect(mocks.notify).toHaveBeenCalledWith({
       title: "Kotys",
       body: "Deploy done.",
+      chatId: 7,
     });
   });
 
@@ -75,6 +76,7 @@ describe("useNotifications", () => {
     expect(mocks.notify).toHaveBeenCalledWith({
       title: "Kotys",
       body: "Deploy done.",
+      chatId: 7,
     });
   });
 
@@ -86,6 +88,7 @@ describe("useNotifications", () => {
     expect(mocks.notify).toHaveBeenCalledWith({
       title: "Task reminder",
       body: "Pay invoice",
+      chatId: undefined,
     });
   });
 

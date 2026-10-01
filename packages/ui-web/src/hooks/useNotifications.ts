@@ -18,7 +18,7 @@ export function useNotifications(): void {
       ) {
         return;
       }
-      platform.notify({ title, body });
+      platform.notify({ title, body, chatId });
     });
   }, [socket, platform]);
 }

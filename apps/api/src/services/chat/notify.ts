@@ -4,10 +4,7 @@ import { notificationSummary } from "./notifyText.js";
 const NOTIFY_AFTER_MS = 2_000;
 const PREVIEW_MAX_CHARS = 120;
 const BODY_MAX_CHARS = 140;
-/**
- * Under this the reply is shorter than a banner, so its own words already are
- * the summary — no reason to spend a model call and three seconds on it.
- */
+/** A reply this short is already smaller than a banner. */
 const SUMMARY_SKIP_UNDER_CHARS = 160;
 const TITLE = "Kotys";
 
@@ -42,9 +39,8 @@ const truncate = (text: string, max: number): string => {
 };
 
 /**
- * The server always emits; each client decides whether to show it. Callers do
- * not await this: the turn has ended, but its `chat:done` frame still has to
- * reach the clients, and nothing should wait three seconds for a banner.
+ * Always emits; each client decides whether to show it. Callers do not await
+ * this: nothing should wait three seconds for a banner.
  */
 export async function maybeNotify({
   startedAt,
