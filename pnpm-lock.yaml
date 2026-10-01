@@ -7,13 +7,6 @@ settings:
 overrides:
   react: 19.1.0
   react-dom: 19.1.0
-  '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
-  '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz
-  '@saystack/web': file:vendor/saystack/saystack-web-0.0.1.tgz
-  '@saystack/react-web': file:vendor/saystack/saystack-react-web-0.0.1.tgz
-  '@saystack/server': file:vendor/saystack/saystack-server-0.0.1.tgz
-  '@saystack/engine-openai-compatible': file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
-  '@saystack/react-native': file:vendor/saystack/saystack-react-native-0.0.1.tgz
 
 importers:
 
@@ -74,14 +67,14 @@ importers:
         specifier: ^1.15.0
         version: 1.15.0(ws@8.21.3)
       '@saystack/core':
-        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
-        version: file:vendor/saystack/saystack-core-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@saystack/engine-openai-compatible':
-        specifier: file:../../vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
-        version: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
+        specifier: ^0.1.1
+        version: 0.1.1
       '@saystack/server':
-        specifier: file:../../vendor/saystack/saystack-server-0.0.1.tgz
-        version: file:vendor/saystack/saystack-server-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -196,14 +189,14 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui-tokens
       '@saystack/core':
-        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
-        version: file:vendor/saystack/saystack-core-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@saystack/react':
-        specifier: file:../../vendor/saystack/saystack-react-0.0.1.tgz
-        version: file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
+        specifier: ^0.1.0
+        version: 0.1.0(react@19.1.0)
       '@saystack/react-native':
-        specifier: file:../../vendor/saystack/saystack-react-native-0.0.1.tgz
-        version: file:vendor/saystack/saystack-react-native-0.0.1.tgz(ddbba2de1494ff62ef1d9254b99d90fb)
+        specifier: ^0.1.0
+        version: 0.1.0(ddbba2de1494ff62ef1d9254b99d90fb)
       expo:
         specifier: ~57.0.25
         version: 57.0.25(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.16)(expo-router@57.0.19)(react-dom@19.1.0(react@19.1.0))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)(typescript@6.0.3)
@@ -430,17 +423,17 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@saystack/core':
-        specifier: file:../../vendor/saystack/saystack-core-0.0.1.tgz
-        version: file:vendor/saystack/saystack-core-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@saystack/react':
-        specifier: file:../../vendor/saystack/saystack-react-0.0.1.tgz
-        version: file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
+        specifier: ^0.1.0
+        version: 0.1.0(react@19.1.0)
       '@saystack/react-web':
-        specifier: file:../../vendor/saystack/saystack-react-web-0.0.1.tgz
-        version: file:vendor/saystack/saystack-react-web-0.0.1.tgz(react@19.1.0)
+        specifier: ^0.1.0
+        version: 0.1.0(react@19.1.0)
       '@saystack/web':
-        specifier: file:../../vendor/saystack/saystack-web-0.0.1.tgz
-        version: file:vendor/saystack/saystack-web-0.0.1.tgz
+        specifier: ^0.1.0
+        version: 0.1.0
       '@tiptap/core':
         specifier: ^3.31.3
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -2372,19 +2365,16 @@ packages:
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
-  '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz':
-    resolution: {integrity: sha512-myMiDoYQKD6eaxkQ+8VZxcCBDtwPz9pTVgqrD0OZDd7pTcSkHmuvlxagDWtFf7r4viEwC0BXieIMREbaeiKFNg==, tarball: file:vendor/saystack/saystack-core-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/core@0.1.0':
+    resolution: {integrity: sha512-C8DLQ1KdhPRKaKUVydci+OPe2d0mbc9FIfIATKtOgWihQDZCYa6f58+yEQrNjolBK1VL3q/o+iSf4bpioKvFaQ==}
     engines: {node: '>=22'}
 
-  '@saystack/engine-openai-compatible@file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz':
-    resolution: {integrity: sha512-KpneT82+IxX1G9ZCgztdrE9sEMivDpjT3bUpS6jxSx5eC5U6PBhDT0E2IT9OzNTX8QY+iChLvgp3SAveRweICA==, tarball: file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/engine-openai-compatible@0.1.1':
+    resolution: {integrity: sha512-yZ3Hmh3e+SuWxV8aarvkDoi1UFS2chMENlTXenx3HhJAZZlNOGwvNfMsLMXSGKgdslqyYw1nxWSsRRsLvZKhfw==}
     engines: {node: '>=22'}
 
-  '@saystack/react-native@file:vendor/saystack/saystack-react-native-0.0.1.tgz':
-    resolution: {integrity: sha512-o+Kpb66PRqet6MDn1+xd10CMgyAL5wNAyO4rz6lS/IaiO8h2Nm2tgjwGM62EJnkCQ85P5A3b/TtHy5ewfN0XyA==, tarball: file:vendor/saystack/saystack-react-native-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/react-native@0.1.0':
+    resolution: {integrity: sha512-8D+27IKhiLFOooLOwaYktJV60Z6GKj/juz2kTMgsE+ofzUpr2Je5nx85nOD0vXgwiaxi/I08Jb2sAYU43lTC7g==}
     engines: {node: '>=22'}
     peerDependencies:
       expo-audio: '>=57.0.0'
@@ -2400,28 +2390,24 @@ packages:
       expo-gl:
         optional: true
 
-  '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz':
-    resolution: {integrity: sha512-df62CveFnPoRKBLwewueW1LL9YKi6yYOHTLTyGv+4s30hIdArLAG3oYpd5XAg7/YfOJS5MsCr8zq3epg0r8qxg==, tarball: file:vendor/saystack/saystack-react-web-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/react-web@0.1.0':
+    resolution: {integrity: sha512-u80GFJhUA7ehfo+b1QrfP0jgszYnNshRyUaZyCReTO+9CrZh4TgwQlzt8R9lL9Q+EHHy8u9zeP5Dsq6zCcRxeg==}
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
-  '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz':
-    resolution: {integrity: sha512-IGWBtwCi+Ut9ABKaK15lqCy5DPp3oaUMvhO8eoj3+IPNm+rESMH7gMVJX6REx+XE7zfuCG/CJeeQwVdpBrV87g==, tarball: file:vendor/saystack/saystack-react-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/react@0.1.0':
+    resolution: {integrity: sha512-rIcGswu/A3Mg+b64CsywzaNYUvJAQmTkBeXZGZy0911y2+WkVFAZaFmM+maG6bg1+M4IGAuwsfn0WWOsphYLcg==}
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
-  '@saystack/server@file:vendor/saystack/saystack-server-0.0.1.tgz':
-    resolution: {integrity: sha512-GvdyuMe6UnFlHKnBK92Cw/AncIugfyG03wJkEXaeWcQLi0rR6jxOmk3K4i9NQI/yk6Nrf0dYUxeKr5YZVG3F2w==, tarball: file:vendor/saystack/saystack-server-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/server@0.1.0':
+    resolution: {integrity: sha512-K6UaJI8z3UOtp295g1Q88YjLZ7I6qTKVqBvnb359fMTsjlawEn0mBm65xsn0HHRfmbbmZt+w1iTG6Gt7sZoXuA==}
     engines: {node: '>=22'}
 
-  '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
-    resolution: {integrity: sha512-ztGaXlO6QkN551IVixawmCzzXCGNZO8c6mP5kgM/f17COzrZFxlMSIJy9BkrPcLM66b8LbtIsTsWpS9wkGebow==, tarball: file:vendor/saystack/saystack-web-0.0.1.tgz}
-    version: 0.0.1
+  '@saystack/web@0.1.0':
+    resolution: {integrity: sha512-aq7fK0FxjUkdKkxOBGqLm+xZfdM9j1NXbgYDBHOQB7vrgC0sL60qAcVBFdzECPzMcpOBQgpp8AAeX56pOOopXQ==}
     engines: {node: '>=22'}
 
   '@sinclair/typebox@0.27.12':
@@ -8150,7 +8136,7 @@ snapshots:
       '@expo/router-server': 57.0.11(@expo/metro-runtime@57.0.16)(expo-constants@57.0.19(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(supports-color@8.1.1))(expo-font@57.0.4)(expo-router@57.0.19)(expo-server@57.0.3)(expo@57.0.25)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(supports-color@8.1.1)
       '@expo/schema-utils': 57.0.2
       '@expo/spawn-async': 1.8.0
-      '@expo/ws-tunnel': 2.0.0(ws@8.21.3)
+      '@expo/ws-tunnel': 2.0.0(ws@8.22.0)
       '@expo/xcpretty': 4.4.4
       '@react-native/dev-middleware': 0.86.3(supports-color@8.1.1)
       accepts: 1.3.8
@@ -8188,7 +8174,7 @@ snapshots:
       terminal-link: 2.1.1
       toqr: 0.1.1
       wrap-ansi: 7.0.0
-      ws: 8.21.3
+      ws: 8.22.0
       zod: 3.25.76
     optionalDependencies:
       expo-router: 57.0.19(9512253e98c67f7c1d447906f2e0f98b)
@@ -8503,9 +8489,9 @@ snapshots:
       react: 19.1.0
       react-native: 0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1)
 
-  '@expo/ws-tunnel@2.0.0(ws@8.21.3)':
+  '@expo/ws-tunnel@2.0.0(ws@8.22.0)':
     dependencies:
-      ws: 8.21.3
+      ws: 8.22.0
 
   '@expo/xcpretty@4.4.4':
     dependencies:
@@ -9277,20 +9263,20 @@ snapshots:
 
   '@rtsao/scc@1.1.0': {}
 
-  '@saystack/core@file:vendor/saystack/saystack-core-0.0.1.tgz': {}
+  '@saystack/core@0.1.0': {}
 
-  '@saystack/engine-openai-compatible@file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz':
+  '@saystack/engine-openai-compatible@0.1.1':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/core': 0.1.0
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@saystack/react-native@file:vendor/saystack/saystack-react-native-0.0.1.tgz(ddbba2de1494ff62ef1d9254b99d90fb)':
+  '@saystack/react-native@0.1.0(ddbba2de1494ff62ef1d9254b99d90fb)':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
-      '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
+      '@saystack/core': 0.1.0
+      '@saystack/react': 0.1.0(react@19.1.0)
       expo-audio: 57.0.4(expo-asset@57.0.18(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)(typescript@6.0.3))(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
       expo-file-system: 57.0.6(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))
       expo-modules-core: 57.0.19(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
@@ -9300,26 +9286,26 @@ snapshots:
       expo-blur: 57.0.3(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
       expo-gl: 57.0.2(expo@57.0.25)(react-dom@19.1.0(react@19.1.0))(react-native-reanimated@4.6.0(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
 
-  '@saystack/react-web@file:vendor/saystack/saystack-react-web-0.0.1.tgz(react@19.1.0)':
+  '@saystack/react-web@0.1.0(react@19.1.0)':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
-      '@saystack/react': file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)
-      '@saystack/web': file:vendor/saystack/saystack-web-0.0.1.tgz
+      '@saystack/core': 0.1.0
+      '@saystack/react': 0.1.0(react@19.1.0)
+      '@saystack/web': 0.1.0
       react: 19.1.0
 
-  '@saystack/react@file:vendor/saystack/saystack-react-0.0.1.tgz(react@19.1.0)':
+  '@saystack/react@0.1.0(react@19.1.0)':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/core': 0.1.0
       react: 19.1.0
 
-  '@saystack/server@file:vendor/saystack/saystack-server-0.0.1.tgz':
+  '@saystack/server@0.1.0':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/core': 0.1.0
       hono: 4.13.5
 
-  '@saystack/web@file:vendor/saystack/saystack-web-0.0.1.tgz':
+  '@saystack/web@0.1.0':
     dependencies:
-      '@saystack/core': file:vendor/saystack/saystack-core-0.0.1.tgz
+      '@saystack/core': 0.1.0
 
   '@sinclair/typebox@0.27.12': {}
 

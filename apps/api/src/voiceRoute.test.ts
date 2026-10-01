@@ -3,8 +3,10 @@ import path from "node:path";
 import type {
   ISttEngineConfig,
   ISttTranscribeInput,
+  ITtsEngineConfig,
   ITtsSynthesizeInput,
 } from "@saystack/core";
+import type { IOpenAiTtsOptions } from "@saystack/engine-openai-compatible";
 import type { Context } from "hono";
 import type { WSEvents } from "hono/ws";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   transcribe: vi.fn<(input: ISttTranscribeInput) => Promise<unknown>>(),
   synthesize: vi.fn<(input: ITtsSynthesizeInput) => Promise<unknown>>(),
   engines: [] as ISttEngineConfig[],
+  ttsOptions: [] as (IOpenAiTtsOptions | undefined)[],
   upgrade: null as ((c: Context) => Promise<WSEvents>) | null,
 }));
 
@@ -46,10 +49,16 @@ vi.mock("@saystack/engine-openai-compatible", async (importOriginal) => ({
       transcribe: mocks.transcribe,
     };
   },
-  createOpenAiTtsAdapter: () => ({
-    capabilities: { streaming: false, voiceCloning: true },
-    synthesize: mocks.synthesize,
-  }),
+  createOpenAiTtsAdapter: (
+    _engine: ITtsEngineConfig,
+    options?: IOpenAiTtsOptions,
+  ) => {
+    mocks.ttsOptions.push(options);
+    return {
+      capabilities: { streaming: false, voiceCloning: true },
+      synthesize: mocks.synthesize,
+    };
+  },
 }));
 
 vi.mock("@hono/node-server", async (importOriginal) => ({
@@ -62,6 +71,7 @@ vi.mock("@hono/node-server", async (importOriginal) => ({
 
 const { Hono } = await import("hono");
 const { DB_PATH } = await import("@kotys/db");
+const { maxAudioTokens } = await import("@saystack/engine-openai-compatible");
 const { saveReference } = await import("./services/tts/reference.js");
 const { registerVoiceRoutes } = await import("./voiceRoute.js");
 
@@ -111,6 +121,7 @@ beforeEach(() => {
   mocks.settings.set("stt_model", "omlx:whisper-large-v3-turbo");
   mocks.settings.set("tts_model", "omlx:higgs_audio_v3-tts-4b");
   mocks.engines.length = 0;
+  mocks.ttsOptions.length = 0;
   mocks.transcribe.mockReset();
   mocks.transcribe.mockResolvedValue({ ok: true, text: "Здравей." });
   mocks.synthesize.mockReset();
@@ -165,6 +176,12 @@ describe("POST /voice/speech", () => {
     expect(mocks.synthesize.mock.calls[0]?.[0].signal).toBeInstanceOf(
       AbortSignal,
     );
+  });
+
+  it("caps the audio tokens oMLX may generate, so a model that runs on stops", async () => {
+    await speak({ text: "Hi." });
+
+    expect(mocks.ttsOptions[0]?.maxTokens).toBe(maxAudioTokens);
   });
 
   it("reads in the stored reference voice, never one sent by the client", async () => {

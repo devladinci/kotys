@@ -6,6 +6,7 @@ import {
   createOmlxRealtimeSttAdapter,
   createOpenAiSttAdapter,
   createOpenAiTtsAdapter,
+  maxAudioTokens,
 } from "@saystack/engine-openai-compatible";
 import { createVoiceRoutes } from "@saystack/server";
 import { isValidToken, requireAuth } from "./auth.js";
@@ -64,7 +65,9 @@ export function registerVoiceRoutes(app: Hono): void {
       getSettings: voiceSettings,
       createSttAdapter: (engine) => createOpenAiSttAdapter(engine),
       createTtsAdapter: (engine) =>
-        withReference(createOpenAiTtsAdapter(engine)),
+        withReference(
+          createOpenAiTtsAdapter(engine, { maxTokens: maxAudioTokens }),
+        ),
       realtime: {
         upgradeWebSocket,
         authorize: (c) => isValidToken(c.req.query("token")),

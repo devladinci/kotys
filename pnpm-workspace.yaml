@@ -3,18 +3,9 @@ packages:
   - "apps/*"
 # One React across the monorepo: Metro bundles @kotys/core source into the
 # mobile app, so a second copy (even a patch-version apart) breaks hooks.
-# saystack is not on npm yet. Every @saystack package, including the ones the
-# saystack packages depend on each other for, installs from vendor/saystack.
 overrides:
   react: 19.1.0
   react-dom: 19.1.0
-  "@saystack/core": file:vendor/saystack/saystack-core-0.0.1.tgz
-  "@saystack/react": file:vendor/saystack/saystack-react-0.0.1.tgz
-  "@saystack/web": file:vendor/saystack/saystack-web-0.0.1.tgz
-  "@saystack/react-web": file:vendor/saystack/saystack-react-web-0.0.1.tgz
-  "@saystack/server": file:vendor/saystack/saystack-server-0.0.1.tgz
-  "@saystack/engine-openai-compatible": file:vendor/saystack/saystack-engine-openai-compatible-0.0.1.tgz
-  "@saystack/react-native": file:vendor/saystack/saystack-react-native-0.0.1.tgz
 allowBuilds:
   better-sqlite3: true
   electron-winstaller: false
@@ -30,6 +21,13 @@ minimumReleaseAgeExclude:
   - "@expo/prebuild-config@57.0.15"
   - "@expo/router-server@57.0.8"
   - "@expo/ui@57.0.14"
+  - "@saystack/core@0.1.0"
+  - "@saystack/engine-openai-compatible@0.1.1"
+  - "@saystack/react@0.1.0"
+  - "@saystack/react-native@0.1.0"
+  - "@saystack/react-web@0.1.0"
+  - "@saystack/server@0.1.0"
+  - "@saystack/web@0.1.0"
   - babel-preset-expo@57.0.9
   - expo-asset@57.0.15
   - expo-constants@57.0.15
