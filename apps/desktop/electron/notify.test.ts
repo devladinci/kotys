@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const shown: { title: string; body: string }[] = [];
+const shown: Record<string, unknown>[] = [];
 const isSupported = vi.fn(() => true);
 
 vi.mock("electron", () => ({
   Notification: class {
-    options: { title: string; body: string };
-    constructor(options: { title: string; body: string }) {
+    options: Record<string, unknown>;
+    constructor(options: Record<string, unknown>) {
       this.options = options;
     }
     show() {
@@ -17,6 +17,13 @@ vi.mock("electron", () => ({
 }));
 
 const { plausibleNotify, showNotification } = await import("./notify");
+
+// macOS stamps the bundle icon on its own; only other platforms get one
+// passed explicitly, so the expected options differ per platform.
+const bannerIcon =
+  process.platform === "darwin"
+    ? {}
+    : { icon: expect.stringContaining("icon.png") };
 
 const windowFocused = { isFocused: () => true };
 const windowAway = { isFocused: () => false };
@@ -65,7 +72,7 @@ describe("showNotification", () => {
     expect(
       showNotification({ title: "Kotys", body: "Done." }, windowAway),
     ).toBe(true);
-    expect(shown).toEqual([{ title: "Kotys", body: "Done." }]);
+    expect(shown).toEqual([{ title: "Kotys", body: "Done.", ...bannerIcon }]);
   });
 
   it("shows nothing while the user is looking at a reply", () => {

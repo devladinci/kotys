@@ -6,12 +6,12 @@ import { shouldShowNotification } from "@kotys/core";
  * Each layer is unit-tested on its own, so a field dropped in a seam between
  * them still passes every other test in the repo.
  */
-const banners: { title: string; body: string }[] = [];
+const banners: Record<string, unknown>[] = [];
 
 vi.mock("electron", () => ({
   Notification: class {
-    #options: { title: string; body: string };
-    constructor(options: { title: string; body: string }) {
+    #options: Record<string, unknown>;
+    constructor(options: Record<string, unknown>) {
       this.#options = options;
     }
     show() {
@@ -28,6 +28,13 @@ type IBridgePayload = { title: string; body: string; chatId?: number };
 
 const sentOverIpc: unknown[] = [];
 let pending: unknown;
+
+// macOS stamps the bundle icon on its own; only other platforms get one passed
+// explicitly, so the expected options differ per platform.
+const bannerIcon =
+  process.platform === "darwin"
+    ? {}
+    : { icon: expect.stringContaining("icon.png") };
 
 const windowFocused = { isFocused: () => true };
 const windowAway = { isFocused: () => false };
@@ -68,7 +75,9 @@ it("carries a reminder all the way to the banner while the user is looking at Ko
     windowFocused,
   );
 
-  expect(banners).toEqual([{ title: "Task reminder", body: "Pay invoice" }]);
+  expect(banners).toEqual([
+    { title: "Task reminder", body: "Pay invoice", ...bannerIcon },
+  ]);
 });
 
 it("carries a finished reply to the banner while the window is behind another app", () => {
@@ -78,7 +87,9 @@ it("carries a finished reply to the banner while the window is behind another ap
     windowAway,
   );
 
-  expect(banners).toEqual([{ title: "Kotys", body: "Deploy done." }]);
+  expect(banners).toEqual([
+    { title: "Kotys", body: "Deploy done.", ...bannerIcon },
+  ]);
 });
 
 it("shows no banner for a reply the user is already reading", () => {
