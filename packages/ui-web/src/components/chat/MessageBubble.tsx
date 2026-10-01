@@ -1,10 +1,13 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Brain, ChevronDown, Pencil, RotateCw } from "lucide-react";
 import type { Message, ToolActivity } from "@kotys/contracts";
 import { isErrorTurn, isSteerActivity } from "@kotys/contracts";
-import { SkillMessage, splitContentByWidgets } from "@kotys/core";
+import { SkillMessage, splitContentByWidgets, useAppStore } from "@kotys/core";
+import { hasSpeechText } from "@saystack/core";
 import CopyTextButton from "../CopyTextButton";
+import { ACTION_BUTTON_CLASS } from "../actionButton";
 import { MessageImages } from "./MessageImages";
+import { SpeakerButton } from "./SpeakerButton";
 import {
   MarkdownBody,
   StreamingProvider,
@@ -34,9 +37,6 @@ const TIME_FORMAT: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-const ACTION_BUTTON_CLASS =
-  "p-1 rounded text-text-muted hover:text-text transition";
-
 const focusOnMount = (node: HTMLTextAreaElement | null) => node?.focus();
 
 function MessageBubbleBase({
@@ -50,9 +50,16 @@ function MessageBubbleBase({
   isLoading,
 }: IProps) {
   const isUser = message.role === "user";
+  const hasSpeechModel = useAppStore((s) => s.ttsModel !== null);
+  const canReadAloud =
+    !isUser &&
+    hasSpeechModel &&
+    !isErrorTurn(message.content) &&
+    hasSpeechText(message.content);
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const isEmptyStreaming =
     isStreamingThis &&
@@ -123,6 +130,13 @@ function MessageBubbleBase({
               </span>
             )}
             <CopyTextButton text={message.content} />
+            {canReadAloud && (
+              <SpeakerButton
+                messageId={message.id}
+                content={message.content}
+                bodyRef={bodyRef}
+              />
+            )}
             {isUser && onEditAndResend && !isLoading && (
               <button
                 onClick={handleEditStart}
@@ -234,16 +248,23 @@ function MessageBubbleBase({
               ) : (
                 <>
                   <StreamingProvider value={isStreamingThis}>
-                    {splitContentByWidgets(
-                      message.content,
-                      message.toolCalls ?? [],
-                    ).map((segment) =>
-                      segment.kind === "text" ? (
-                        <MarkdownBody key={segment.id} content={segment.text} />
-                      ) : (
-                        <WidgetFor key={segment.id} widget={segment.widget} />
-                      ),
-                    )}
+                    <div ref={bodyRef}>
+                      {splitContentByWidgets(
+                        message.content,
+                        message.toolCalls ?? [],
+                      ).map((segment) =>
+                        segment.kind === "text" ? (
+                          <MarkdownBody
+                            key={segment.id}
+                            content={segment.text}
+                          />
+                        ) : (
+                          <div key={segment.id} data-read-along-skip>
+                            <WidgetFor widget={segment.widget} />
+                          </div>
+                        ),
+                      )}
+                    </div>
                   </StreamingProvider>
                   {isFailed && canRegenerate && (
                     <div className="mt-1.5">

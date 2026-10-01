@@ -29,6 +29,7 @@ import { clearConfig, loadConfig, saveConfig } from "../lib/config";
 import { useAppStateSocket } from "../lib/useAppStateSocket";
 import { PairingScreen } from "../components/PairingScreen";
 import { ApprovalSheet } from "../components/ApprovalSheet";
+import { SpeechProvider } from "../components/chat/SpeechProvider";
 import { theme, useThemeMode } from "../lib/theme";
 
 // Show banners (rather than heads-up popups) while the app is foregrounded;
@@ -166,21 +167,23 @@ export default function RootLayout() {
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       <KotysProvider config={config} platform={mobilePlatform}>
         <Bootstrap onUnpair={unpair} />
-        <View style={{ flex: 1, backgroundColor: t.bg }}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="chat/[id]"
-              options={{
-                headerShown: true,
-                headerBackButtonDisplayMode: "minimal",
-                headerStyle: { backgroundColor: t.surface },
-                headerTintColor: t.text,
-                headerTitleStyle: { fontWeight: "600" },
-              }}
-            />
-          </Stack>
-        </View>
+        <SpeechProvider>
+          <View style={{ flex: 1, backgroundColor: t.bg }}>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="chat/[id]"
+                options={{
+                  headerShown: true,
+                  headerBackButtonDisplayMode: "minimal",
+                  headerStyle: { backgroundColor: t.surface },
+                  headerTintColor: t.text,
+                  headerTitleStyle: { fontWeight: "600" },
+                }}
+              />
+            </Stack>
+          </View>
+        </SpeechProvider>
         {/* Mounted once, over everything: an approval sheet can appear on any
             screen the user happens to be on. Input requests are inline on the
             chat screen, not global. */}

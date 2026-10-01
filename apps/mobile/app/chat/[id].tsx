@@ -18,10 +18,13 @@ import type {
 } from "react-native";
 import { Bubble } from "../../components/chat/Bubble";
 import { QueuedMessageRow } from "../../components/chat/QueuedMessageRow";
+import { MicButton } from "../../components/chat/MicButton";
+import { renderPlayerIcon } from "../../components/chat/renderPlayerIcon";
 import { ON_ACCENT, s, themedStyles } from "../../components/chat/styles";
 import { TurnSeparator } from "../../components/chat/TurnSeparator";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FullWindowOverlay } from "react-native-screens";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DEFAULT_MODEL,
@@ -33,18 +36,28 @@ import {
   useAppStore,
   useChat,
   useChatList,
-  usePlatform,
   useSkills,
   useTokenEstimator,
   useUserInputStore,
-  useVoiceInput,
 } from "@kotys/core";
-import type { Message, VoiceStatus } from "@kotys/core";
+import type { Message } from "@kotys/core";
+import {
+  DictationSpotlight,
+  ReadAloudSpotlight,
+  useHoldToTalk,
+  useNativeDictation,
+} from "@saystack/react-native";
 import type { ModelListing, SkillListing } from "@kotys/contracts";
 import { registerScrollHandler } from "../../lib/platform";
 import { useChatScreen } from "../../lib/useChatScreen";
 import { pickImages, takePhoto, MAX_IMAGES } from "../../lib/images";
 import { theme, useThemeMode } from "../../lib/theme";
+import {
+  authHeaders,
+  dictationUrl,
+  dictationStreamUrl,
+} from "../../lib/voiceConfig";
+import { useVoiceTheme } from "../../lib/voiceTheme";
 import { UserInputInline } from "../../components/UserInputInline";
 import { SlashMenu } from "../../components/chat/SlashMenu";
 import { ModelPickers } from "../../components/kit/ModelPickers";
@@ -62,6 +75,9 @@ const CHAT_ACTIONS = [RENAME_CHAT, CANCEL];
 const ATTACH_ACTIONS = [PHOTO_LIBRARY, TAKE_PHOTO, CANCEL];
 const KEYBOARD_GAP = 8;
 const AT_BOTTOM_THRESHOLD = 64;
+const HEADER_HEIGHT = 44;
+const COMPOSER_PLACEHOLDER = "Message — runs on your Mac";
+const DICTATION_STREAM = { url: dictationStreamUrl };
 
 const keyExtractor = (m: Message) => String(m.id);
 
@@ -89,22 +105,6 @@ const reportSend = (pending: Promise<{ needsSettings: boolean }>) => {
         err instanceof Error ? err.message : String(err),
       );
     });
-};
-
-const composerPlaceholder = (status: VoiceStatus, seconds: number) => {
-  if (status === "recording") {
-    return `Listening… ${seconds}s — release to transcribe`;
-  }
-  if (status === "transcribing") return "Transcribing…";
-  return "Message — runs on your Mac";
-};
-
-const micLabel = (status: VoiceStatus, seconds: number) => {
-  if (status === "recording") {
-    return `Listening — ${seconds} seconds. Release to transcribe`;
-  }
-  if (status === "transcribing") return "Transcribing";
-  return "Hold to dictate";
 };
 
 function ChatScreen() {
@@ -184,7 +184,6 @@ function ChatScreen() {
   const inputPending = isInputForChat(inputRequest, chatId);
   const supportsThinking = chatModel.capabilities.includes("thinking");
   const visionCapable = chatModel.capabilities.includes("vision");
-  const platform = usePlatform();
   const { skills } = useSkills();
   const [cursor, setCursor] = useState<number | null>(null);
 
@@ -407,44 +406,34 @@ function ChatScreen() {
     [send, pinBottom],
   );
 
-  const {
-    status: voiceStatus,
-    error: voiceError,
-    start: startVoice,
-    stop: stopVoice,
-    cancel: cancelVoice,
-  } = useVoiceInput(platform, handleTranscript);
-  const isRecording = voiceStatus === "recording";
-  const isTranscribing = voiceStatus === "transcribing";
-  const [voiceSeconds, setVoiceSeconds] = useState(0);
+  // Streamed words go into the draft; other models send their transcript
+  // as its own message.
+  const handleInsert = useCallback(
+    (text: string) => {
+      setDraft((current) => {
+        const kept = current.replace(/\s+$/, "");
+        return kept ? `${kept} ${text}` : text;
+      });
+    },
+    [setDraft],
+  );
 
-  useEffect(() => {
-    if (!isRecording) return;
-    const started = Date.now();
-    const timer = setInterval(
-      () => setVoiceSeconds(Math.floor((Date.now() - started) / 1000)),
-      500,
-    );
-    return () => clearInterval(timer);
-  }, [isRecording]);
-
-  useEffect(() => {
-    if (voiceStatus !== "error" || !voiceError) return;
-    Alert.alert("Voice input failed", voiceError);
-  }, [voiceStatus, voiceError]);
-
-  const handleMicPressIn = useCallback(() => {
-    setVoiceSeconds(0);
-    void startVoice();
-  }, [startVoice]);
-
-  const handleMicPressOut = useCallback(() => {
-    if (isRecording) {
-      stopVoice();
-      return;
-    }
-    cancelVoice();
-  }, [isRecording, stopVoice, cancelVoice]);
+  const dictation = useNativeDictation({
+    endpoint: dictationUrl(),
+    headers: authHeaders,
+    realtime: DICTATION_STREAM,
+    onText: handleTranscript,
+    onInsert: handleInsert,
+  });
+  const isTranscribing = dictation.state === "transcribing";
+  const hold = useHoldToTalk({
+    onStart: dictation.handlePressStart,
+    onEnd: dictation.handlePressEnd,
+    onCancel: dictation.handleCancel,
+    isDisabled: isTranscribing,
+  });
+  const voice = useVoiceTheme();
+  const composerRef = useRef<View>(null);
 
   const handleCommitEdit = useCallback(() => {
     if (!editing) return;
@@ -633,7 +622,7 @@ function ChatScreen() {
           </View>
         </View>
       ) : (
-        <View style={[s.composerWrap, composerInset]}>
+        <View ref={composerRef} style={[s.composerWrap, composerInset]}>
           {queuedMessages.length > 0 ? (
             <View style={s.queue} accessibilityLiveRegion="polite">
               <Text style={[s.queueCaption, ts.mutedText]}>
@@ -681,9 +670,9 @@ function ChatScreen() {
               value={draft}
               onChangeText={setDraft}
               onSelectionChange={handleSelectionChange}
-              placeholder={composerPlaceholder(voiceStatus, voiceSeconds)}
-              placeholderTextColor={isRecording ? t.danger : t.textMuted}
-              pointerEvents={isRecording ? "none" : "auto"}
+              placeholder={COMPOSER_PLACEHOLDER}
+              placeholderTextColor={t.textMuted}
+              pointerEvents={hold.isHolding ? "none" : "auto"}
               multiline
               keyboardAppearance={mode}
               style={[s.composerInput, ts.text]}
@@ -752,21 +741,7 @@ function ChatScreen() {
                   />
                 </Pressable>
               ) : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={micLabel(voiceStatus, voiceSeconds)}
-                disabled={isTranscribing}
-                onPressIn={handleMicPressIn}
-                onPressOut={handleMicPressOut}
-                hitSlop={6}
-                style={s.toolBtn}
-              >
-                <Ionicons
-                  name={isTranscribing ? "hourglass-outline" : "mic-outline"}
-                  size={19}
-                  color={isRecording || isTranscribing ? t.accent : t.textMuted}
-                />
-              </Pressable>
+              <MicButton hold={hold} isBusy={isTranscribing} />
               <View style={s.spacer} />
               <Pressable
                 accessibilityRole="button"
@@ -832,6 +807,21 @@ function ChatScreen() {
         model={chatModel}
       />
       <ModePicker isVisible={modeSheet} onClose={handleCloseModeSheet} />
+      <DictationSpotlight
+        dictation={dictation}
+        hold={hold}
+        lifted={composerRef}
+        theme={voice}
+        container={FullWindowOverlay}
+      />
+      <ReadAloudSpotlight
+        theme={voice}
+        container={FullWindowOverlay}
+        top={insets.top + HEADER_HEIGHT}
+        bottomInset={insets.bottom}
+        textStyle={s.readAlong}
+        renderIcon={renderPlayerIcon}
+      />
     </View>
   );
 }

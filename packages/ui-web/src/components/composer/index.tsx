@@ -1,27 +1,33 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DragEvent as ReactDragEvent,
   ChangeEvent as ReactChangeEvent,
 } from "react";
 import { EditorContent } from "@tiptap/react";
 import { ImagePlus, ListPlus, Send, Square, X } from "lucide-react";
-import {
-  queueCaption,
-  usePlatform,
-  useSkills,
-  useVoiceInput,
-} from "@kotys/core";
+import { queueCaption, useSkills } from "@kotys/core";
 import type { QueuedMessage } from "@kotys/core";
 import type { SkillListing } from "@kotys/contracts";
+import { useDictationAura, useWebDictation } from "@saystack/react-web";
+import { unlockWebAudio } from "@saystack/web";
+import {
+  authHeaders,
+  dictationStreamUrl,
+  dictationUrl,
+} from "../../voiceConfig";
+import { AURA_LAYER } from "../chat/auraLayer";
 import MicButton from "../chat/MicButton";
 import SlashMenu from "./SlashMenu";
 import { QueuedMessageRow } from "./QueuedMessageRow";
 import { StatusNote } from "./StatusNote";
+import { createTiptapInput } from "./dictationExtension";
 import { useComposerEditor } from "./useComposerEditor";
 import { useSlashMenu, applySlashPick } from "./slashExtension";
 
 const MAX_IMAGES = 4;
 const IMAGE_MAX_DIM = 1536;
+
+const REALTIME = { url: dictationStreamUrl };
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -89,6 +95,7 @@ function ComposerBase({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const { skills } = useSkills();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const noteTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const nextImageId = useRef(0);
 
@@ -171,26 +178,39 @@ function ComposerBase({
     getImages: () => effectiveImages,
   });
 
-  const platform = usePlatform();
+  const dictationInput = useMemo(
+    () => (editor ? createTiptapInput(editor) : undefined),
+    [editor],
+  );
 
-  // The draft stays: dictation sends its own message beside it.
+  // Models that stream write into the draft; with the others the draft
+  // stays and dictation sends its own message beside it.
   const handleTranscript = (text: string) => {
     handleSend(text, effectiveImages);
   };
 
-  const voice = useVoiceInput(platform, handleTranscript);
+  const dictation = useWebDictation({
+    endpoint: dictationUrl(),
+    headers: authHeaders,
+    realtime: REALTIME,
+    input: dictationInput,
+    onText: handleTranscript,
+  });
+
+  useDictationAura(boxRef, dictation, { zIndex: AURA_LAYER });
 
   const handleVoiceStart = () => {
-    void voice.start();
+    unlockWebAudio();
+    dictation.handlePressStart();
   };
 
   useEffect(() => {
-    if (voice.status !== "error") return;
+    if (dictation.state !== "error") return;
     /* eslint-disable react-hooks/set-state-in-effect -- transient note, mirrors the rejected-image strip */
-    setVoiceError(voice.error ?? "Voice input failed");
+    setVoiceError(dictation.errorMessage ?? "Voice input failed");
     noteTimer.current = setTimeout(() => setVoiceError(null), 4000);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [voice.status, voice.error]);
+  }, [dictation.state, dictation.errorMessage]);
 
   const menu = useSlashMenu();
 
@@ -213,6 +233,7 @@ function ComposerBase({
         />
       )}
       <div
+        ref={boxRef}
         className={`bg-surface rounded-xl border p-1.5 transition ${
           dragOver
             ? "border-accent ring-2 ring-accent/30 bg-accent/5"
@@ -290,10 +311,10 @@ function ComposerBase({
             onChange={handleFileInput}
           />
           <MicButton
-            status={voice.status}
+            status={dictation.state}
             onStart={handleVoiceStart}
-            onStop={voice.stop}
-            onCancel={voice.cancel}
+            onStop={dictation.handlePressEnd}
+            onCancel={dictation.handleCancel}
           />
           <button
             onClick={handleAttachClick}

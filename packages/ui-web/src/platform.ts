@@ -1,5 +1,4 @@
 import type { Platform } from "@kotys/core";
-import { createVoiceRecorder } from "./voiceRecorder.js";
 
 interface ElectronBridge {
   notify: (n: { title: string; body: string }) => void;
@@ -16,8 +15,6 @@ const ensureNotificationPermission = () => {
     void Notification.requestPermission();
   }
 };
-
-let recorder: ReturnType<typeof createVoiceRecorder> | null = null;
 
 export const webPlatform: Platform = {
   scrollToMessage: (id) => {
@@ -48,17 +45,6 @@ export const webPlatform: Platform = {
     ensureNotificationPermission();
     if (Notification.permission === "granted")
       new Notification(title, { body });
-  },
-  startVoiceRecording: async () => {
-    recorder = createVoiceRecorder();
-    await recorder.start();
-  },
-  stopVoiceRecording: async () => {
-    const rec = recorder;
-    recorder = null;
-    if (!rec) throw new Error("Not recording");
-    const { blob, mimeType } = await rec.stop();
-    return { blob, mimeType };
   },
 };
 

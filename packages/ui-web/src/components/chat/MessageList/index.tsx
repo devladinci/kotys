@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -71,6 +72,20 @@ export default function MessageList({
   );
 
   useImperativeHandle(ref, () => ({ scrollToBottom }), [scrollToBottom]);
+
+  const hasMessages = messages.length > 0;
+
+  // The list gets shorter when something opens below it, like the read-aloud
+  // player; a list showing the newest message keeps it in view.
+  useEffect(() => {
+    const el = isVirtual ? listRef.current?.element : scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottom.current) scrollToBottom();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isVirtual, hasMessages, scrollToBottom]);
 
   const handleRowsRendered = useCallback(() => {
     if (stickToBottom.current) scrollToBottom();

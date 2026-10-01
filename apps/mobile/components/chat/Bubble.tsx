@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { ActionSheetIOS, Image, Pressable, Text, View } from "react-native";
 import { setStringAsync } from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
@@ -9,7 +9,10 @@ import {
   SKILL_FENCE_PREFIX,
   SkillMessage,
   splitContentByWidgets,
+  useAppStore,
 } from "@kotys/core";
+import { hasSpeechText } from "@saystack/core";
+import { useReadAloudMessage } from "@saystack/react-native";
 import type { ContentSegment, Message } from "@kotys/core";
 import { theme, useThemeMode } from "../../lib/theme";
 import type { ThemeMode } from "../../lib/theme";
@@ -34,14 +37,22 @@ const EDIT_RESEND = "Edit & resend";
 const RETRY = "Retry";
 const REGENERATE = "Regenerate";
 const COPY = "Copy";
+const READ_ALOUD = "Read aloud";
+const STOP_READING = "Stop reading";
 const CANCEL = "Cancel";
 const USER_ACTIONS = [EDIT_RESEND, COPY, CANCEL];
 const REPLY_ACTIONS = [REGENERATE, COPY, CANCEL];
 const FAILED_REPLY_ACTIONS = [RETRY, ...REPLY_ACTIONS];
+const DOUBLE_TAP_MS = 300;
 
-const longPressActions = (isUser: boolean, content: string) => {
+const longPressActions = (
+  isUser: boolean,
+  content: string,
+  speechAction: string | null,
+) => {
   if (isUser) return USER_ACTIONS;
-  return isErrorTurn(content) ? FAILED_REPLY_ACTIONS : REPLY_ACTIONS;
+  if (isErrorTurn(content)) return FAILED_REPLY_ACTIONS;
+  return speechAction ? [speechAction, ...REPLY_ACTIONS] : REPLY_ACTIONS;
 };
 
 const displayText = (content: string) =>
@@ -96,14 +107,47 @@ function BubbleBase({
   const rules = markdownRules[mode];
   const isUser = message.role === "user";
   const [thinkOpen, setThinkOpen] = useState(false);
+  const ttsModel = useAppStore((st) => st.ttsModel);
+  const bodyRef = useRef<View>(null);
+  const readAloud = useReadAloudMessage(message.id, bodyRef);
+  const lastTapAt = useRef(0);
+  const canRead =
+    !isUser &&
+    !isStreaming &&
+    !!ttsModel &&
+    !isErrorTurn(message.content) &&
+    hasSpeechText(message.content);
 
   const toolCalls = (message.toolCalls ?? []).filter(
     (tc) => !isSteerActivity(tc),
   );
 
+  const { isActive: isReading, speak, stop } = readAloud;
+
+  const toggleReading = useCallback(() => {
+    if (isReading) {
+      stop();
+      return;
+    }
+    speak(message.content);
+  }, [isReading, message.content, speak, stop]);
+
+  const handlePress = useCallback(() => {
+    if (!canRead) return;
+    const now = Date.now();
+    const isDoubleTap = now - lastTapAt.current < DOUBLE_TAP_MS;
+    lastTapAt.current = isDoubleTap ? 0 : now;
+    if (isDoubleTap) toggleReading();
+  }, [canRead, toggleReading]);
+
   const handleLongPress = useCallback(() => {
     if (isStreaming || isBusy) return;
-    const options = longPressActions(isUser, message.content);
+    const speechAction = canRead
+      ? isReading
+        ? STOP_READING
+        : READ_ALOUD
+      : null;
+    const options = longPressActions(isUser, message.content, speechAction);
     ActionSheetIOS.showActionSheetWithOptions(
       { options, cancelButtonIndex: options.length - 1 },
       (idx) => {
@@ -111,9 +155,20 @@ function BubbleBase({
         if (action === EDIT_RESEND) onEdit(message);
         if (action === COPY) void setStringAsync(message.content);
         if (action === RETRY || action === REGENERATE) onRegenerate(message.id);
+        if (action === READ_ALOUD || action === STOP_READING) toggleReading();
       },
     );
-  }, [message, isUser, isStreaming, isBusy, onEdit, onRegenerate]);
+  }, [
+    message,
+    isUser,
+    isStreaming,
+    isBusy,
+    canRead,
+    isReading,
+    onEdit,
+    onRegenerate,
+    toggleReading,
+  ]);
 
   const handleToggleThinking = () => setThinkOpen((open) => !open);
 
@@ -171,8 +226,13 @@ function BubbleBase({
   };
 
   return (
-    <Pressable onLongPress={handleLongPress} delayLongPress={350}>
+    <Pressable
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={350}
+    >
       <View
+        ref={bodyRef}
         style={[
           isUser ? s.bubbleUser : s.bubbleAssistant,
           isUser ? ts.userBubble : null,

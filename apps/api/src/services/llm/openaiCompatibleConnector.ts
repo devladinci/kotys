@@ -221,7 +221,7 @@ const mapUsage = (usage: OpenAiResponse["usage"]): ConnectorUsage | null =>
 const AUDIO_MODEL_NAME_RE =
   /(^|[^a-z])(tts|stt|asr|whisper|parakeet|transcri|speech|codec|voice)([^a-z]|$)/i;
 
-export const isAudioModelName = (name: string): boolean =>
+const isAudioModelName = (name: string): boolean =>
   AUDIO_MODEL_NAME_RE.test(name);
 
 export function createOpenAiCompatibleConnector(

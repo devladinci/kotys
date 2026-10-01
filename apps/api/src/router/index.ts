@@ -11,6 +11,7 @@ import { ollamaRouter } from "./ollama.js";
 import { modelsRouter } from "./models.js";
 import { analyticsRouter } from "./analytics.js";
 import { sttRouter } from "./stt.js";
+import { ttsRouter } from "./tts.js";
 
 export const router = {
   chats: chatsRouter,
@@ -26,6 +27,7 @@ export const router = {
   models: modelsRouter,
   analytics: analyticsRouter,
   stt: sttRouter,
+  tts: ttsRouter,
 };
 
 export type AppRouter = typeof router;

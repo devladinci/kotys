@@ -25,6 +25,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/chat/Sidebar";
 import ApprovalPrompt from "./components/chat/ApprovalPrompt";
 import CommandPalette from "./components/chat/CommandPalette";
+import { SpeechProvider } from "./components/chat/SpeechProvider";
 import TodoSidebar from "./components/todos/TodoSidebar";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import AnalyticsPage from "./components/analytics";
@@ -168,51 +169,53 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen bg-bg text-text overflow-hidden">
-        {!sidebarHidden && (
-          <Sidebar
-            chats={chats}
-            activeChatId={activeChatId}
-            searchQuery={searchQuery}
-            searchResults={searchResults}
-            pinnedChatIds={pinnedChatIds}
-            onCreateChat={handleCreateChat}
-            onSelectChat={handleSelectChat}
-            onDeleteChat={handleDeleteChatClick}
-            onRenameChat={handleRenameChat}
-            onSearchChange={setSearchQuery}
-            onOpenSearchResult={handleOpenSearchResult}
-            onTogglePinned={handleTogglePinned}
-            onOpenSettings={handleOpenSettings}
-            onOpenAnalytics={handleOpenAnalytics}
-          />
-        )}
-        <Routes>
-          <Route path="/" element={<IndexRoute />} />
-          <Route path="/chat/:chatId" element={<ChatRoute />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/settings" element={<SettingsLayout />}>
-            <Route index element={<GeneralRoute />} />
-            <Route path="tools" element={<ToolsSettings />} />
-            <Route path="mcp" element={<McpSettings />} />
-            <Route path="skills" element={<SkillsSettings />} />
-            <Route path="memory" element={<MemorySettings />} />
-            <Route path="pomodoro" element={<PomodoroSettings />} />
-            <Route path="voice" element={<VoiceSettings />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <TodoSidebar />
-        <ApprovalPrompt />
-        {paletteOpen && (
-          <CommandPalette
-            chats={chats}
-            onSelectChat={handleSelectChat}
-            onCreateChat={handleCreateChat}
-            onClose={handleClosePalette}
-          />
-        )}
-      </div>
+      <SpeechProvider>
+        <div className="flex h-screen bg-bg text-text overflow-hidden">
+          {!sidebarHidden && (
+            <Sidebar
+              chats={chats}
+              activeChatId={activeChatId}
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              pinnedChatIds={pinnedChatIds}
+              onCreateChat={handleCreateChat}
+              onSelectChat={handleSelectChat}
+              onDeleteChat={handleDeleteChatClick}
+              onRenameChat={handleRenameChat}
+              onSearchChange={setSearchQuery}
+              onOpenSearchResult={handleOpenSearchResult}
+              onTogglePinned={handleTogglePinned}
+              onOpenSettings={handleOpenSettings}
+              onOpenAnalytics={handleOpenAnalytics}
+            />
+          )}
+          <Routes>
+            <Route path="/" element={<IndexRoute />} />
+            <Route path="/chat/:chatId" element={<ChatRoute />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/settings" element={<SettingsLayout />}>
+              <Route index element={<GeneralRoute />} />
+              <Route path="tools" element={<ToolsSettings />} />
+              <Route path="mcp" element={<McpSettings />} />
+              <Route path="skills" element={<SkillsSettings />} />
+              <Route path="memory" element={<MemorySettings />} />
+              <Route path="pomodoro" element={<PomodoroSettings />} />
+              <Route path="voice" element={<VoiceSettings />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <TodoSidebar />
+          <ApprovalPrompt />
+          {paletteOpen && (
+            <CommandPalette
+              chats={chats}
+              onSelectChat={handleSelectChat}
+              onCreateChat={handleCreateChat}
+              onClose={handleClosePalette}
+            />
+          )}
+        </div>
+      </SpeechProvider>
     </ErrorBoundary>
   );
 }

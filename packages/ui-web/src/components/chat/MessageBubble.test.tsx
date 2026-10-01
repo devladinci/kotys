@@ -1,8 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MessageBubble } from "./MessageBubble";
+import { useAppStore } from "@kotys/core";
 import type { Message } from "@kotys/contracts";
+import { initTestClients } from "../../test/mocks/rpc";
+import { KotysProviderForTest } from "../../test/platform";
+import { MessageBubble } from "./MessageBubble";
+import { SpeechProvider } from "./SpeechProvider";
+
+vi.mock("@kotys/client", async () => await import("../../test/mocks/client"));
 
 const userMessage = (content: string): Message => ({
   id: 1,
@@ -138,5 +144,61 @@ describe("MessageBubble steer", () => {
     renderBubble(steered);
     expect(screen.getAllByText(/^1 tool · /).length).toBeGreaterThan(0);
     expect(screen.queryByText(/2 tools/)).toBeNull();
+  });
+});
+
+describe("MessageBubble read aloud", () => {
+  const reply = (content: string): Message => ({
+    id: 3,
+    role: "assistant",
+    content,
+    createdAt: 0,
+  });
+
+  const renderWithProvider = (message: Message) =>
+    render(
+      <KotysProviderForTest>
+        <SpeechProvider>
+          <MessageBubble
+            message={message}
+            isStreamingThis={false}
+            isHighlighted={false}
+            onImageClick={noop}
+          />
+        </SpeechProvider>
+      </KotysProviderForTest>,
+    );
+
+  const readAloud = () => screen.queryByRole("button", { name: "Read aloud" });
+
+  beforeEach(async () => {
+    await initTestClients();
+    useAppStore.setState({ ttsModel: "omlx:higgs_audio_v3-tts-4b" });
+  });
+
+  it("is offered on a finished reply once a speech model is selected", () => {
+    renderWithProvider(reply("Here is the answer."));
+
+    expect(readAloud()).not.toBeNull();
+  });
+
+  it("is hidden while no speech model is selected", () => {
+    useAppStore.setState({ ttsModel: null });
+    renderBubble(reply("Here is the answer."));
+
+    expect(readAloud()).toBeNull();
+  });
+
+  it("is not offered on a reply that is only code", () => {
+    renderWithProvider(reply("```ts\nconst answer = 42;\n```"));
+
+    expect(readAloud()).toBeNull();
+  });
+
+  it("is never offered on your own messages or on a failed reply", () => {
+    renderWithProvider(userMessage("Read this back to me."));
+    renderWithProvider(reply("Partial\n\n**Error:** model crashed"));
+
+    expect(readAloud()).toBeNull();
   });
 });

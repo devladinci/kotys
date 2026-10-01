@@ -216,6 +216,13 @@ export const s = StyleSheet.create({
     gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  micHot: {
+    transform: [{ scale: 1.14 }],
+  },
+  readAlong: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
   editHint: {
     fontSize: 12,
   },
@@ -351,6 +358,15 @@ const createThemedStyles = (mode: ThemeMode) => {
     editBar: {
       backgroundColor: t.surface,
       borderTopColor: t.border,
+    },
+    dangerText: {
+      color: t.danger,
+    },
+    micHot: {
+      backgroundColor: t.accent,
+    },
+    micCancel: {
+      backgroundColor: t.danger,
     },
     editCancel: {
       borderColor: t.border,

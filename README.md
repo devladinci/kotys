@@ -89,7 +89,8 @@ https://github.com/user-attachments/assets/aec0508f-aae0-4a31-b3e6-8a9d89ead042
   between them checked by ESLint instead of left to convention. `contracts`
   depends on nothing but zod. `core` stays free of the DOM so React Native
   can import it.
-- **Voice.** Talk instead of typing, with speech-to-text.
+- **Voice.** Talk instead of typing, with speech-to-text, and have replies
+  read aloud, long ones as a short spoken summary.
 
 ## How it works
 
@@ -136,7 +137,8 @@ You need:
 - Node.js 22+
 - pnpm 10+
 - [Ollama](https://ollama.com) running locally, or an Ollama Cloud API key
-- Optional: an [oMLX](https://omlx.ai) server, for MLX models and dictation
+- Optional: an [oMLX](https://omlx.ai) server, for MLX models, dictation, and
+  reading replies aloud
 
 ```bash
 bin/setup
@@ -159,6 +161,7 @@ Short, practical how-tos live in [docs/recipes.md](docs/recipes.md):
 - [Start on your desk, finish on your phone](docs/recipes.md#start-on-your-desk-finish-on-your-phone)
 - [Move around fast](docs/recipes.md#move-around-fast)
 - [Talk instead of typing](docs/recipes.md#talk-instead-of-typing)
+- [Hear replies aloud](docs/recipes.md#hear-replies-aloud)
 - [Turn tools on and off](docs/recipes.md#turn-tools-on-and-off)
 - [Add an MCP server](docs/recipes.md#add-an-mcp-server)
 - [Write your first skill](docs/recipes.md#write-your-first-skill)

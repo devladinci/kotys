@@ -215,4 +215,73 @@ describe("useAppStore", () => {
     await act(() => result.current.hydrate());
     expect(result.current.sttModel).toBe(null);
   });
+
+  it("setTtsModel persists provider-tagged value via RPC", async () => {
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.setTtsModel("omlx:higgs_audio_v3-tts-4b"));
+    expect(result.current.ttsModel).toBe("omlx:higgs_audio_v3-tts-4b");
+    expect(settingsSet).toHaveBeenCalledWith({
+      key: "tts_model",
+      value: "omlx:higgs_audio_v3-tts-4b",
+    });
+  });
+
+  it("setTtsModel(null) clears the selection", async () => {
+    useAppStore.setState({ ttsModel: "omlx:higgs_audio_v3-tts-4b" });
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.setTtsModel(null));
+    expect(result.current.ttsModel).toBe(null);
+    expect(settingsSet).toHaveBeenCalledWith({ key: "tts_model", value: "" });
+  });
+
+  it("hydrate reads tts_model (empty value = null)", async () => {
+    settingsGet.mockImplementation(async (input: { key: string }) => ({
+      value: input.key === "tts_model" ? "omlx:higgs" : null,
+      secret: false as const,
+    }));
+    settingsHasSecret.mockResolvedValue({ present: false });
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.hydrate());
+    expect(result.current.ttsModel).toBe("omlx:higgs");
+  });
+
+  it("setTtsSummaryModel stores the whole listing and clears with null", async () => {
+    const listing = {
+      name: "deepseek-v4.1-flash",
+      capabilities: [],
+      contextLength: null,
+      source: "cloud" as const,
+      provider: "ollama",
+    };
+    const { result } = renderHook(() => useAppStore());
+
+    await act(() => result.current.setTtsSummaryModel(listing));
+    expect(result.current.ttsSummaryModel).toEqual(listing);
+    expect(settingsSet).toHaveBeenCalledWith({
+      key: "tts_summary_model",
+      value: JSON.stringify(listing),
+    });
+
+    await act(() => result.current.setTtsSummaryModel(null));
+    expect(result.current.ttsSummaryModel).toBe(null);
+    expect(settingsSet).toHaveBeenLastCalledWith({
+      key: "tts_summary_model",
+      value: "",
+    });
+  });
+
+  it.each([
+    ["a stored listing", JSON.stringify({ name: "gemma4:31b" }), "gemma4:31b"],
+    ["an empty value", "", null],
+    ["invalid json", "{oops", null],
+  ])("hydrate reads tts_summary_model from %s", async (_, value, name) => {
+    useAppStore.setState({ ttsSummaryModel: null });
+    settingsGet.mockImplementation(async (input: { key: string }) => ({
+      value: input.key === "tts_summary_model" ? value : null,
+      secret: false as const,
+    }));
+    const { result } = renderHook(() => useAppStore());
+    await act(() => result.current.hydrate());
+    expect(result.current.ttsSummaryModel?.name ?? null).toBe(name);
+  });
 });

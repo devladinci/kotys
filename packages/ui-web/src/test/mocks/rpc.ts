@@ -78,6 +78,14 @@ export const rpcMock = {
     servers: fn([]),
     reconnect: fn([]),
   },
+  stt: {
+    models: fn([]),
+  },
+  tts: {
+    models: fn([]),
+    reference: fn({ isSet: false, text: "" }),
+    removeReference: fn({ ok: true }),
+  },
 } as const;
 
 export const rpc = rpcMock as unknown as Record<string, Record<string, Mock>>;

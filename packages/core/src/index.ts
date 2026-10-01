@@ -8,13 +8,15 @@ export * from "./shared/modelListing.js";
 export * from "./shared/todoDates.js";
 export * from "./shared/format.js";
 export * from "./shared/useNow.js";
+export * from "./shared/useAudioModels.js";
+export * from "./shared/modelOptions.js";
 export * from "./shared/contentWidgets.js";
 
 export * from "./chat/useChat.js";
 export * from "./chat/useChatStream.js";
 export * from "./chat/useToolApproval.js";
 export * from "./chat/useUserInput.js";
-export * from "./chat/useVoiceInput.js";
+export * from "./speech/speechApi.js";
 export * from "./chat/useMessages.js";
 export * from "./chat/chatSync.js";
 export * from "./chat/echoGuard.js";
