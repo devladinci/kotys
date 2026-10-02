@@ -5,6 +5,7 @@ const h = vi.hoisted(() => {
   const inserts: { role: string; content?: string }[] = [];
   const updates: { id: number; content?: string }[] = [];
   const userInsert: { mode: "ok" | "null" | "throw" } = { mode: "ok" };
+  const compact: { mode: "summary" | "short" | "throw" } = { mode: "summary" };
   const skill: {
     mode: "ok" | "hang";
     resolve: ((value: unknown) => void) | null;
@@ -25,7 +26,17 @@ const h = vi.hoisted(() => {
       return true;
     },
   };
-  return { sent, inserts, updates, userInsert, skill, listeners, net, socket };
+  return {
+    sent,
+    inserts,
+    updates,
+    userInsert,
+    compact,
+    skill,
+    listeners,
+    net,
+    socket,
+  };
 });
 
 vi.mock("../shared/clients.js", () => ({
@@ -47,6 +58,11 @@ vi.mock("../shared/clients.js", () => ({
     },
     chats: {
       liveStream: async () => null,
+      compact: async () => {
+        if (h.compact.mode === "throw") throw new Error("model down");
+        if (h.compact.mode === "short") return { compacted: false };
+        return { summary: "earlier turns", upto: 1 };
+      },
     },
     skills: {
       get: async ({ name }: { name: string }) => {
@@ -81,6 +97,7 @@ const { useAppStore } = await import("../shared/useAppStore.js");
 
 const { useChat } = await import("./useChat.js");
 const { projectedUsedTokens } = await import("./useTokenEstimator.js");
+const { estimateTokens } = await import("@kotys/contracts");
 const { subscribeChatSync } = await import("./chatSync.js");
 const { renderHook, act } = await import("@testing-library/react");
 
@@ -92,7 +109,7 @@ const model = {
   capabilities: [],
 };
 
-function renderChat(activeChatId: number) {
+function renderChat(activeChatId: number, onSummaryChanged = () => {}) {
   return renderHook(() =>
     useChat({
       activeChatId,
@@ -104,7 +121,7 @@ function renderChat(activeChatId: number) {
       onChatCreated: () => {},
       onTopicsInferred: () => {},
       onTitleInferred: () => {},
-      onSummaryChanged: () => {},
+      onSummaryChanged,
     }),
   );
 }
@@ -585,7 +602,83 @@ describe("useChat send", () => {
     });
 
     expect(reply()?.livePromptTokens).toBeUndefined();
-    // 4554 measured + "done" + 3000 of tool output the next turn replays.
-    expect(projectedUsedTokens(result.current.messages)).toBe(7_555);
+    expect(projectedUsedTokens(result.current.messages)).toBe(
+      4_554 + estimateTokens("done") + 3_000,
+    );
+  });
+
+  it("does not anchor the meter on a reply the provider never counted", async () => {
+    const { result } = renderChat(7);
+
+    await act(async () => {
+      await result.current.send("a".repeat(400), []);
+    });
+    const requestId = sentOf("chat:stream")[0].payload.requestId as number;
+
+    await act(async () => {
+      emitFrame({
+        type: "chat:done",
+        chatId: 7,
+        seq: 1,
+        payload: {
+          requestId,
+          result: { ...emptyResult, promptTokens: 50_000 },
+        },
+      });
+    });
+
+    const reply = result.current.messages.find((m) => m.id === requestId);
+    expect(reply?.tokensMeasured).toBe(false);
+    expect(result.current.contextUsed).toBe(
+      estimateTokens("a".repeat(400)) + estimateTokens("done"),
+    );
+  });
+});
+
+describe("useChat: compact now", () => {
+  beforeEach(() => {
+    h.compact.mode = "summary";
+    resetStreamState();
+    resetLiveStreams();
+    resetQueued();
+    resetEchoGuard();
+  });
+
+  it.each([
+    ["summary", "compacted", 1],
+    ["short", "nothing", 0],
+    ["throw", "error", 0],
+  ] as const)(
+    "a %s answer reports %s and reloads the chat %i time(s)",
+    async (mode, expected, reloads) => {
+      h.compact.mode = mode;
+      const onSummaryChanged = vi.fn();
+      const { result } = renderChat(7, onSummaryChanged);
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.compactNow();
+      });
+
+      expect(outcome).toBe(expected);
+      expect(onSummaryChanged).toHaveBeenCalledTimes(reloads);
+      expect(result.current.isCompacting).toBe(false);
+    },
+  );
+
+  it("can run again after a failed attempt", async () => {
+    h.compact.mode = "throw";
+    const { result } = renderChat(7);
+    await act(async () => {
+      await result.current.compactNow();
+    });
+
+    h.compact.mode = "summary";
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.compactNow();
+    });
+
+    expect(outcome).toBe("compacted");
   });
 });

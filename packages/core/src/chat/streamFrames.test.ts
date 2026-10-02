@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import type { ChatStreamResult } from "@kotys/contracts";
+import { estimateTokens } from "@kotys/contracts";
 import {
   claimLiveStream,
   releaseLiveStream,
@@ -7,6 +8,7 @@ import {
 } from "./liveStreams.js";
 import { applyDone, applyUsage, classifyFrame } from "./streamFrames.js";
 import type { Message } from "./types.js";
+import { projectedUsedTokens } from "./useTokenEstimator.js";
 
 beforeEach(() => {
   resetLiveStreams();
@@ -14,20 +16,16 @@ beforeEach(() => {
 
 describe("classifyFrame", () => {
   it("routes claimed request ids as own — parallel streams stay own", () => {
-    // Chat 7 and chat 8 both stream from this client.
     claimLiveStream(42, 7);
     claimLiveStream(43, 8);
-    // Frames for either arrive while viewing some other chat (9).
     expect(classifyFrame(42, 7, 9)).toBe("own");
     expect(classifyFrame(43, 8, 9)).toBe("own");
-    // Even frames stamped with the open chat stay own while claimed.
     expect(classifyFrame(42, 9, 9)).toBe("own");
   });
 
   it("releasing a claim demotes its frames to foreign routing", () => {
     claimLiveStream(42, 7);
     releaseLiveStream(42);
-    // Viewing chat 7: the finishing stream's frames are foreign-visible now.
     expect(classifyFrame(42, 7, 7)).toBe("visible");
     expect(classifyFrame(42, 8, 7)).toBe("ignore");
   });
@@ -78,5 +76,32 @@ describe("live usage", () => {
     expect(done[1].livePromptTokens).toBeUndefined();
     expect(done[1].promptTokens).toBe(4_554);
     expect(done[1].toolResultTokens).toBe(3_000);
+  });
+
+  it("keeps a reply the provider never counted from anchoring the meter", () => {
+    const done = applyDone(turn(), 2, {
+      ...result,
+      promptTokens: 9_000,
+      tokensMeasured: false,
+      toolResultTokens: undefined,
+    });
+    expect(done[1].tokensMeasured).toBe(false);
+    expect(projectedUsedTokens(done)).toBe(
+      estimateTokens("hi") + estimateTokens("done"),
+    );
+  });
+
+  it("keeps the row's flag when a legacy daemon sends none", () => {
+    const measured: Message[] = [
+      { id: 1, role: "user", content: "hi" },
+      { id: 2, role: "assistant", content: "", tokensMeasured: true },
+    ];
+    const legacy = { ...result } as Partial<ChatStreamResult>;
+    delete legacy.tokensMeasured;
+    const done = applyDone(measured, 2, legacy as ChatStreamResult);
+    expect(done[1].tokensMeasured).toBe(true);
+    expect(projectedUsedTokens(done)).toBe(
+      4_554 + estimateTokens("done") + 3_000,
+    );
   });
 });

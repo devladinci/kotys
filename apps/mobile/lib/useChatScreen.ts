@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard } from "react-native";
 import { MAX_IMAGES } from "./images";
 
+interface IEditing {
+  id: number;
+  text: string;
+}
+
 export function useChatScreen() {
   const [draft, setDraft] = useState("");
   const [atBottom, setAtBottom] = useState(true);
@@ -10,15 +15,15 @@ export function useChatScreen() {
   const [modelSheet, setModelSheet] = useState(false);
   const [thinkSheet, setThinkSheet] = useState(false);
   const [modeSheet, setModeSheet] = useState(false);
-  const [editing, setEditing] = useState<{ id: number; text: string } | null>(
-    null,
-  );
+  const [contextSheet, setContextSheet] = useState(false);
+  const [editing, setEditing] = useState<IEditing | null>(null);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
 
   useEffect(() => {
     const show = Keyboard.addListener("keyboardWillShow", (e) =>
       setKbHeight(e.endCoordinates.height),
     );
+
     const hide = Keyboard.addListener("keyboardWillHide", () => setKbHeight(0));
     return () => {
       show.remove();
@@ -58,6 +63,8 @@ export function useChatScreen() {
     setThinkSheet,
     modeSheet,
     setModeSheet,
+    contextSheet,
+    setContextSheet,
     editing,
     setEditing,
     pendingImages,
