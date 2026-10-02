@@ -81,6 +81,8 @@ const STREAM_FLUSH_MS = 90;
 
 export type { QueuedMessage } from "./useMessageQueue.js";
 
+export type CompactResult = "compacted" | "nothing" | "error";
+
 // Settled on arrival, not on the flush cadence, so the done frame right
 // behind a receipt cannot find its entry still queued and send it twice.
 function settleSteer(activity: ToolActivity): void {
@@ -359,7 +361,7 @@ export function useChat({
                 model: chatModel.name,
                 promptTokens: result.promptTokens || undefined,
                 evalTokens: result.evalTokens || undefined,
-                tokensMeasured: result.tokensMeasured || undefined,
+                tokensMeasured: result.tokensMeasured,
                 toolCalls:
                   result.toolCalls.length > 0 ? result.toolCalls : undefined,
                 toolResultTokens: result.toolResultTokens || undefined,
@@ -535,6 +537,7 @@ export function useChat({
           "assistant",
           "",
         );
+
         if (newAssistantId === null) {
           clearStreamActivity(currentChatId);
           finishStreamEntry(currentChatId);
@@ -668,9 +671,7 @@ export function useChat({
     [activeChatId, streamingId, queuedMessages, appendStream],
   );
 
-  const compactNow = useCallback(async (): Promise<
-    "compacted" | "nothing" | "error"
-  > => {
+  const compactNow = useCallback(async (): Promise<CompactResult> => {
     if (activeChatId === null || isCompacting) return "nothing";
     setIsCompacting(true);
     try {

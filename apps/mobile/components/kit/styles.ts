@@ -1,8 +1,17 @@
 import { StyleSheet } from "react-native";
+import type { TextStyle } from "react-native";
 import { theme } from "../../lib/theme";
 import type { ThemeMode } from "../../lib/theme";
+import type { UsageLevel } from "./usageLevel";
 
 export const ON_ACCENT = "#fff";
+
+const USAGE_FULL_COLOR = "#ef4444";
+
+interface IUsageTone {
+  color: string;
+  text: TextStyle;
+}
 
 export const s = StyleSheet.create({
   sheetContainer: { flex: 1, justifyContent: "flex-end" },
@@ -153,6 +162,7 @@ export const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
   },
+  compactBusy: { opacity: 0.6 },
   compactLabel: { color: ON_ACCENT, fontWeight: "600", fontSize: 15 },
 });
 
@@ -172,10 +182,29 @@ const createThemedStyles = (mode: ThemeMode) => {
     toolImage: { borderColor: t.border },
     inputCard: { borderColor: t.border, backgroundColor: t.surface },
     compact: { backgroundColor: t.accent },
+    usageNormal: { color: t.accent },
+    usageHigh: { color: t.warn },
+    usageFull: { color: USAGE_FULL_COLOR },
   });
 };
 
 export const themedStyles = {
   light: createThemedStyles("light"),
   dark: createThemedStyles("dark"),
+};
+
+const createUsageTones = (mode: ThemeMode) => {
+  const t = theme(mode);
+  const ts = themedStyles[mode];
+  const tones: Record<UsageLevel, IUsageTone> = {
+    normal: { color: t.accent, text: ts.usageNormal },
+    high: { color: t.warn, text: ts.usageHigh },
+    full: { color: USAGE_FULL_COLOR, text: ts.usageFull },
+  };
+  return tones;
+};
+
+export const usageTones = {
+  light: createUsageTones("light"),
+  dark: createUsageTones("dark"),
 };

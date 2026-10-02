@@ -37,7 +37,6 @@ import {
   useChat,
   useChatList,
   useSkills,
-  useTokenEstimator,
   useUserInputStore,
 } from "@kotys/core";
 import type { Message } from "@kotys/core";
@@ -47,6 +46,7 @@ import {
   useHoldToTalk,
   useNativeDictation,
 } from "@saystack/react-native";
+import { contextPct, DEFAULT_CONTEXT } from "@kotys/contracts";
 import type { ModelListing, SkillListing } from "@kotys/contracts";
 import { registerScrollHandler } from "../../lib/platform";
 import { useChatScreen } from "../../lib/useChatScreen";
@@ -63,6 +63,7 @@ import { SlashMenu } from "../../components/chat/SlashMenu";
 import { ModelPickers } from "../../components/kit/ModelPickers";
 import { ModePicker } from "../../components/kit/ModePicker";
 import { ThinkingPicker } from "../../components/kit/ThinkingPicker";
+import { ContextSheet } from "../../components/kit/ContextSheet";
 import { TokenBadge } from "../../components/kit/TokenBadge";
 
 type ChatRouteParams = { id: string };
@@ -129,6 +130,7 @@ function ChatScreen() {
     () => chats.find((c) => c.id === chatId) ?? null,
     [chats, chatId],
   );
+
   const chatTitle = chat?.title ?? "";
   const chatSummary = chat?.summary ?? null;
   const chatSummaryUpto = chat?.summary_upto ?? null;
@@ -153,6 +155,8 @@ function ChatScreen() {
     setThinkSheet,
     modeSheet,
     setModeSheet,
+    contextSheet,
+    setContextSheet,
     editing,
     setEditing,
     pendingImages,
@@ -230,6 +234,7 @@ function ChatScreen() {
     onChatCreated: handleChatCreated,
     onTitleInferred: bumpChatsVersion,
     onTopicsInferred: bumpChatsVersion,
+    onSummaryChanged: bumpChatsVersion,
   });
 
   const promptRename = useCallback(() => {
@@ -257,17 +262,21 @@ function ChatScreen() {
     );
   }, [promptRename]);
 
-  const handleCompact = useCallback(() => {
-    void compactNow();
-  }, [compactNow]);
+  const handleOpenContextSheet = useCallback(() => {
+    setContextSheet(true);
+  }, [setContextSheet]);
 
-  const headerBadge = useTokenEstimator(messages, chatModel.contextLength, {
-    summary: chatSummary,
-    summaryUpto: chatSummaryUpto,
-  });
-  const headerPct = contextUsed > 0 ? headerBadge.pct : 0;
+  const handleCloseContextSheet = useCallback(() => {
+    setContextSheet(false);
+  }, [setContextSheet]);
+
+  const contextLength = chatModel.contextLength ?? DEFAULT_CONTEXT;
+  const usedPct = contextPct(contextUsed, contextLength);
+  const hasUsage = contextUsed > 0;
   // setOptions re-renders the screen; without this signature gate it loops.
-  const headerSignature = `${chatTitle}|${headerPct}|${headerBadge.ctx}|${chatModel.name}|${isCompacted}|${isCompacting}|${mode}`;
+  // The header keeps what it rendered until the signature changes, so live
+  // values belong in ContextSheet, not here.
+  const headerSignature = `${chatTitle}|${hasUsage}|${usedPct}|${isCompacting}|${mode}`;
   const prevHeaderSignature = useRef<string | null>(null);
 
   useEffect(() => {
@@ -277,14 +286,13 @@ function ChatScreen() {
       title: chatTitle || "Chat",
       headerRight: () => (
         <View style={s.headerActions}>
-          <TokenBadge
-            used={contextUsed}
-            pct={headerBadge.pct}
-            ctx={headerBadge.ctx}
-            isCompacted={isCompacted}
-            isCompacting={isCompacting}
-            onCompact={handleCompact}
-          />
+          {hasUsage && (
+            <TokenBadge
+              pct={usedPct}
+              isCompacting={isCompacting}
+              onPress={handleOpenContextSheet}
+            />
+          )}
           <Pressable
             onPress={handleOpenChatActions}
             hitSlop={12}
@@ -299,12 +307,10 @@ function ChatScreen() {
     headerSignature,
     navigation,
     chatTitle,
-    contextUsed,
-    headerBadge.pct,
-    headerBadge.ctx,
-    isCompacted,
+    hasUsage,
+    usedPct,
     isCompacting,
-    handleCompact,
+    handleOpenContextSheet,
     handleOpenChatActions,
     t.text,
   ]);
@@ -406,8 +412,6 @@ function ChatScreen() {
     [send, pinBottom],
   );
 
-  // Streamed words go into the draft; other models send their transcript
-  // as its own message.
   const handleInsert = useCallback(
     (text: string) => {
       setDraft((current) => {
@@ -425,6 +429,7 @@ function ChatScreen() {
     onText: handleTranscript,
     onInsert: handleInsert,
   });
+
   const isTranscribing = dictation.state === "transcribing";
   const hold = useHoldToTalk({
     onStart: dictation.handlePressStart,
@@ -432,6 +437,7 @@ function ChatScreen() {
     onCancel: dictation.handleCancel,
     isDisabled: isTranscribing,
   });
+
   const voice = useVoiceTheme();
   const composerRef = useRef<View>(null);
 
@@ -807,6 +813,16 @@ function ChatScreen() {
         model={chatModel}
       />
       <ModePicker isVisible={modeSheet} onClose={handleCloseModeSheet} />
+      <ContextSheet
+        isVisible={contextSheet}
+        onClose={handleCloseContextSheet}
+        used={contextUsed}
+        pct={usedPct}
+        ctx={contextLength}
+        isCompacted={isCompacted}
+        isCompacting={isCompacting}
+        onCompact={compactNow}
+      />
       <DictationSpotlight
         dictation={dictation}
         hold={hold}
