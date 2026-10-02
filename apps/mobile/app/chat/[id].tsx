@@ -286,13 +286,13 @@ function ChatScreen() {
       title: chatTitle || "Chat",
       headerRight: () => (
         <View style={s.headerActions}>
-          {hasUsage ? (
+          {hasUsage && (
             <TokenBadge
               pct={usedPct}
               isCompacting={isCompacting}
               onPress={handleOpenContextSheet}
             />
-          ) : null}
+          )}
           <Pressable
             onPress={handleOpenChatActions}
             hitSlop={12}
