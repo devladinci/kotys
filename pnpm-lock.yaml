@@ -67,14 +67,14 @@ importers:
         specifier: ^1.15.0
         version: 1.15.0(ws@8.21.3)
       '@saystack/core':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@saystack/engine-openai-compatible':
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.4
+        version: 0.1.4
       '@saystack/server':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.3
+        version: 0.1.3
       hono:
         specifier: ^4.13.5
         version: 4.13.5
@@ -189,14 +189,14 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui-tokens
       '@saystack/core':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@saystack/react':
-        specifier: ^0.1.0
-        version: 0.1.0(react@19.1.0)
+        specifier: ^0.2.1
+        version: 0.2.1(react@19.1.0)
       '@saystack/react-native':
-        specifier: ^0.1.0
-        version: 0.1.0(ddbba2de1494ff62ef1d9254b99d90fb)
+        specifier: ^0.2.1
+        version: 0.2.1(ddbba2de1494ff62ef1d9254b99d90fb)
       expo:
         specifier: ~57.0.25
         version: 57.0.25(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.16)(expo-router@57.0.19)(react-dom@19.1.0(react@19.1.0))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)(typescript@6.0.3)
@@ -423,17 +423,17 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@saystack/core':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.1
+        version: 0.2.1
       '@saystack/react':
-        specifier: ^0.1.0
-        version: 0.1.0(react@19.1.0)
+        specifier: ^0.2.1
+        version: 0.2.1(react@19.1.0)
       '@saystack/react-web':
-        specifier: ^0.1.0
-        version: 0.1.0(react@19.1.0)
+        specifier: ^0.2.1
+        version: 0.2.1(react@19.1.0)
       '@saystack/web':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.3
+        version: 0.1.3
       '@tiptap/core':
         specifier: ^3.31.3
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -2365,16 +2365,16 @@ packages:
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
 
-  '@saystack/core@0.1.0':
-    resolution: {integrity: sha512-C8DLQ1KdhPRKaKUVydci+OPe2d0mbc9FIfIATKtOgWihQDZCYa6f58+yEQrNjolBK1VL3q/o+iSf4bpioKvFaQ==}
+  '@saystack/core@0.2.1':
+    resolution: {integrity: sha512-Kxhn3wlQY1SgEJG9zEnCZH5uqyuvZxErZgXvsyNP2rfX4XnThBO2MIy/0Lv0klFqGJXESjpzL9DQ0y/s+a3A+g==}
     engines: {node: '>=22'}
 
-  '@saystack/engine-openai-compatible@0.1.1':
-    resolution: {integrity: sha512-yZ3Hmh3e+SuWxV8aarvkDoi1UFS2chMENlTXenx3HhJAZZlNOGwvNfMsLMXSGKgdslqyYw1nxWSsRRsLvZKhfw==}
+  '@saystack/engine-openai-compatible@0.1.4':
+    resolution: {integrity: sha512-aiohv3pKM9OKu+rxgysuo4lkblsLNEuAF0zFytDEpU3c0pye49m/hoGGOy8Kw/bIV2batlldQU6MzxJBydWz0w==}
     engines: {node: '>=22'}
 
-  '@saystack/react-native@0.1.0':
-    resolution: {integrity: sha512-8D+27IKhiLFOooLOwaYktJV60Z6GKj/juz2kTMgsE+ofzUpr2Je5nx85nOD0vXgwiaxi/I08Jb2sAYU43lTC7g==}
+  '@saystack/react-native@0.2.1':
+    resolution: {integrity: sha512-alxygFNy9WhaLn3t17XZyIJCoZVz06GCAWc6iTmhcwKzsayv7H0e1b7r0M9qoWKvsm22QWA8E9jWIinGU8/D7A==}
     engines: {node: '>=22'}
     peerDependencies:
       expo-audio: '>=57.0.0'
@@ -2390,24 +2390,24 @@ packages:
       expo-gl:
         optional: true
 
-  '@saystack/react-web@0.1.0':
-    resolution: {integrity: sha512-u80GFJhUA7ehfo+b1QrfP0jgszYnNshRyUaZyCReTO+9CrZh4TgwQlzt8R9lL9Q+EHHy8u9zeP5Dsq6zCcRxeg==}
+  '@saystack/react-web@0.2.1':
+    resolution: {integrity: sha512-0Dv3+Es/BHrjVrat3+l7M6rup8i7tAhLosupwPD973tupG1ntbOW/g5s0vWsnelMaoEz4T2BA9XxpP+6FcTwHw==}
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
-  '@saystack/react@0.1.0':
-    resolution: {integrity: sha512-rIcGswu/A3Mg+b64CsywzaNYUvJAQmTkBeXZGZy0911y2+WkVFAZaFmM+maG6bg1+M4IGAuwsfn0WWOsphYLcg==}
+  '@saystack/react@0.2.1':
+    resolution: {integrity: sha512-fKunN3OgadMB5jN4o4p4bXzRHAiaw9i+Zgn01Ns7UmTyl5kedhnRsgfMhTNZUfeGC0UkGGf+zeffP3NB9R4dxg==}
     engines: {node: '>=22'}
     peerDependencies:
       react: 19.1.0
 
-  '@saystack/server@0.1.0':
-    resolution: {integrity: sha512-K6UaJI8z3UOtp295g1Q88YjLZ7I6qTKVqBvnb359fMTsjlawEn0mBm65xsn0HHRfmbbmZt+w1iTG6Gt7sZoXuA==}
+  '@saystack/server@0.1.3':
+    resolution: {integrity: sha512-iHQbaL16IaG7R7OPsg2e1UngZDUnbF1N+MEulEw0/zWPdZ0vp2S64BhvnLYfkYkgxIK2uHkAGhHBVFXYqynGvg==}
     engines: {node: '>=22'}
 
-  '@saystack/web@0.1.0':
-    resolution: {integrity: sha512-aq7fK0FxjUkdKkxOBGqLm+xZfdM9j1NXbgYDBHOQB7vrgC0sL60qAcVBFdzECPzMcpOBQgpp8AAeX56pOOopXQ==}
+  '@saystack/web@0.1.3':
+    resolution: {integrity: sha512-TgukBIUcjIp8VXBTlzfFTd+OA6KCgLwN8Iki12fI1LOFF4LB14ezxjXdUkI7fD9XnDV+om93CKtz0ukO7+AA7A==}
     engines: {node: '>=22'}
 
   '@sinclair/typebox@0.27.12':
@@ -9263,20 +9263,20 @@ snapshots:
 
   '@rtsao/scc@1.1.0': {}
 
-  '@saystack/core@0.1.0': {}
+  '@saystack/core@0.2.1': {}
 
-  '@saystack/engine-openai-compatible@0.1.1':
+  '@saystack/engine-openai-compatible@0.1.4':
     dependencies:
-      '@saystack/core': 0.1.0
+      '@saystack/core': 0.2.1
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@saystack/react-native@0.1.0(ddbba2de1494ff62ef1d9254b99d90fb)':
+  '@saystack/react-native@0.2.1(ddbba2de1494ff62ef1d9254b99d90fb)':
     dependencies:
-      '@saystack/core': 0.1.0
-      '@saystack/react': 0.1.0(react@19.1.0)
+      '@saystack/core': 0.2.1
+      '@saystack/react': 0.2.1(react@19.1.0)
       expo-audio: 57.0.4(expo-asset@57.0.18(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)(supports-color@8.1.1)(typescript@6.0.3))(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
       expo-file-system: 57.0.6(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))
       expo-modules-core: 57.0.19(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
@@ -9286,26 +9286,26 @@ snapshots:
       expo-blur: 57.0.3(expo@57.0.25)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
       expo-gl: 57.0.2(expo@57.0.25)(react-dom@19.1.0(react@19.1.0))(react-native-reanimated@4.6.0(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0))(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.1.0)(supports-color@8.1.1))(react@19.1.0)
 
-  '@saystack/react-web@0.1.0(react@19.1.0)':
+  '@saystack/react-web@0.2.1(react@19.1.0)':
     dependencies:
-      '@saystack/core': 0.1.0
-      '@saystack/react': 0.1.0(react@19.1.0)
-      '@saystack/web': 0.1.0
+      '@saystack/core': 0.2.1
+      '@saystack/react': 0.2.1(react@19.1.0)
+      '@saystack/web': 0.1.3
       react: 19.1.0
 
-  '@saystack/react@0.1.0(react@19.1.0)':
+  '@saystack/react@0.2.1(react@19.1.0)':
     dependencies:
-      '@saystack/core': 0.1.0
+      '@saystack/core': 0.2.1
       react: 19.1.0
 
-  '@saystack/server@0.1.0':
+  '@saystack/server@0.1.3':
     dependencies:
-      '@saystack/core': 0.1.0
+      '@saystack/core': 0.2.1
       hono: 4.13.5
 
-  '@saystack/web@0.1.0':
+  '@saystack/web@0.1.3':
     dependencies:
-      '@saystack/core': 0.1.0
+      '@saystack/core': 0.2.1
 
   '@sinclair/typebox@0.27.12': {}
 
