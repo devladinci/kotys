@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { EventEmitter } from "node:events";
 import type {
   LspDiagnostic,
   LspInitializeParams,
@@ -73,7 +72,7 @@ function asInitializeResult(value: unknown): LspInitializeResult {
 export type LspClientState =
   "idle" | "initializing" | "ready" | "closed" | "error";
 
-export class LspClient extends EventEmitter {
+export class LspClient {
   private child: ChildProcess;
   private state: LspClientState = "idle";
   private pending = new Map<number | string, RequestHandler>();
@@ -84,32 +83,24 @@ export class LspClient extends EventEmitter {
   private diagnosticsWaits = new Set<DiagnosticsWait>();
 
   constructor(command: string, args: string[], rootUri: string) {
-    super();
     this.rootUri = rootUri;
     this.child = spawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "ignore"],
       env: process.env,
     });
 
     this.child.on("error", (err) => {
       this.state = "error";
       this.rejectAll(err);
-      this.emit("error", err);
     });
 
     this.child.on("close", (code) => {
       this.state = "closed";
       this.rejectAll(new Error(`LSP server exited (${code ?? "unknown"})`));
-      this.emit("close", code);
     });
 
     this.child.stdout?.setEncoding("utf-8");
     this.child.stdout?.on("data", (chunk: string) => this.onData(chunk));
-
-    this.child.stderr?.on("data", (chunk: Buffer | string) => {
-      const text = Buffer.isBuffer(chunk) ? chunk.toString("utf-8") : chunk;
-      this.emit("stderr", text.trim());
-    });
   }
 
   getState(): LspClientState {
@@ -131,12 +122,18 @@ export class LspClient extends EventEmitter {
         },
       },
     };
-    const raw = await this.request("initialize", params, DEFAULT_TIMEOUT_MS);
+    const raw = await this.request(
+      "initialize",
+      params,
+      DEFAULT_TIMEOUT_MS,
+    ).catch((err: unknown) => {
+      if (this.state === "initializing") this.state = "idle";
+      throw err;
+    });
     const result = asInitializeResult(raw);
     this.capabilities = result.capabilities;
     this.notify("initialized", {});
     this.state = "ready";
-    this.emit("ready", result);
     return result;
   }
 
@@ -275,7 +272,6 @@ export class LspClient extends EventEmitter {
               : hasStringMessage(msg.error)
                 ? (msg.error.message ?? JSON.stringify(msg.error))
                 : JSON.stringify(msg.error);
-          this.state = "idle";
           handler?.reject(new Error(text));
         } else {
           handler?.resolve("result" in msg ? msg.result : undefined);

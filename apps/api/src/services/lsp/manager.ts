@@ -1,7 +1,11 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { LspClient } from "./client.js";
-import { detectLspServer, resolveCommandPath } from "./detect.js";
+import {
+  detectLspServer,
+  languageIdFor,
+  resolveCommandPath,
+} from "./detect.js";
 import type { LspServerConfig } from "./detect.js";
 import type { LspDiagnostic, LspTextDocumentItem } from "./protocol.js";
 
@@ -40,21 +44,14 @@ export function createLspManager(): LspManager {
   };
 
   const resolveClient = async (
-    filePath: string,
-  ): Promise<{ client: LspClient; config: LspServerConfig } | null> => {
-    const config = await resolveConfig(filePath);
-    if (!config) return null;
-
+    config: LspServerConfig,
+  ): Promise<LspClient | null> => {
     const key = config.rootUri;
     const existing = clients.get(key);
-    if (existing) return { client: existing, config };
+    if (existing) return existing;
 
     const inFlight = initPromises.get(key);
-    if (inFlight) {
-      const client = await inFlight;
-      if (!client) return null;
-      return { client, config };
-    }
+    if (inFlight) return inFlight;
 
     const promise = (async (): Promise<LspClient | null> => {
       const client = new LspClient(
@@ -73,22 +70,23 @@ export function createLspManager(): LspManager {
     })();
 
     initPromises.set(key, promise);
-    const client = await promise;
-    if (!client) return null;
-    return { client, config };
+    return promise;
   };
 
   const getDiagnostics = async (
     filePath: string,
   ): Promise<LspDiagnosticsResult | null> => {
-    const resolved = await resolveClient(filePath);
-    if (!resolved) return null;
-    const { client, config } = resolved;
+    const config = await resolveConfig(filePath);
+    if (!config) return null;
+    const languageId = languageIdFor(filePath, config);
+    if (!languageId) return null;
+    const client = await resolveClient(config);
+    if (!client) return null;
 
     const text = await fs.readFile(filePath, "utf-8");
     const item: LspTextDocumentItem = {
       uri: `file://${filePath}`,
-      languageId: config.languageId,
+      languageId,
       version: 1,
       text,
     };

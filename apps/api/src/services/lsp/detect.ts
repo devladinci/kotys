@@ -7,35 +7,48 @@ export type LspServerConfig = {
   command: string;
   args: string[];
   rootUri: string;
-  languageId: string;
+  languageIds: string[];
   commandPath: string;
 };
 
-type BaseConfig = { languageId: string; command: string; args: string[] };
+type BaseConfig = { command: string; args: string[]; languageIds: string[] };
+
+const TYPESCRIPT_SERVER: BaseConfig = {
+  command: "typescript-language-server",
+  args: ["--stdio"],
+  languageIds: [
+    "typescript",
+    "typescriptreact",
+    "javascript",
+    "javascriptreact",
+  ],
+};
 
 const MARKERS: Record<string, BaseConfig> = {
-  "tsconfig.json": {
-    languageId: "typescript",
-    command: "typescript-language-server",
-    args: ["--stdio"],
-  },
-  "jsconfig.json": {
-    languageId: "javascript",
-    command: "typescript-language-server",
-    args: ["--stdio"],
-  },
+  "tsconfig.json": TYPESCRIPT_SERVER,
+  "jsconfig.json": TYPESCRIPT_SERVER,
 };
 
 const FALLBACK_MARKERS: Record<string, BaseConfig> = {
-  "package.json": {
-    languageId: "javascript",
-    command: "typescript-language-server",
-    args: ["--stdio"],
-  },
-  "Cargo.toml": { languageId: "rust", command: "rust-analyzer", args: [] },
-  "go.mod": { languageId: "go", command: "gopls", args: [] },
-  "pyproject.toml": { languageId: "python", command: "pylsp", args: [] },
-  "setup.py": { languageId: "python", command: "pylsp", args: [] },
+  "package.json": TYPESCRIPT_SERVER,
+  "Cargo.toml": { command: "rust-analyzer", args: [], languageIds: ["rust"] },
+  "go.mod": { command: "gopls", args: [], languageIds: ["go"] },
+  "pyproject.toml": { command: "pylsp", args: [], languageIds: ["python"] },
+  "setup.py": { command: "pylsp", args: [], languageIds: ["python"] },
+};
+
+const LANGUAGE_IDS: Record<string, string> = {
+  ".ts": "typescript",
+  ".mts": "typescript",
+  ".cts": "typescript",
+  ".tsx": "typescriptreact",
+  ".js": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".jsx": "javascriptreact",
+  ".rs": "rust",
+  ".go": "go",
+  ".py": "python",
 };
 
 function bundledCommandPath(command: string): string | null {
@@ -94,31 +107,28 @@ export async function detectLspServer(
 
   const entries = await fs.readdir(root);
   for (const [name, config] of Object.entries(MARKERS)) {
-    if (entries.includes(name)) {
-      return buildConfig(root, config.languageId, config.command, config.args);
-    }
+    if (entries.includes(name)) return buildConfig(root, config);
   }
   for (const [name, config] of Object.entries(FALLBACK_MARKERS)) {
-    if (entries.includes(name)) {
-      return buildConfig(root, config.languageId, config.command, config.args);
-    }
+    if (entries.includes(name)) return buildConfig(root, config);
   }
   return null;
 }
 
-function buildConfig(
-  root: string,
-  languageId: string,
-  command: string,
-  args: string[],
-): LspServerConfig {
-  const commandPath = bundledCommandPath(command) ?? command;
+export function languageIdFor(
+  filePath: string,
+  config: LspServerConfig,
+): string | null {
+  const languageId = LANGUAGE_IDS[path.extname(filePath).toLowerCase()];
+  if (!languageId || !config.languageIds.includes(languageId)) return null;
+  return languageId;
+}
+
+function buildConfig(root: string, base: BaseConfig): LspServerConfig {
   return {
-    command,
-    args,
+    ...base,
     rootUri: fileUri(root),
-    languageId,
-    commandPath,
+    commandPath: bundledCommandPath(base.command) ?? base.command,
   };
 }
 
