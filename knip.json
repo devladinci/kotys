@@ -7,7 +7,10 @@
       // pbcopy/osascript are macOS system binaries (clipboard type and the
       // Chromium-safe paste path), not package dependencies. tailscale is an
       // optional system CLI — MagicDNS name lookup degrades gracefully.
-      "ignoreBinaries": ["pbcopy", "osascript", "tailscale"]
+      "ignoreBinaries": ["pbcopy", "osascript", "tailscale"],
+      // typescript-language-server is a bundled language server resolved at
+      // runtime by the LSP detector; it is not statically imported.
+      "ignoreDependencies": ["typescript-language-server"]
     },
     "apps/desktop": {
       "entry": ["electron/main.ts", "electron/preload.ts"],

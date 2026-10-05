@@ -48,6 +48,7 @@ import { spawnAgentDefinition, SPAWN_AGENT_NAME } from "./subagentSpawn.js";
 import { getEnabledTools } from "./toolEnabled.js";
 import { maybeNotify } from "./notify.js";
 import { syncModelWindow } from "./modelWindow.js";
+import { createLspManager } from "../lsp/index.js";
 import { createTurnStreamer, isAbortError } from "./turnStream.js";
 import { createToolExecutor } from "./toolCallExecutor.js";
 import {
@@ -212,12 +213,14 @@ export async function streamChat(
     host: OLLAMA_CLOUD_HOST,
     headers: cloudApiKey ? { Authorization: `Bearer ${cloudApiKey}` } : {},
   });
+  const lsp = createLspManager();
   const toolContext: ToolContext = {
     ollama: toolOllama,
     homedir: os.homedir(),
     chatId: streamChatId,
     chatTopics: streamChatId ? getChatTopics(streamChatId) : [],
     signal,
+    lsp,
     requestApproval: consent,
     requestUserInput: (req) =>
       requestUserInput({ chatId: streamChatId, ...req }, signal),
@@ -378,6 +381,7 @@ export async function streamChat(
   } finally {
     signal.removeEventListener("abort", onSignalAbort);
     stopTick();
+    lsp.close();
   }
   const usage = streamer.usage;
   const turnUsage = recordTurnUsage({

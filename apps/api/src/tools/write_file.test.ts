@@ -3,13 +3,20 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { execute } from "./write_file.js";
 import type { ToolContext } from "./types.js";
+import type {
+  LspManager,
+  LspDiagnosticsResult,
+} from "../services/lsp/index.js";
 
 // Only the two fields write_file actually reads; the rest of ToolContext is
 // DB and Ollama plumbing it never touches.
 type ApprovalFn = NonNullable<ToolContext["requestApproval"]>;
 
-const ctxWith = (homedir: string, requestApproval?: ApprovalFn) =>
-  ({ homedir, requestApproval }) as unknown as ToolContext;
+const ctxWith = (
+  homedir: string,
+  requestApproval?: ApprovalFn,
+  lsp?: ToolContext["lsp"],
+) => ({ homedir, requestApproval, lsp }) as unknown as ToolContext;
 
 /** A stub approval channel that always answers the same way. */
 const approver = (answer: boolean) => vi.fn<ApprovalFn>(async () => answer);
@@ -127,5 +134,33 @@ describe("write_file guards", () => {
         ctxWith(home, async () => true),
       ),
     ).rejects.toThrow(/path is required/i);
+  });
+
+  it("appends LSP diagnostics when a manager returns them", async () => {
+    const lsp: LspManager = {
+      getDiagnostics: vi.fn(async (): Promise<LspDiagnosticsResult> => ({
+        diagnostics: [
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 5 },
+            },
+            severity: 1,
+            message: "Cannot find name 'hello'.",
+          },
+        ],
+        formatted:
+          "LSP diagnostics for b.ts (1 issue):\n- 1:1 Error: Cannot find name 'hello'.",
+      })),
+      close: vi.fn(),
+    };
+    const result = await execute(
+      { path: "b.ts", content: "hello;" },
+      ctxWith(home, async () => true, lsp),
+    );
+
+    expect(lsp.getDiagnostics).toHaveBeenCalledOnce();
+    expect(result.content).toContain("Cannot find name 'hello'");
+    expect(await fs.readFile(path.join(home, "b.ts"), "utf-8")).toBe("hello;");
   });
 });

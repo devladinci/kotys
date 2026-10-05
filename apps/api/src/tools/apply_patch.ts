@@ -6,6 +6,7 @@ import { resolvePath } from "./paths.js";
 import { isSensitiveTarget } from "./sensitive_paths.js";
 import { isInGitRepo } from "./git_check.js";
 import { verifiedBackup } from "./backup.js";
+import { maybeDiagnostics } from "./diagnostics.js";
 
 const MAX_FILE_BYTES = 200_000;
 const HINT_RADIUS_LINES = 2;
@@ -150,14 +151,16 @@ export async function execute(
   const tmp = `${resolved}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, updated, "utf-8");
   await fs.rename(tmp, resolved);
+  const diagnostics = await maybeDiagnostics(ctx, resolved);
   return {
-    content: JSON.stringify({
-      path: resolved,
-      replaced: 1,
-      bytes: Buffer.byteLength(updated, "utf-8"),
-      ...(bak ? { backup: bak } : {}),
-      ...(inGit ? { in_git_repo: true } : {}),
-    }),
+    content:
+      JSON.stringify({
+        path: resolved,
+        replaced: 1,
+        bytes: Buffer.byteLength(updated, "utf-8"),
+        ...(bak ? { backup: bak } : {}),
+        ...(inGit ? { in_git_repo: true } : {}),
+      }) + diagnostics,
     activity: {
       filePath: resolved,
       results: [{ title: `${path.basename(resolved)} (patched)`, url: "" }],
