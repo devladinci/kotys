@@ -4,8 +4,8 @@ packages:
 # One React across the monorepo: Metro bundles @kotys/core source into the
 # mobile app, so a second copy (even a patch-version apart) breaks hooks.
 overrides:
-  react: 19.1.0
-  react-dom: 19.1.0
+  react: 19.2.3
+  react-dom: 19.2.3
 allowBuilds:
   better-sqlite3: true
   electron-winstaller: false

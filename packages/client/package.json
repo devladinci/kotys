@@ -21,12 +21,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@orpc/client": "^1.0.0"
+    "@orpc/client": "^1.15.4"
   },
   "devDependencies": {
     "@kotys/api": "workspace:*",
-    "@orpc/server": "^1.15.0",
-    "typescript": "~6.0.2",
+    "@orpc/server": "^1.15.4",
+    "typescript": "~6.0.3",
     "vitest": "^3.2.7"
   }
 }
