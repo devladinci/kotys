@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
-import { LspClient } from "./client.js";
+import { DIAGNOSTICS_SETTLE_MS, LspClient } from "./client.js";
+import type { LspDiagnostic, LspServerCapabilities } from "./protocol.js";
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
@@ -79,6 +80,64 @@ function lastWrite(): string {
   return String(call[0]);
 }
 
+function lastSent(): unknown {
+  return JSON.parse(lastWrite().split("\r\n\r\n")[1]);
+}
+
+const URI = "file:///repo/index.ts";
+
+const ITEM = {
+  uri: URI,
+  languageId: "typescript",
+  version: 1,
+  text: "const x: number = 'oops';\n",
+};
+
+const TYPE_ERROR = "Type 'string' is not assignable to type 'number'.";
+
+function diagnostic(
+  message: string,
+  severity?: LspDiagnostic["severity"],
+): LspDiagnostic {
+  return {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+    severity,
+    message,
+  };
+}
+
+function publish(uri: string, diagnostics: LspDiagnostic[]): void {
+  fake._emit(
+    "data",
+    encodeMessage({
+      jsonrpc: "2.0",
+      method: "textDocument/publishDiagnostics",
+      params: { uri, diagnostics },
+    }),
+  );
+}
+
+async function startClient(
+  capabilities: LspServerCapabilities = {},
+): Promise<LspClient> {
+  const client = new LspClient(
+    "typescript-language-server",
+    ["--stdio"],
+    "file:///repo",
+  );
+  const initPromise = client.initialize();
+  fake._emit(
+    "data",
+    encodeMessage({ jsonrpc: "2.0", id: 1, result: { capabilities } }),
+  );
+  await initPromise;
+  return client;
+}
+
+function messages(diagnostics: LspDiagnostic[]): string[] {
+  return diagnostics.map((d) => d.message);
+}
+
 describe("LspClient initialize", () => {
   it("sends initialize and resolves when the server responds", async () => {
     const client = new LspClient(
@@ -138,139 +197,141 @@ describe("LspClient initialize", () => {
 });
 
 describe("LspClient diagnostics", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("pulls diagnostics via textDocument/diagnostic when supported", async () => {
-    const client = new LspClient(
-      "typescript-language-server",
-      ["--stdio"],
-      "file:///repo",
-    );
-    const initPromise = client.initialize();
-    fake._emit(
-      "data",
-      encodeMessage({
-        jsonrpc: "2.0",
-        id: 1,
-        result: { capabilities: { diagnosticProvider: true } },
-      }),
-    );
-    await initPromise;
+    const client = await startClient({ diagnosticProvider: true });
 
-    const diagPromise = client.diagnostics("/repo/index.ts");
+    const diagPromise = client.diagnostics(ITEM);
     expect(lastWrite()).toContain('"method":"textDocument/diagnostic"');
-
     fake._emit(
       "data",
       encodeMessage({
         jsonrpc: "2.0",
         id: 2,
-        result: {
-          items: [
-            {
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 1 },
-              },
-              message: "err",
-            },
-          ],
-        },
+        result: { items: [diagnostic("err")] },
       }),
     );
 
-    const diagnostics = await diagPromise;
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].message).toBe("err");
+    expect(messages(await diagPromise)).toEqual(["err"]);
   });
 
   it("falls back to publishDiagnostics when pull diagnostics are unsupported", async () => {
-    const client = new LspClient(
-      "typescript-language-server",
-      ["--stdio"],
-      "file:///repo",
-    );
-    const initPromise = client.initialize();
-    fake._emit(
-      "data",
-      encodeMessage({ jsonrpc: "2.0", id: 1, result: { capabilities: {} } }),
-    );
-    await initPromise;
+    const client = await startClient();
 
-    const diagPromise = client.diagnostics("/repo/index.ts");
-    fake._emit(
-      "data",
-      encodeMessage({
-        jsonrpc: "2.0",
-        method: "textDocument/publishDiagnostics",
-        params: {
-          uri: "file:///repo/index.ts",
-          diagnostics: [
-            {
-              range: {
-                start: { line: 1, character: 0 },
-                end: { line: 1, character: 1 },
-              },
-              message: "warn",
-            },
-          ],
-        },
-      }),
-    );
+    const diagPromise = client.diagnostics(ITEM);
+    publish(URI, [diagnostic("warn")]);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
 
-    const diagnostics = await diagPromise;
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].message).toBe("warn");
+    expect(messages(await diagPromise)).toEqual(["warn"]);
+  });
+
+  it("keeps listening after an empty publish for the diagnostics that follow", async () => {
+    const client = await startClient();
+    let isAnswered = false;
+
+    const diagPromise = client.diagnostics(ITEM).then((diagnostics) => {
+      isAnswered = true;
+      return diagnostics;
+    });
+    publish(URI, []);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS - 1);
+    expect(isAnswered).toBe(false);
+    publish(URI, [diagnostic(TYPE_ERROR, 1)]);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+
+    expect(messages(await diagPromise)).toEqual([TYPE_ERROR]);
+  });
+
+  it("does not answer a new check with an earlier check's diagnostics", async () => {
+    const client = await startClient();
+    const first = client.diagnostics(ITEM);
+    publish(URI, [diagnostic(TYPE_ERROR, 1)]);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+    await first;
+    let isAnswered = false;
+
+    const second = client
+      .diagnostics({ ...ITEM, text: "const x: number = 1;\n" })
+      .then((diagnostics) => {
+        isAnswered = true;
+        return diagnostics;
+      });
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+    expect(isAnswered).toBe(false);
+    publish(URI, []);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+
+    expect(await second).toEqual([]);
+  });
+
+  it("ignores diagnostics published for other files", async () => {
+    const client = await startClient();
+
+    const diagPromise = client.diagnostics(ITEM);
+    publish("file:///repo/tsconfig.json", [diagnostic("elsewhere")]);
+    publish(URI, [diagnostic("here")]);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+
+    expect(messages(await diagPromise)).toEqual(["here"]);
+  });
+
+  it("answers with no diagnostics when the server never publishes", async () => {
+    const client = await startClient();
+
+    const diagPromise = client.diagnostics(ITEM);
+    await vi.runAllTimersAsync();
+
+    expect(await diagPromise).toEqual([]);
+  });
+
+  it("answers with the last publish when the server exits mid-check", async () => {
+    const client = await startClient();
+
+    const diagPromise = client.diagnostics(ITEM);
+    publish(URI, [diagnostic(TYPE_ERROR, 1)]);
+    fake._emit("close", 1);
+
+    expect(messages(await diagPromise)).toEqual([TYPE_ERROR]);
+  });
+
+  it("opens the document for the check and closes it afterwards", async () => {
+    const client = await startClient();
+
+    const diagPromise = client.diagnostics(ITEM);
+    expect(lastSent()).toEqual({
+      jsonrpc: "2.0",
+      method: "textDocument/didOpen",
+      params: { textDocument: ITEM },
+    });
+    publish(URI, []);
+    await vi.advanceTimersByTimeAsync(DIAGNOSTICS_SETTLE_MS);
+    await diagPromise;
+
+    expect(lastSent()).toEqual({
+      jsonrpc: "2.0",
+      method: "textDocument/didClose",
+      params: { textDocument: { uri: URI } },
+    });
   });
 
   it("orders diagnostics by severity then message", async () => {
-    const client = new LspClient(
-      "typescript-language-server",
-      ["--stdio"],
-      "file:///repo",
-    );
-    const initPromise = client.initialize();
-    fake._emit(
-      "data",
-      encodeMessage({
-        jsonrpc: "2.0",
-        id: 1,
-        result: { capabilities: { diagnosticProvider: true } },
-      }),
-    );
-    await initPromise;
+    const client = await startClient({ diagnosticProvider: true });
 
-    const diagPromise = client.diagnostics("/repo/index.ts");
+    const diagPromise = client.diagnostics(ITEM);
     fake._emit(
       "data",
       encodeMessage({
         jsonrpc: "2.0",
         id: 2,
         result: {
-          items: [
-            {
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 1 },
-              },
-              severity: 2,
-              message: "b",
-            },
-            {
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 1 },
-              },
-              severity: 1,
-              message: "a",
-            },
-            {
-              range: {
-                start: { line: 0, character: 0 },
-                end: { line: 0, character: 1 },
-              },
-              severity: 1,
-              message: "c",
-            },
-          ],
+          items: [diagnostic("b", 2), diagnostic("a", 1), diagnostic("c", 1)],
         },
       }),
     );
@@ -286,17 +347,7 @@ describe("LspClient diagnostics", () => {
 
 describe("LspClient shutdown", () => {
   it("sends shutdown/exit and terminates the child", async () => {
-    const client = new LspClient(
-      "typescript-language-server",
-      ["--stdio"],
-      "file:///repo",
-    );
-    const initPromise = client.initialize();
-    fake._emit(
-      "data",
-      encodeMessage({ jsonrpc: "2.0", id: 1, result: { capabilities: {} } }),
-    );
-    await initPromise;
+    const client = await startClient();
 
     client.shutdown();
     expect(lastWrite()).toContain('"method":"exit"');

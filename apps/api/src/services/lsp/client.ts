@@ -7,27 +7,25 @@ import type {
   LspJsonRpcMessage,
   LspPublishDiagnosticsParams,
   LspServerCapabilities,
-  LspTextDocumentContentChangeEvent,
   LspTextDocumentItem,
-  LspVersionedTextDocumentIdentifier,
 } from "./protocol.js";
 
 const CONTENT_LENGTH = "Content-Length: ";
 const DEFAULT_TIMEOUT_MS = 5000;
+export const DIAGNOSTICS_SETTLE_MS = 500;
 
 type RequestHandler = {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
 };
 
-type PendingWait = {
+type DiagnosticsWait = {
+  uri: string;
+  diagnostics: LspDiagnostic[];
   resolve: (value: LspDiagnostic[]) => void;
-  timer: NodeJS.Timeout;
+  deadline?: NodeJS.Timeout;
+  settle?: NodeJS.Timeout;
 };
-
-function toUri(filePath: string): string {
-  return `file://${filePath}`;
-}
 
 function encodeMessage(msg: LspJsonRpcMessage): string {
   const body = JSON.stringify(msg);
@@ -83,8 +81,7 @@ export class LspClient extends EventEmitter {
   private nextId = 1;
   private readonly rootUri: string;
   private capabilities: LspServerCapabilities = {};
-  private diagnosticsByUri = new Map<string, LspDiagnostic[]>();
-  private pendingDiagnosticWaits = new Map<string, PendingWait>();
+  private diagnosticsWaits = new Set<DiagnosticsWait>();
 
   constructor(command: string, args: string[], rootUri: string) {
     super();
@@ -143,48 +140,14 @@ export class LspClient extends EventEmitter {
     return result;
   }
 
-  didOpen(item: LspTextDocumentItem): void {
-    this.notify("textDocument/didOpen", { textDocument: item });
-  }
-
-  didChange(
-    doc: LspVersionedTextDocumentIdentifier,
-    changes: LspTextDocumentContentChangeEvent[],
-  ): void {
-    this.notify("textDocument/didChange", {
-      textDocument: doc,
-      contentChanges: changes,
-    });
-  }
-
-  async diagnostics(filePath: string): Promise<LspDiagnostic[]> {
+  async diagnostics(item: LspTextDocumentItem): Promise<LspDiagnostic[]> {
     if (this.state !== "ready") return [];
-    const uri = toUri(filePath);
-
-    if (this.capabilities.diagnosticProvider) {
-      try {
-        const raw = await this.request(
-          "textDocument/diagnostic",
-          { textDocument: { uri } },
-          DEFAULT_TIMEOUT_MS,
-        );
-        const items = extractDiagnosticItems(raw);
-        return normalizeDiagnostics(items);
-      } catch {
-        // Fall through to the publishDiagnostics wait path.
-      }
+    this.notify("textDocument/didOpen", { textDocument: item });
+    try {
+      return normalizeDiagnostics(await this.collectDiagnostics(item.uri));
+    } finally {
+      this.notify("textDocument/didClose", { textDocument: { uri: item.uri } });
     }
-
-    const existing = this.diagnosticsByUri.get(uri);
-    if (existing) return normalizeDiagnostics(existing);
-
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        this.pendingDiagnosticWaits.delete(uri);
-        resolve(normalizeDiagnostics(this.diagnosticsByUri.get(uri) ?? []));
-      }, DEFAULT_TIMEOUT_MS);
-      this.pendingDiagnosticWaits.set(uri, { resolve, timer });
-    });
   }
 
   shutdown(): void {
@@ -238,6 +201,40 @@ export class LspClient extends EventEmitter {
     });
   }
 
+  private async collectDiagnostics(uri: string): Promise<LspDiagnostic[]> {
+    if (this.capabilities.diagnosticProvider) {
+      try {
+        const raw = await this.request(
+          "textDocument/diagnostic",
+          { textDocument: { uri } },
+          DEFAULT_TIMEOUT_MS,
+        );
+        return extractDiagnosticItems(raw);
+      } catch {
+        // Fall through to the publishDiagnostics wait path.
+      }
+    }
+    return this.waitForPublishedDiagnostics(uri);
+  }
+
+  private waitForPublishedDiagnostics(uri: string): Promise<LspDiagnostic[]> {
+    return new Promise((resolve) => {
+      const wait: DiagnosticsWait = { uri, diagnostics: [], resolve };
+      wait.deadline = setTimeout(
+        () => this.finishDiagnosticsWait(wait),
+        DEFAULT_TIMEOUT_MS,
+      );
+      this.diagnosticsWaits.add(wait);
+    });
+  }
+
+  private finishDiagnosticsWait(wait: DiagnosticsWait): void {
+    clearTimeout(wait.deadline);
+    clearTimeout(wait.settle);
+    this.diagnosticsWaits.delete(wait);
+    wait.resolve(wait.diagnostics);
+  }
+
   private onData(chunk: string): void {
     this.buffer += chunk;
     for (;;) {
@@ -288,13 +285,14 @@ export class LspClient extends EventEmitter {
     }
 
     if (isPublishDiagnosticsMessage(msg)) {
-      const params = msg.params;
-      this.diagnosticsByUri.set(params.uri, params.diagnostics ?? []);
-      const wait = this.pendingDiagnosticWaits.get(params.uri);
-      if (wait) {
-        clearTimeout(wait.timer);
-        this.pendingDiagnosticWaits.delete(params.uri);
-        wait.resolve(normalizeDiagnostics(params.diagnostics ?? []));
+      for (const wait of this.diagnosticsWaits) {
+        if (wait.uri !== msg.params.uri) continue;
+        wait.diagnostics = msg.params.diagnostics ?? [];
+        clearTimeout(wait.settle);
+        wait.settle = setTimeout(
+          () => this.finishDiagnosticsWait(wait),
+          DIAGNOSTICS_SETTLE_MS,
+        );
       }
     }
   }
@@ -304,11 +302,9 @@ export class LspClient extends EventEmitter {
       handler.reject(reason);
     }
     this.pending.clear();
-    for (const wait of this.pendingDiagnosticWaits.values()) {
-      clearTimeout(wait.timer);
-      wait.resolve([]);
+    for (const wait of this.diagnosticsWaits) {
+      this.finishDiagnosticsWait(wait);
     }
-    this.pendingDiagnosticWaits.clear();
   }
 }
 
