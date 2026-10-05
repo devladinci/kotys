@@ -5,6 +5,7 @@ import type {
   ToolResult,
   InputField,
 } from "@kotys/contracts";
+import type { LspManager } from "../services/lsp/index.js";
 
 // Backend-only (it holds the live Ollama client), so it stays in apps/api
 // rather than contracts.
@@ -15,6 +16,8 @@ export type ToolContext = {
   chatTopics: string[];
   /** Aborted when the user stops the turn; long-running tools must honor it. */
   signal: AbortSignal;
+  /** Language-server manager for diagnostics-aware file edits. */
+  lsp?: LspManager;
   /** Resolves true when the user consents. Absent means auto-deny. */
   requestApproval?: (request: {
     tool: string;

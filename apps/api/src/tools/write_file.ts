@@ -6,6 +6,7 @@ import { resolvePath } from "./paths.js";
 import { isSensitiveTarget } from "./sensitive_paths.js";
 import { isInGitRepo } from "./git_check.js";
 import { verifiedBackup } from "./backup.js";
+import { maybeDiagnostics } from "./diagnostics.js";
 
 const MAX_WRITE_BYTES = 200_000;
 
@@ -56,11 +57,6 @@ export async function execute(
     // new file
   }
 
-  // Always require approval for file writes — the user should see and consent
-  // to every file the model creates or overwrites. The preview carries the
-  // full content so the user can review before approving. No approval channel
-  // means no write: silently proceeding would turn a missing dependency into
-  // an unreviewed change on disk.
   if (!ctx.requestApproval) {
     throw new Error(
       "approval not available — cannot write a file without user consent",
@@ -89,8 +85,6 @@ export async function execute(
 
   await fs.mkdir(path.dirname(resolved), { recursive: true });
 
-  // Only back up if the file exists AND we're not in a git repo (git already
-  // tracks history, and .bak files can leak into commits).
   let bak: string | null = null;
   if (fileExists && !inGit) {
     bak = await verifiedBackup(resolved);
@@ -99,13 +93,15 @@ export async function execute(
   const tmp = `${resolved}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, content, "utf-8");
   await fs.rename(tmp, resolved);
+  const diagnostics = await maybeDiagnostics(ctx, resolved);
   return {
-    content: JSON.stringify({
-      path: resolved,
-      bytes: Buffer.byteLength(content, "utf-8"),
-      ...(bak ? { backup: bak } : {}),
-      ...(inGit ? { in_git_repo: true } : {}),
-    }),
+    content:
+      JSON.stringify({
+        path: resolved,
+        bytes: Buffer.byteLength(content, "utf-8"),
+        ...(bak ? { backup: bak } : {}),
+        ...(inGit ? { in_git_repo: true } : {}),
+      }) + diagnostics,
     activity: {
       filePath: resolved,
       results: [{ title: `${path.basename(resolved)} (written)`, url: "" }],

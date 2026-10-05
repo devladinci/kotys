@@ -3,13 +3,20 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { execute } from "./apply_patch.js";
 import type { ToolContext } from "./types.js";
+import type {
+  LspManager,
+  LspDiagnosticsResult,
+} from "../services/lsp/index.js";
 
 // Only the two fields apply_patch actually reads; the rest of ToolContext is
 // DB and Ollama plumbing it never touches.
 type ApprovalFn = NonNullable<ToolContext["requestApproval"]>;
 
-const ctxWith = (homedir: string, requestApproval?: ApprovalFn) =>
-  ({ homedir, requestApproval }) as unknown as ToolContext;
+const ctxWith = (
+  homedir: string,
+  requestApproval?: ApprovalFn,
+  lsp?: ToolContext["lsp"],
+) => ({ homedir, requestApproval, lsp }) as unknown as ToolContext;
 
 /** A stub approval channel that always answers the same way. */
 const approver = (answer: boolean) => vi.fn<ApprovalFn>(async () => answer);
@@ -145,5 +152,42 @@ describe("apply_patch guards", () => {
       "dup\ndup\ndup\n",
     );
     await expect(fs.access(path.join(home, "a.txt.bak"))).rejects.toThrow();
+  });
+
+  it("appends LSP diagnostics when a manager returns them", async () => {
+    await fs.writeFile(path.join(home, "a.ts"), "const x: number = 'one';\n");
+    const lsp: LspManager = {
+      getDiagnostics: vi.fn(async (): Promise<LspDiagnosticsResult> => ({
+        diagnostics: [
+          {
+            range: {
+              start: { line: 0, character: 6 },
+              end: { line: 0, character: 13 },
+            },
+            severity: 1,
+            message: "Type 'string' is not assignable to type 'number'.",
+          },
+        ],
+        formatted:
+          "LSP diagnostics for a.ts (1 issue):\n- 1:7 Error: Type 'string' is not assignable to type 'number'.",
+      })),
+      close: vi.fn(),
+    };
+    const result = await execute(
+      {
+        path: "a.ts",
+        old_text: "const x: number = 'one';",
+        new_text: "const x: number = 1;",
+      },
+      ctxWith(home, async () => true, lsp),
+    );
+
+    expect(lsp.getDiagnostics).toHaveBeenCalledOnce();
+    expect(result.content).toContain(
+      "Type 'string' is not assignable to type 'number'",
+    );
+    expect(await fs.readFile(path.join(home, "a.ts"), "utf-8")).toBe(
+      "const x: number = 1;\n",
+    );
   });
 });
