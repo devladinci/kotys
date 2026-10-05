@@ -19,7 +19,6 @@ type FakeChild = {
     setEncoding: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
   };
-  stderr: { on: ReturnType<typeof vi.fn> };
   on: ReturnType<typeof vi.fn>;
   kill: ReturnType<typeof vi.fn>;
   killed: boolean;
@@ -35,12 +34,6 @@ function makeFakeChild(): FakeChild {
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         handlers.set(event, [...(handlers.get(event) ?? []), cb]);
         return fake.stdout;
-      }),
-    },
-    stderr: {
-      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
-        handlers.set(event, [...(handlers.get(event) ?? []), cb]);
-        return fake.stderr;
       }),
     },
     on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
@@ -194,6 +187,20 @@ describe("LspClient initialize", () => {
     await expect(promise).rejects.toThrow(/exited/);
     expect(client.getState()).toBe("closed");
   });
+
+  it("rejects without throwing when the server fails to start", async () => {
+    const client = new LspClient(
+      "typescript-language-server",
+      ["--stdio"],
+      "file:///repo",
+    );
+    const promise = client.initialize();
+
+    expect(() => fake._emit("error", new Error("spawn EACCES"))).not.toThrow();
+
+    await expect(promise).rejects.toThrow(/EACCES/);
+    expect(client.getState()).toBe("error");
+  });
 });
 
 describe("LspClient diagnostics", () => {
@@ -220,6 +227,34 @@ describe("LspClient diagnostics", () => {
     );
 
     expect(messages(await diagPromise)).toEqual(["err"]);
+  });
+
+  it("keeps pulling diagnostics after a failed pull", async () => {
+    const client = await startClient({ diagnosticProvider: true });
+    const first = client.diagnostics(ITEM);
+    fake._emit(
+      "data",
+      encodeMessage({
+        jsonrpc: "2.0",
+        id: 2,
+        error: { code: -32603, message: "busy" },
+      }),
+    );
+    await vi.runAllTimersAsync();
+    await first;
+
+    const second = client.diagnostics(ITEM);
+    expect(lastWrite()).toContain('"method":"textDocument/diagnostic"');
+    fake._emit(
+      "data",
+      encodeMessage({
+        jsonrpc: "2.0",
+        id: 3,
+        result: { items: [diagnostic(TYPE_ERROR, 1)] },
+      }),
+    );
+
+    expect(messages(await second)).toEqual([TYPE_ERROR]);
   });
 
   it("falls back to publishDiagnostics when pull diagnostics are unsupported", async () => {
