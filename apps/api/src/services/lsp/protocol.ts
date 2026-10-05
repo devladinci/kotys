@@ -23,18 +23,6 @@ export type LspTextDocumentItem = {
   text: string;
 };
 
-type LspTextDocumentIdentifier = {
-  uri: string;
-};
-
-export type LspVersionedTextDocumentIdentifier = LspTextDocumentIdentifier & {
-  version: number;
-};
-
-export type LspTextDocumentContentChangeEvent = {
-  text: string;
-};
-
 type LspClientCapabilities = {
   textDocument?: {
     diagnostic?: {

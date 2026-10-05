@@ -12,6 +12,16 @@ async function linkTypescript(root: string): Promise<void> {
   await fs.symlink(tsDir, path.join(modulesDir, "typescript"));
 }
 
+async function createProject(home: string): Promise<string> {
+  const root = path.join(home, "project");
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { strict: true } }),
+  );
+  return root;
+}
+
 describe("LspManager integration", () => {
   let home: string;
   let manager: ReturnType<typeof createLspManager>;
@@ -27,15 +37,9 @@ describe("LspManager integration", () => {
   });
 
   it("returns TypeScript diagnostics from the bundled language server", async () => {
-    const root = path.join(home, "project");
-    const src = path.join(root, "src");
-    await fs.mkdir(src, { recursive: true });
-    await fs.writeFile(
-      path.join(root, "tsconfig.json"),
-      JSON.stringify({ compilerOptions: { strict: true } }),
-    );
+    const root = await createProject(home);
     await linkTypescript(root);
-    const file = path.join(src, "index.ts");
+    const file = path.join(root, "src", "index.ts");
     await fs.writeFile(file, "const x: number = 'oops';\n");
 
     const result = await manager.getDiagnostics(file);
@@ -47,15 +51,30 @@ describe("LspManager integration", () => {
     );
   }, 20000);
 
-  it("returns null when the file has no diagnostics", async () => {
-    const root = path.join(home, "project");
-    const src = path.join(root, "src");
-    await fs.mkdir(src, { recursive: true });
-    await fs.writeFile(
-      path.join(root, "tsconfig.json"),
-      JSON.stringify({ compilerOptions: { strict: true } }),
+  it("checks the file again after each edit", async () => {
+    const root = await createProject(home);
+    await linkTypescript(root);
+    const file = path.join(root, "src", "index.ts");
+
+    await fs.writeFile(file, "const x: number = 'oops';\n");
+    const broken = await manager.getDiagnostics(file);
+    await fs.writeFile(file, "const x: number = 1;\n");
+    const fixed = await manager.getDiagnostics(file);
+    await fs.writeFile(file, "const x: number = 1;\nconst y: string = 2;\n");
+    const brokenAgain = await manager.getDiagnostics(file);
+
+    expect(broken?.formatted).toMatch(
+      /Type 'string' is not assignable to type 'number'/,
     );
-    const file = path.join(src, "clean.ts");
+    expect(fixed).toBeNull();
+    expect(brokenAgain?.formatted).toMatch(
+      /2:7 Error \[2322\]: Type 'number' is not assignable to type 'string'/,
+    );
+  }, 30000);
+
+  it("returns null when the file has no diagnostics", async () => {
+    const root = await createProject(home);
+    const file = path.join(root, "src", "clean.ts");
     await fs.writeFile(file, "const x: number = 1;\n");
 
     const result = await manager.getDiagnostics(file);

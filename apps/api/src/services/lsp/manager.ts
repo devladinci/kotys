@@ -86,19 +86,15 @@ export function createLspManager(): LspManager {
     const { client, config } = resolved;
 
     const text = await fs.readFile(filePath, "utf-8");
-    const uri = `file://${filePath}`;
     const item: LspTextDocumentItem = {
-      uri,
+      uri: `file://${filePath}`,
       languageId: config.languageId,
       version: 1,
       text,
     };
 
-    client.didOpen(item);
-    client.didChange({ uri, version: 2 }, [{ text }]);
-
     const diagnostics = await withTimeout(
-      client.diagnostics(filePath),
+      client.diagnostics(item),
       DIAGNOSTICS_TIMEOUT_MS,
     );
 
